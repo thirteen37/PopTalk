@@ -10,3 +10,7 @@ build/
 bench/audio-cache/
 # Personal recordings for `audio` cases stay local until decided otherwise (#23).
 bench/audio/
+# Fine-tuning (#21): bulk data, audio, adapters and fused weights stay local.
+training/out/
+training/.venv/
+__pycache__/
