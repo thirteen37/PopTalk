@@ -124,6 +124,15 @@ public enum Prompts {
     {"action":"replace","text":"Quarterly Review","vocabulary":null,"remember":false}
     """
 
+    /// Prewarm requests (#33): a dictation and an edit, each with a full screen-context window, so a
+    /// model's first real request doesn't pay for cold paths that a short prompt never reaches.
+    public static let warmup: [[ChatMessage]] = {
+        let screen = ScreenSnapshot(appName: "Notes", windowTitle: "Notes",
+                                    text: String(repeating: "Meeting notes: ship the beta on Thursday, then review the Q3 plan with the team. ", count: 60))
+        return [dictation(transcript: "Hello world.", context: screen, vocabulary: []),
+                edit(instruction: "make this more formal", selection: "hey can u send it", context: screen, vocabulary: [])]
+    }()
+
     public static func edit(instruction: String, selection: String, context: ScreenSnapshot, vocabulary: [VocabTerm]) -> [ChatMessage] {
         [ChatMessage(role: "system", content: editSystem),
          ChatMessage(role: "user", content: """
