@@ -36,7 +36,7 @@ enum ScreenContext {
         if NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars),
            CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
             pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle, field: focused.flatMap(frame)) {
-            snap.text += (snap.text.isEmpty ? "" : "\n") + ocr
+            snap.ocrText = ocr  // own budget in Prompts.window (#25)
         }
         // ponytail: domain rides in the window title until ScreenSnapshot/<screen> grow a domain field.
         if !isPrivate(), let domain = focused.flatMap(webDomain) {
