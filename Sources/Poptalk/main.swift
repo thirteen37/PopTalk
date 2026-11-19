@@ -1,7 +1,6 @@
 import AppKit
 import FluidAudio
 import Foundation
-import FoundationModels
 import PoptalkCore
 
 // Debug entry point: Poptalk --transcribe <file> [boost terms…]
@@ -22,28 +21,10 @@ if args.count >= 3, args[1] == "--transcribe" {
 if args.count >= 3, args[1] == "--pipeline" {
     func opt(_ name: String) -> String? { args.firstIndex(of: name).map { args[$0 + 1] } }
     Settings.register()
-    let client = LLMClient(baseURL: Settings.baseURL)
-    var complete: Pipeline.Complete = { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) }
-    // -provider apple-pcc: Apple's larger Private Cloud Compute model (macOS 27+). Off-device.
-    if UserDefaults.standard.string(forKey: "provider") == "apple-pcc", #available(macOS 27, *) {
-        let pcc = PrivateCloudComputeLanguageModel()
-        guard case .available = pcc.availability else { print("PCC unavailable: \(pcc.availability)"); exit(1) }
-        complete = { _, messages, _, _ in
-            let session = LanguageModelSession(model: pcc, instructions: messages.first { $0.role == "system" }?.content ?? "")
-            do { return try await session.respond(to: messages.last!.content, options: GenerationOptions(temperature: 0)).content }
-            catch { FileHandle.standardError.write(Data("PCC error: \(error)\n".utf8)); throw error }
-        }
-    }
-    // -provider apple: Apple Intelligence on-device model (FoundationModels), for comparison.
-    if UserDefaults.standard.string(forKey: "provider") == "apple", #available(macOS 26, *) {
-        guard case .available = SystemLanguageModel.default.availability else {
-            print("Apple Intelligence unavailable: \(SystemLanguageModel.default.availability)"); exit(1)
-        }
-        complete = { _, messages, _, _ in
-            let session = LanguageModelSession(instructions: messages.first { $0.role == "system" }?.content ?? "")
-            return try await session.respond(to: messages.last!.content, options: GenerationOptions(temperature: 0)).content
-        }
-    }
+    // -provider lmstudio (default) | apple (on-device FoundationModels) | apple-pcc (Private Cloud Compute)
+    let complete: Pipeline.Complete
+    do { (complete, _) = try Providers.make(UserDefaults.standard.string(forKey: "provider") ?? "lmstudio", baseURL: Settings.baseURL) }
+    catch { print(error); exit(1) }
     let pipeline = Pipeline(
         complete: complete,
         vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-debug-vocab.json")),
