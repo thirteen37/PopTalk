@@ -165,8 +165,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let label: String
+        var pasted = true
         switch result.outcome {
-        case .insert(let s, let l): await TextIO.insert(s); label = l
+        case .insert(let s, let l):
+            pasted = await TextIO.insert(s)
+            label = pasted ? l : "No text field found — copied to clipboard"
         case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
         case .insertBefore(let s): await TextIO.insertBeforeSelection(s); label = "Inserted"
         case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
@@ -174,7 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
-        overlay.showOutcome(shown, undo: { TextIO.undo() }, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
+        overlay.showOutcome(shown, undo: pasted ? { TextIO.undo() } : nil, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
         }
