@@ -32,6 +32,7 @@ public enum TermExtractor {
                 let ns = line as NSString
                 var phrase: [String] = []
                 var phraseStart = 0, phraseEnd = -1
+                var prev: (word: String, start: Int, end: Int, isTerm: Bool, isShortNumber: Bool)?
                 func at(_ loc: Int) -> Int? { isTitle ? nil : base + loc }
                 func flush() { if !phrase.isEmpty { emit(phrase.joined(separator: " "), at: at(phraseStart)) }; phrase = [] }
 
@@ -46,6 +47,14 @@ public enum TermExtractor {
                     let isCamel = zip(word, word.dropFirst()).contains { $0.isLowercase && $1.isUppercase }
                     let isAllCaps = word.count >= 2 && word.allSatisfy { $0.isUppercase }
                     let isCapitalized = word.first!.isUppercase && !sentenceStart
+                    let isShortNumber = word.count < 3 && word.contains { $0.isNumber }
+                    let isTerm = isIdentifier || isCamel || isAllCaps || isCapitalized
+                    // Numbers too short to boost alone ("Q3", "27") join an adjacent term: "Q3 OKRs", "iOS 27" (#30).
+                    if let p = prev, (isShortNumber && p.isTerm) || (p.isShortNumber && isTerm),
+                       ns.substring(with: NSRange(location: p.end, length: m.range.location - p.end)) == " " {
+                        emit(p.word + " " + word, at: at(p.start))
+                    }
+                    prev = (word, m.range.location, m.range.location + m.range.length, isTerm, isShortNumber)
 
                     if isIdentifier || isCamel || isAllCaps {
                         flush(); emit(word, at: at(m.range.location))

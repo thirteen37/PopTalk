@@ -61,7 +61,7 @@ private func texts(_ text: String, cursor: Int? = nil, title: String = "", limit
     let text = (0..<200).map { "word Name\($0)x" }.joined(separator: " ")
     let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice", weight: 7)],
                                     context: ScreenSnapshot(text: text, cursorOffset: 0))
-    #expect(terms.first == VocabTerm(text: "FluidVoice", weight: 7))
+    #expect(terms.first == VocabTerm(text: "FluidVoice", aliases: ["fluid voice"], weight: 7))
     #expect(terms.count == 61)
     #expect(terms[1].text == "Name0x")
     #expect(terms[1].weight > terms[60].weight)

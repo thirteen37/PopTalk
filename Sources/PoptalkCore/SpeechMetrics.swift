@@ -52,6 +52,14 @@ public enum SpeechMetrics {
         let (r, b) = (align(ref, words(raw)).matched, align(ref, words(boosted)).matched)
         return (b.subtracting(r).count, r.subtracting(b).count)
     }
+
+    /// Expected terms heard in `raw` but not in `boosted`. Matched inside words, ignoring case, spaces and
+    /// punctuation, so "Q3" counts as heard in "Q3OKRs": the loss boost precision misses (#30).
+    public static func termsLost(_ terms: [String], raw: String, boosted: String) -> [String] {
+        func squashed(_ s: String) -> String { words(s).joined() }
+        let (r, b) = (squashed(raw), squashed(boosted))
+        return terms.filter { r.contains(squashed($0)) && !b.contains(squashed($0)) }
+    }
 }
 
 /// Speech-stage results for one run of an audio case.
@@ -62,6 +70,8 @@ public struct SpeechRun: Codable, Sendable {
     public var werRaw: Double, werBoosted: Double, werFinal: Double
     public var recallRaw: Double?, recallBoosted: Double?, recallFinal: Double?
     public var boostFixed: Int, boostBroken: Int
+    /// `SpeechMetrics.termsLost`; nil in results from before the metric.
+    public var termsLost: [String]? = nil
 
     public init(raw: String, boosted: String, boostTerms: Int, asrSeconds: Double, rescoreSeconds: Double,
                 werRaw: Double, werBoosted: Double, werFinal: Double,
@@ -93,6 +103,7 @@ public struct SpeechRun: Codable, Sendable {
                   recallBoosted: SpeechMetrics.termRecall(terms, in: boosted),
                   recallFinal: SpeechMetrics.termRecall(terms, in: final),
                   boostFixed: changes.fixed, boostBroken: changes.broken)
+        termsLost = SpeechMetrics.termsLost(terms, raw: raw, boosted: boosted)
     }
 }
 
@@ -102,6 +113,8 @@ public struct SpeechSummary: Sendable {
     public var werRaw: Double, werBoosted: Double, werFinal: Double
     public var recallRaw: Double?, recallBoosted: Double?, recallFinal: Double?
     public var boostFixed: Int, boostBroken: Int
+    /// Total `SpeechRun.termsLost`; nil when no run recorded it.
+    public var termsLost: Int?
     /// fixed / (fixed + broken): of the words boosting changed, how many it changed for the better.
     public var boostPrecision: Double? { boostFixed + boostBroken == 0 ? nil : Double(boostFixed) / Double(boostFixed + boostBroken) }
     public var asrMedian: Double, rescoreMedian: Double, llmMedian: Double
@@ -124,6 +137,7 @@ extension BenchReport {
             werRaw: mean(s.map(\.werRaw)), werBoosted: mean(s.map(\.werBoosted)), werFinal: mean(s.map(\.werFinal)),
             recallRaw: meanOpt(s.map(\.recallRaw)), recallBoosted: meanOpt(s.map(\.recallBoosted)), recallFinal: meanOpt(s.map(\.recallFinal)),
             boostFixed: s.map(\.boostFixed).reduce(0, +), boostBroken: s.map(\.boostBroken).reduce(0, +),
+            termsLost: s.contains { $0.termsLost != nil } ? s.map { $0.termsLost?.count ?? 0 }.reduce(0, +) : nil,
             asrMedian: median(s.map(\.asrSeconds)), rescoreMedian: median(s.map(\.rescoreSeconds)), llmMedian: median(runs.map(\.seconds)))
     }
 
@@ -131,7 +145,7 @@ extension BenchReport {
         guard let s = speechSummary() else { return nil }
         func pct(_ x: Double?) -> String { x.map { String(format: "%5.1f%%", 100 * $0) } ?? "     -" }
         return """
-            speech     pass \(s.passed)/\(s.runs)   boost fixed \(s.boostFixed) broken \(s.boostBroken) precision \(pct(s.boostPrecision))
+            speech     pass \(s.passed)/\(s.runs)   boost fixed \(s.boostFixed) broken \(s.boostBroken) lost \(s.termsLost.map(String.init) ?? "-") precision \(pct(s.boostPrecision))
                          raw   boosted    final
             WER       \(pct(s.werRaw))    \(pct(s.werBoosted))   \(pct(s.werFinal))
             recall    \(pct(s.recallRaw))    \(pct(s.recallBoosted))   \(pct(s.recallFinal))
@@ -154,6 +168,8 @@ extension BenchReport {
         ]
         func f(_ x: Double?) -> String { x.map { String(format: "%.3f", $0) } ?? "-" }
         lines += metrics.filter { f($0.1) != f($0.2) }.map { "speech \($0.0) \(f($0.1)) → \(f($0.2))" }
+        func n(_ x: Int?) -> String { x.map(String.init) ?? "-" }
+        if sa.termsLost != sb.termsLost { lines.append("speech termsLost \(n(sa.termsLost)) → \(n(sb.termsLost))") }
         return lines
     }
 }

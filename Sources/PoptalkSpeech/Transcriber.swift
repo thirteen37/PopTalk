@@ -56,7 +56,7 @@ public actor Transcriber {
         let output = await session.rescore(
             text: result.text, tokenTimings: result.tokenTimings ?? [], audioSamples: samples)
         lastRescoreSeconds = Date().timeIntervalSince(start)
-        return Transcription(raw: result.text, text: output?.text ?? result.text, asrSeconds: asrSeconds, rescoreSeconds: lastRescoreSeconds)
+        return Transcription(raw: result.text, text: Pipeline.splitFused(output?.text ?? result.text, terms: boost), asrSeconds: asrSeconds, rescoreSeconds: lastRescoreSeconds)
     }
 }
 
