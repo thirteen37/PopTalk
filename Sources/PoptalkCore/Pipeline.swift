@@ -81,7 +81,8 @@ public struct Pipeline: Sendable {
         let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
         let raw: String
         do { raw = try await complete(editModel, messages, true, editTimeout) } catch {
-            return PipelineResult(outcome: .error("Couldn't reach the language model"))
+            let timedOut = (error as? URLError)?.code == .timedOut
+            return PipelineResult(outcome: .error(timedOut ? "Model took too long" : "Couldn't reach the language model"))
         }
         guard let edit = try? LLMClient.parseEditResult(raw) else {
             return PipelineResult(outcome: .error("Didn't understand the model's reply"))

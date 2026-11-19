@@ -122,6 +122,14 @@ private func req(_ t: String, selection: String? = nil) -> Request {
     #expect(r.outcome == .error("Couldn't reach the language model"))
 }
 
+// #11: a slow model is not an unreachable one.
+@Test func editTimeoutSaysTooLong() async {
+    let p = Pipeline(complete: { _, _, _, _ in throw URLError(.timedOut) },
+                     vocabulary: VocabularyStore(url: tmp()), cleanupModel: "s", editModel: "b")
+    let r = await p.run(req("make it formal", selection: "hey"))
+    #expect(r.outcome == .error("Model took too long"))
+}
+
 @Test func malformedEditReplyIsError() async {
     let r = await pipeline(reply: "Sure, here you go: Hey.").run(req("make it formal", selection: "hey"))
     guard case .error = r.outcome else { Issue.record("expected error, got \(r.outcome)"); return }
