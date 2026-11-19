@@ -487,7 +487,9 @@ def teacher_target(it, reply):
         return None
     # No new names: capitalized words in the output must come from the selection (translations may add some).
     names = set(re.findall(r"(?<![.!?]\s)(?<!^)\b[A-Z][\w-]+", sel))
-    if not lang and any(n not in text for n in names if n not in {"I"}):
+    # Translations may translate days, months and "Project", but keep the names themselves.
+    keep = names - {"I"} - (set(L.DAYS) | set(L.MONTHS) | set(L.PROJECT_HEAD) if lang else set())
+    if any(n not in text for n in keep):
         return None
     new = set(re.findall(r"\b[A-Z][a-z]+[A-Z]\w*", text)) - set(re.findall(r"\b[A-Z][a-z]+[A-Z]\w*", sel))
     if new:

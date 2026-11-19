@@ -1,0 +1,30 @@
+{
+  "items": 5953,
+  "byCategory": {
+    "d-correction-text": 468,
+    "d-filler-text": 243,
+    "d-keep-text": 115,
+    "d-names-audio": 437,
+    "d-names-text": 791,
+    "d-names-vocab": 109,
+    "d-no-echo": 250,
+    "d-question-text": 147,
+    "e-bullets": 230,
+    "e-case": 89,
+    "e-correct-context": 450,
+    "e-correct-grammar": 153,
+    "e-correct-spelled": 450,
+    "e-correct-typo": 195,
+    "e-insert-after": 250,
+    "e-insert-before": 150,
+    "e-numbered": 80,
+    "e-rephrase": 132,
+    "e-replace": 371,
+    "e-shorter": 257,
+    "e-tone": 332,
+    "e-translate": 254
+  },
+  "contaminationRejected": {
+    "e-tone": 10
+  }
+}
