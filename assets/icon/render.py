@@ -5,15 +5,20 @@
 # ///
 """Render icon concept SVGs to PNG previews and a contact sheet.
 
-Usage: assets/icon/render.py   (renders every assets/icon/concepts/<n>-<slug>/)
+Usage: assets/icon/render.py         (renders every assets/icon/concepts/<n>-<slug>/)
+       assets/icon/render.py build   (AppIcon.icns + MenuBar*.png from the promoted SVGs, for install.zsh)
 """
 import io
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import resvg_py
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).parent / "concepts"
+ICON = Path(__file__).parent
+ROOT = ICON / "concepts"
 LIGHT, DARK = "#ECECEC", "#1E1E1E"
 
 
@@ -70,5 +75,20 @@ def main() -> None:
     print(f"rendered {len(cells)} concepts -> {ROOT / 'contact-sheet.png'}")
 
 
+def build() -> None:
+    """AppIcon.icns via iconutil, plus 18pt template PNGs (@1x/@2x) for the status item."""
+    with tempfile.TemporaryDirectory() as tmp:
+        iconset = Path(tmp) / "AppIcon.iconset"
+        iconset.mkdir()
+        for pt in (16, 32, 128, 256, 512):
+            render(ICON / "AppIcon.svg", pt).save(iconset / f"icon_{pt}x{pt}.png")
+            render(ICON / "AppIcon.svg", pt * 2).save(iconset / f"icon_{pt}x{pt}@2x.png")
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(ICON / "AppIcon.icns")], check=True)
+    for name in ("MenuBar", "MenuBarAttention"):
+        render(ICON / f"{name}.svg", 18).save(ICON / f"{name}.png")
+        render(ICON / f"{name}.svg", 36).save(ICON / f"{name}@2x.png")
+    print(f"built AppIcon.icns and MenuBar PNGs in {ICON}")
+
+
 if __name__ == "__main__":
-    main()
+    build() if sys.argv[1:] == ["build"] else main()

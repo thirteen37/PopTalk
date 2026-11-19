@@ -33,6 +33,8 @@ cp .build/release/Poptalk $app/Contents/MacOS/
 # Except MLX's Metal shaders: mlx-swift searches every loaded bundle's resources, so Contents/Resources works.
 mkdir -p $app/Contents/Resources
 cp -R .build/release/mlx-swift_Cmlx.bundle $app/Contents/Resources/
+# Icons are pre-rendered and committed (regenerate: assets/icon/render.py build).
+cp assets/icon/AppIcon.icns assets/icon/MenuBar*.png $app/Contents/Resources/
 cat > $app/Contents/Info.plist <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -41,6 +43,7 @@ cat > $app/Contents/Info.plist <<'PLIST'
     <key>CFBundleIdentifier</key><string>io.lyx.poptalk</string>
     <key>CFBundleName</key><string>Poptalk</string>
     <key>CFBundleExecutable</key><string>Poptalk</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>CFBundleVersion</key><string>1</string>
@@ -58,4 +61,4 @@ pkill -x Poptalk || true
 rm -rf -- /Applications/Poptalk.app
 cp -R $app /Applications/
 open /Applications/Poptalk.app
-print "Installed /Applications/Poptalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ waveform icon shows status)."
+print "Installed /Applications/Poptalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ speech-bubble icon shows status)."

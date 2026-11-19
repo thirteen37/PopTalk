@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         Settings.register()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Poptalk")
+        updateIcon()
         status.onChange = { [weak self] in self?.updateIcon() }
         let menu = NSMenu()
         menu.delegate = self
@@ -56,8 +56,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func updateIcon() {
         let attention = status.value.needsAttention
-        statusItem.button?.image = NSImage(systemSymbolName: attention ? "exclamationmark.triangle" : "waveform",
-                                           accessibilityDescription: attention ? "Poptalk needs attention" : "Poptalk")
+        // Template PNGs copied into Contents/Resources by install.zsh; SF Symbols if missing (e.g. `swift run`).
+        let image = Bundle.main.image(forResource: attention ? "MenuBarAttention" : "MenuBar")
+            ?? NSImage(systemSymbolName: attention ? "exclamationmark.triangle" : "waveform", accessibilityDescription: nil)
+        image?.isTemplate = true
+        image?.size = NSSize(width: 18, height: 18)
+        image?.accessibilityDescription = attention ? "Poptalk needs attention" : "Poptalk"
+        statusItem.button?.image = image
     }
 
     /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and Settings.

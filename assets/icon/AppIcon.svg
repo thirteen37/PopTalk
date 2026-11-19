@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Poptalk concept 1 "talk": waveform inside a speech bubble. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF9A6A"/>
+      <stop offset="1" stop-color="#E5435A"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bars" gradientUnits="userSpaceOnUse" x1="0" y1="306" x2="0" y2="606">
+      <stop offset="0" stop-color="#FF8355"/>
+      <stop offset="1" stop-color="#E0405C"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#7A1028" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <g fill="#fff" filter="url(#lift)">
+    <rect x="212" y="246" width="600" height="420" rx="170"/>
+    <path d="M318 600 C 316 690 290 752 246 800 C 344 796 430 744 486 650 Z"/>
+  </g>
+  <g fill="url(#bars)">
+    <rect x="350" y="401" width="44" height="110" rx="22"/>
+    <rect x="420" y="346" width="44" height="220" rx="22"/>
+    <rect x="490" y="306" width="44" height="300" rx="22"/>
+    <rect x="560" y="356" width="44" height="200" rx="22"/>
+    <rect x="630" y="396" width="44" height="120" rx="22"/>
+  </g>
+</svg>
