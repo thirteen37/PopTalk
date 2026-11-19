@@ -148,9 +148,13 @@ extension Pipeline {
     /// A space before inserted text when the cursor follows a non-space, non-opening character.
     static func leadingSpace(_ c: ScreenSnapshot) -> String {
         let ns = c.text as NSString  // AX offsets are UTF-16
-        guard let at = c.cursorOffset, at > 0, at <= ns.length,
-              let prev = Character(ns.substring(with: NSRange(location: at - 1, length: 1))) as Character?
-        else { return "" }
+        guard let at = c.cursorOffset, at > 0, at <= ns.length else { return "" }
+        return leadingSpace(after: Character(ns.substring(with: NSRange(location: at - 1, length: 1))))
+    }
+
+    /// A space unless `prev` is missing, whitespace, or an opening bracket/quote.
+    static func leadingSpace(after prev: Character?) -> String {
+        guard let prev else { return "" }
         return prev.isWhitespace || "([{\"'“‘".contains(prev) ? "" : " "
     }
 }

@@ -129,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let pipeline = Pipeline(complete: { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) },
                                     vocabulary: store, cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
             let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
-            await apply(result)
+            await apply(result, cursorKnown: snapshot.cursorOffset != nil)
         }
     }
 
@@ -150,7 +150,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func apply(_ result: PipelineResult) async {
+    /// Where Poptalk last pasted; spaces the next dictation when the cursor position is unknown.
+    private var lastInsert: LastInsert<AXUIElement>?
+
+    private func apply(_ result: PipelineResult, cursorKnown: Bool) async {
         let text: String
         switch result.outcome {
         case .nothing: overlay.hide(); return
@@ -166,19 +169,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let label: String
         var pasted = true
+        let field = TextIO.focusedElement()
         switch result.outcome {
         case .insert(let s, let l):
-            pasted = await TextIO.insert(s)
+            // With a known cursor the pipeline already spaced it.
+            let space = cursorKnown ? "" : field.flatMap { lastInsert?.space(before: s, into: $0) } ?? ""
+            pasted = await TextIO.insert(space + s)
             label = pasted ? l : "No text field found — copied to clipboard"
         case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
         case .insertBefore(let s): await TextIO.insertBeforeSelection(s); label = "Inserted"
         case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
         case .nothing, .error: return
         }
+        lastInsert = pasted ? field.map { LastInsert(target: $0, text: text) } : nil
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
         // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
-        overlay.showOutcome(shown, undo: pasted ? { TextIO.undo() } : nil, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        overlay.showOutcome(shown, undo: pasted ? { [weak self] in TextIO.undo(); self?.lastInsert = nil } : nil, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
         }

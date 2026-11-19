@@ -35,7 +35,7 @@ enum TextIO {
     /// the clipboard so it isn't lost. Any focused element (including Electron/terminal fields that don't
     /// report a settable value) gets the normal paste-and-restore, so the user's clipboard survives.
     static func insert(_ s: String) async -> Bool {
-        guard hasFocusedElement() else {
+        guard focusedElement() != nil else {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(s, forType: .string)
             press(.v, flags: .maskCommand)
@@ -45,10 +45,11 @@ enum TextIO {
         return true
     }
 
-    private static func hasFocusedElement() -> Bool {
+    static func focusedElement() -> AXUIElement? {
         var focused: CFTypeRef?
-        return AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
-                                             &focused) == .success && focused != nil
+        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
+                                            &focused) == .success, let focused else { return nil }
+        return (focused as! AXUIElement)
     }
 
 
