@@ -45,6 +45,26 @@ private func req(_ t: String, selection: String? = nil) -> Request {
     #expect(zip(calls.timeouts, [4.02, 7.0]).allSatisfy { abs($0 - $1) < 1e-9 } && calls.timeouts.count == 2)
 }
 
+// #29: Gemma sometimes returns the <screen> text instead of the cleaned transcript.
+private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy oat milk, Call Priya re: Q3 OKRs"
+
+@Test func echoedContextIsDetected() {
+    #expect(Pipeline.echoesContext(todoist, transcript: "Remind me to call Priya about the OKRs.", context: todoist))
+    #expect(Pipeline.echoesContext(todoist, transcript: "We went to the store yesterday and bought some milk", context: todoist))
+}
+
+@Test func termFixesFromContextAreNotEcho() {
+    #expect(!Pipeline.echoesContext("Refer to my Meal Prep project on Todoist.", transcript: "refer to my meal prep project on to do list", context: todoist))
+    // A short dictation corrected to one screen term is most of its words, but only one.
+    #expect(!Pipeline.echoesContext("Todoist", transcript: "to do list", context: todoist))
+    #expect(!Pipeline.echoesContext("Add Buy oat milk to my Todoist Inbox.", transcript: "Add Buy milk to my Todoist Inbox.", context: todoist))
+}
+
+@Test func dictationFallsBackToRawWhenModelEchoesScreen() async {
+    let r = await pipeline(reply: todoist).run(Request(transcript: "remind me to call priya about the okrs", selection: nil, context: ScreenSnapshot(text: todoist)))
+    #expect(r.outcome == .insert("remind me to call priya about the okrs", label: "Dictated (raw)"))
+}
+
 @Test func dictationFallsBackToRawWhenLLMFails() async {
     let r = await pipeline(reply: nil).run(req("hello there"))
     #expect(r.outcome == .insert("hello there", label: "Dictated (raw)"))
