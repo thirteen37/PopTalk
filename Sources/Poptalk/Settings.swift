@@ -7,7 +7,7 @@ enum Settings {
     nonisolated(unsafe) static let defaults: [String: Any] = [
         "baseURL": "http://localhost:1234/v1",
         "cleanupModel": "google/gemma-4-e4b",
-        "editModel": "qwen/qwen3.5-9b",
+        "editModel": "google/gemma-4-e4b",
     ]
     static func register() { UserDefaults.standard.register(defaults: defaults) }
 
