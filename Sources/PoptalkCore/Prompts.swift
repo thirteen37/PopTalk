@@ -55,7 +55,7 @@ public enum Prompts {
     static let dictationSystem = """
     You clean up dictated speech. Fix punctuation and capitalization, remove filler \
     words (um, uh, filler "like"), and apply spoken self-corrections ("Tuesday, no, \
-    Thursday" → "Thursday"). Fix misheard words ONLY toward names and terms that \
+    Thursday" → "Thursday"; "two PM, sorry, four PM" → "four PM"). Fix misheard words ONLY toward names and terms that \
     appear in <screen> or <vocabulary>, matching their spelling and capitalization \
     exactly. Never add, answer, or summarize content. Output only the cleaned text.
     """

@@ -49,6 +49,11 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(dictation.contains("<transcript>a&lt;b</transcript>"))
 }
 
+@Test func dictationPromptCoversSorryCorrections() {
+    let system = Prompts.dictation(transcript: "", context: snap(""), vocabulary: []).first!.content
+    #expect(system.contains(#""two PM, sorry, four PM" → "four PM""#))
+}
+
 @Test func dictationPromptContainsTranscriptAndContext() {
     let messages = Prompts.dictation(transcript: "on to-do list", context: snap("Todoist"), vocabulary: [])
     #expect(messages.last!.content.contains("on to-do list"))
