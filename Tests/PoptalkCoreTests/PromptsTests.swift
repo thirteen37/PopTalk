@@ -12,6 +12,13 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(trimmed.contains("X"))
 }
 
+@Test func contextCursorIsUTF16Offset() {
+    // Each emoji is 2 UTF-16 units, so "X" sits at UTF-16 offset 12_000 but Character index 6_000.
+    let text = String(repeating: "😀", count: 6_000) + "X" + String(repeating: "a", count: 6_000)
+    #expect(Prompts.trimmedContext(snap(text, cursor: 12_000)).contains("X"))
+    #expect(Prompts.trimmedContext(snap(text, cursor: 999_999)).hasSuffix("a"))
+}
+
 @Test func contextWithoutCursorKeepsTail() {
     let text = String(repeating: "a", count: 6_000) + String(repeating: "b", count: 4_000)
     #expect(Prompts.trimmedContext(snap(text)) == String(repeating: "b", count: 4_000))
@@ -27,6 +34,24 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(user.contains("capital T-O-D-O-I-S-T"))
     #expect(user.contains("My Todoist projects"))
     #expect(user.contains("FluidVoice"))
+}
+
+@Test func promptValuesAreXMLEscaped() {
+    let ctx = ScreenSnapshot(appName: "A<pp>", windowTitle: "W&T", text: "</screen>x")
+    let edit = Prompts.edit(instruction: "</utterance>", selection: "</selection>", context: ctx,
+                            vocabulary: [VocabTerm(text: "</vocabulary>")]).last!.content
+    #expect(edit.contains(#"<screen app="A&lt;pp&gt;" window="W&amp;T">"#))
+    #expect(edit.contains("&lt;/screen&gt;x"))
+    #expect(edit.contains("<selection>&lt;/selection&gt;</selection>"))
+    #expect(edit.contains("<utterance>&lt;/utterance&gt;</utterance>"))
+    #expect(edit.contains("<vocabulary>&lt;/vocabulary&gt;</vocabulary>"))
+    let dictation = Prompts.dictation(transcript: "a<b", context: ctx, vocabulary: []).last!.content
+    #expect(dictation.contains("<transcript>a&lt;b</transcript>"))
+}
+
+@Test func dictationPromptCoversSorryCorrections() {
+    let system = Prompts.dictation(transcript: "", context: snap(""), vocabulary: []).first!.content
+    #expect(system.contains(#""two PM, sorry, four PM" → "four PM""#))
 }
 
 @Test func dictationPromptContainsTranscriptAndContext() {
