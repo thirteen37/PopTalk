@@ -11,15 +11,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     let store = VocabularyStore()
     private let recorder = AudioRecorder()
-    private var transcriber: Transcriber?
-    private var loadingTranscriber = false
-    private var transcriberError: String?
+    let status = StatusModel()
+    private var transcriber: Transcriber? { didSet { syncSpeech() } }
+    private var loadingTranscriber = false { didSet { syncSpeech() } }
+    private var transcriberError: String? { didSet { syncSpeech() } }
     private var hotkey: Hotkey!
 
     func applicationDidFinishLaunching(_ note: Notification) {
         Settings.register()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Poptalk")
+        status.onChange = { [weak self] in self?.updateIcon() }
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -43,10 +45,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() })
-        installHotkeyWhenTrusted()
+        installHotkeyWhenTrusted()  // also checks permissions
+        if let tab = status.value.launchTab { openSettings(at: tab) }
     }
 
-    /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and menu.
+    private func syncSpeech() {
+        status.value.speech = transcriber != nil ? .ready : loadingTranscriber ? .loading
+            : transcriberError.map { .failed($0) } ?? .loading
+    }
+
+    private func updateIcon() {
+        let attention = status.value.needsAttention
+        statusItem.button?.image = NSImage(systemSymbolName: attention ? "exclamationmark.triangle" : "waveform",
+                                           accessibilityDescription: attention ? "Poptalk needs attention" : "Poptalk")
+    }
+
+    /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and Settings.
     private func loadTranscriber() {
         guard transcriber == nil, !loadingTranscriber else { return }
         loadingTranscriber = true
@@ -59,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// MLX models of the current selection and their load state; a press before `.ready` skips the model.
-    private var modelStatus: [String: ModelStatus] = [:]
+    private var modelStatus: [String: ModelStatus] = [:] { didSet { status.value.models = modelStatus } }
     private var settingsWork: DispatchWorkItem?
 
     /// Loads and prewarms the selected MLX models in the background, unloading any others; on a repeat
@@ -103,7 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// The event tap needs Accessibility; retry until the user grants it.
     private func installHotkeyWhenTrusted() {
-        if hotkey.install() { return }
+        status.value.hotkeyInstalled = hotkey.install()
+        status.refreshPermissions()
+        if status.value.hotkeyInstalled { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.installHotkeyWhenTrusted() }
     }
 
@@ -252,62 +268,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        status.refreshPermissions()
         menu.removeAllItems()
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: status.value.summary, action: nil, keyEquivalent: "")
         menu.addItem(.separator())
-        if transcriber == nil {
-            menu.addItem(withTitle: transcriberError.map { "⚠️ Speech model failed: \($0)" } ?? "Speech model loading…",
-                         action: nil, keyEquivalent: "")
-        }
-        let sel = Settings.selection
-        for id in sel.mlxModels {
-            let role = sel.cleanupModel == sel.editModel ? "Model" : id == sel.cleanupModel ? "Cleanup model" : "Edit model"
-            menu.addItem(withTitle: "\(role) \((id as NSString).lastPathComponent): \(modelStatus[id]?.title ?? ModelStatus.loading.title)",
-                         action: nil, keyEquivalent: "")
-        }
-        let perms: [(String, Bool, String)] = [
-            ("Microphone", AVCaptureDevice.authorizationStatus(for: .audio) == .authorized, "Privacy_Microphone"),
-            ("Accessibility", AXIsProcessTrusted(), "Privacy_Accessibility"),
-            ("Screen Recording", CGPreflightScreenCaptureAccess(), "Privacy_ScreenCapture"),
-        ]
-        for (name, ok, pane) in perms {
-            let item = menu.addItem(withTitle: "\(ok ? "✅" : "⚠️") \(name)", action: #selector(openPane(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = pane
-        }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Import FluidVoice Vocabulary", action: #selector(importFluidVoice), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Quit Poptalk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
 
-    @objc private func openSettings() {
+    @objc private func showSettings() {
+        // Lands on the problem when there is one.
+        openSettings(at: status.value.needsAttention ? (status.value.missing.isEmpty ? .models : .permissions) : status.tab)
+    }
+
+    private func openSettings(at tab: SettingsTab) {
+        status.tab = tab
         if settingsWindow == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+            let view = SettingsView(status: status, store: store) { [weak self] in
+                self?.loadTranscriber()  // each only retries what failed
+                self?.prepareModels()
+            }
+            let host = NSHostingController(rootView: view)
+            host.sizingOptions = .preferredContentSize  // window tracks the content's fitting size
+            let w = NSWindow(contentViewController: host)
+            w.styleMask.remove(.resizable)
             w.title = "Poptalk Settings"
             w.isReleasedWhenClosed = false
             settingsWindow = w
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
-    }
-
-    @objc private func openPane(_ sender: NSMenuItem) {
-        if sender.representedObject as? String == "Privacy_ScreenCapture" { CGRequestScreenCaptureAccess() }
-        let pane = sender.representedObject as! String
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
-    }
-
-    @objc private func importFluidVoice() {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("FluidVoice/parakeet_custom_vocabulary.json")
-        let alert = NSAlert()
-        do {
-            let terms = try VocabularyStore.importFluidVoice(from: url)
-            for t in terms { try store.add(t) }
-            alert.messageText = "Imported \(terms.count) term(s) from FluidVoice."
-        } catch {
-            alert.messageText = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
-        }
-        alert.runModal()
     }
 }

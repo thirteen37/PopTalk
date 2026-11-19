@@ -1,4 +1,5 @@
 import AVFoundation
+import Observation
 import PoptalkCore
 import ServiceManagement
 import SwiftUI
@@ -15,7 +16,30 @@ enum Settings {
     static var inputDeviceUID: String? { UserDefaults.standard.string(forKey: "inputDeviceUID").flatMap { $0.isEmpty ? nil : $0 } }
 }
 
+/// Live status for the menu and Settings; `AppDelegate` writes it.
+@Observable @MainActor
+final class StatusModel {
+    var value = AppStatus() { didSet { if value != oldValue { onChange() } } }
+    var tab = SettingsTab.general
+    @ObservationIgnored var onChange: () -> Void = {}
+
+    /// macOS sends no notification when a permission is granted: callers poll.
+    func refreshPermissions() {
+        var g = Set<Permission>()
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized { g.insert(.microphone) }
+        if AXIsProcessTrusted() { g.insert(.accessibility) }
+        if CGPreflightScreenCaptureAccess() { g.insert(.screenRecording) }
+        if value.granted != g { value.granted = g }
+    }
+}
+
 struct SettingsView: View {
+    static let width: CGFloat = 500
+    @Bindable var status: StatusModel
+    let store: VocabularyStore
+    /// Retries whatever failed to load (speech model and/or LLM models).
+    let retry: () -> Void
+
     @AppStorage("provider") private var provider = ModelSettings.defaults["provider"]!
     @AppStorage("baseURL") private var baseURL = ModelSettings.defaults["baseURL"]!
     @AppStorage("mlxCleanupModel") private var mlxCleanupModel = ModelSettings.defaults["mlxCleanupModel"]!
@@ -24,6 +48,8 @@ struct SettingsView: View {
     @AppStorage("lmstudioEditModel") private var lmstudioEditModel = ModelSettings.defaults["lmstudioEditModel"]!
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var terms: [VocabTerm] = []
+    @State private var vocabMessage: String?
 
     private let devices = AVCaptureDevice.DiscoverySession(
         deviceTypes: [.microphone], mediaType: .audio, position: .unspecified).devices
@@ -35,6 +61,43 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        TabView(selection: $status.tab) {
+            general.tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
+            models.tabItem { Label("Models", systemImage: "cpu") }.tag(SettingsTab.models)
+            permissions.tabItem { Label("Permissions", systemImage: "lock.shield") }.tag(SettingsTab.permissions)
+            vocabulary.tabItem { Label("Vocabulary", systemImage: "character.book.closed") }.tag(SettingsTab.vocabulary)
+        }
+        .task {  // runs while the window is open
+            while !Task.isCancelled {
+                status.refreshPermissions()
+                let t = store.terms  // the overlay can save terms too
+                if t != terms { terms = t }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private var general: some View {
+        Form {
+            Section {
+                Text("Hold Right ⌥ to talk. With text selected, what you say edits the selection.")
+            }
+            Section("Microphone") {
+                Picker("Input", selection: $inputDeviceUID) {
+                    Text("System default").tag("")
+                    ForEach(devices, id: \.uniqueID) { Text($0.localizedName).tag($0.uniqueID) }
+                }
+            }
+            Toggle("Launch at login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { _, on in
+                    try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                }
+        }
+        .formStyle(.grouped)
+        .fitted()
+    }
+
+    private var models: some View {
         Form {
             Section("Language model") {
                 Picker("Provider", selection: $provider) {
@@ -52,24 +115,103 @@ struct SettingsView: View {
                 default:
                     TextField("Dictation cleanup model", text: $mlxCleanupModel)
                     TextField("Edit model", text: $mlxEditModel)
-                    Text("A Hugging Face id (downloaded on first use) or a local model folder. Status is in the menu.")
+                    Text("A Hugging Face id (downloaded on first use) or a local model folder.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            Section("Microphone") {
-                Picker("Input", selection: $inputDeviceUID) {
-                    Text("System default").tag("")
-                    ForEach(devices, id: \.uniqueID) { Text($0.localizedName).tag($0.uniqueID) }
+            Section("Status") {
+                statusRow("Speech model", status.value.speech)
+                let sel = Settings.selection
+                ForEach(sel.mlxModels, id: \.self) { id in
+                    let role = sel.cleanupModel == sel.editModel ? "Model" : id == sel.cleanupModel ? "Cleanup model" : "Edit model"
+                    statusRow("\(role) \((id as NSString).lastPathComponent)", status.value.models[id] ?? .loading)
                 }
             }
-            Toggle("Launch at login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, on in
-                    try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-                }
-            Text("Hold Right ⌥ to talk. With text selected, what you say edits the selection.")
-                .font(.footnote).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
-        .frame(width: 460)
+        .fitted()
+    }
+
+    private func statusRow(_ name: String, _ s: ModelStatus) -> some View {
+        LabeledContent(name) {
+            HStack {
+                Text(s.title).lineLimit(2).textSelection(.enabled)
+                if s.isFailed { Button("Retry", action: retry) }
+            }
+        }
+    }
+
+    private var permissions: some View {
+        Form {
+            Section {
+                ForEach(Permission.allCases, id: \.self) { p in
+                    LabeledContent {
+                        Button("Open System Settings") {
+                            if p == .screenRecording { CGRequestScreenCaptureAccess() }
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(p.pane)")!)
+                        }
+                    } label: {
+                        Label(p.rawValue, systemImage: status.value.isGranted(p) ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(status.value.isGranted(p) ? .green : status.value.missing.contains(p) ? .orange : .secondary)
+                    }
+                }
+            } footer: {
+                Text("Input Monitoring is checked by whether the hotkey is active; Accessibility usually covers it. Screen Recording is optional: it adds on-screen text as context.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .fitted()
+    }
+
+    private var vocabulary: some View {
+        VStack(alignment: .leading) {
+            List {
+                ForEach(terms, id: \.text) { t in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(t.text)
+                            if !t.aliases.isEmpty {
+                                Text(t.aliases.joined(separator: ", ")).font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Button { delete(t) } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+                    }
+                }
+            }
+            .overlay { if terms.isEmpty { Text("No saved terms").foregroundStyle(.secondary) } }
+            HStack {
+                Button("Import FluidVoice Vocabulary", action: importFluidVoice)
+                if let vocabMessage { Text(vocabMessage).font(.footnote).foregroundStyle(.secondary) }
+            }
+        }
+        .padding()
+        .frame(width: SettingsView.width, height: 400)
+    }
+
+    private func delete(_ t: VocabTerm) {
+        do { try store.remove(t.text); vocabMessage = nil } catch { vocabMessage = "Couldn't delete: \(error.localizedDescription)" }
+        terms = store.terms
+    }
+
+    private func importFluidVoice() {
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("FluidVoice/parakeet_custom_vocabulary.json")
+        do {
+            let imported = try VocabularyStore.importFluidVoice(from: url)
+            for t in imported { try store.add(t) }
+            vocabMessage = "Imported \(imported.count) term(s) from FluidVoice."
+        } catch {
+            vocabMessage = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
+        }
+        terms = store.terms
+    }
+}
+
+private extension View {
+    /// Fixed width, height of the content: the window (sized by preferredContentSize) follows tab and provider changes.
+    func fitted() -> some View {
+        scrollDisabled(true).frame(width: SettingsView.width).fixedSize(horizontal: false, vertical: true)
     }
 }
