@@ -88,8 +88,9 @@ public struct Pipeline: Sendable {
         case .replace: .replaceSelection(edit.text, label: "Replaced")
         case .correct: .replaceSelection(edit.text, label: "Corrected")
         case .edit: .replaceSelection(edit.text, label: "Edited")
-        case .insertBefore: .insertBefore(edit.text)
-        case .insertAfter: .insertAfter(edit.text)
+        // Models sometimes repeat the selection in an insert; drop it so it isn't duplicated.
+        case .insertBefore: .insertBefore(edit.text.hasSuffix(selection) ? String(edit.text.dropLast(selection.count)) : edit.text)
+        case .insertAfter: .insertAfter(edit.text.hasPrefix(selection) ? String(edit.text.dropFirst(selection.count)) : edit.text)
         }
         guard let term = edit.vocabulary else { return PipelineResult(outcome: outcome) }
         if edit.remember, (try? vocabulary.add(term)) != nil {

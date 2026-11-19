@@ -78,6 +78,19 @@ private func req(_ t: String, selection: String? = nil) -> Request {
     #expect(r.outcome == .insertAfter(" See you Thursday."))
 }
 
+// #2: a model that repeats the selection inside an insert must not duplicate it.
+@Test func insertAfterStripsRepeatedSelection() async {
+    let reply = #"{"action":"insertAfter","text":"Thanks for the update. See you Thursday.","vocabulary":null,"remember":false}"#
+    let r = await pipeline(reply: reply).run(req("add see you Thursday", selection: "Thanks for the update."))
+    #expect(r.outcome == .insertAfter(" See you Thursday."))
+}
+
+@Test func insertBeforeStripsRepeatedSelection() async {
+    let reply = #"{"action":"insertBefore","text":"Hi Sam, Thanks for the update.","vocabulary":null,"remember":false}"#
+    let r = await pipeline(reply: reply).run(req("add hi Sam before", selection: "Thanks for the update."))
+    #expect(r.outcome == .insertBefore("Hi Sam, "))
+}
+
 @Test func editMapsOutcome() async {
     let reply = #"{"action":"edit","text":"Could you send it?","vocabulary":null,"remember":false}"#
     let r = await pipeline(reply: reply).run(req("more formal", selection: "send it"))
