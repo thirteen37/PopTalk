@@ -7,17 +7,18 @@ adapter_path: training/out/adapters
 fine_tune_type: lora
 mask_prompt: true          # loss on the assistant turn only
 num_layers: 16             # last 16 of 35 layers: halves backward cost vs all layers
-batch_size: 4
-iters: 600                 # ~0.4 epoch of 5.7k examples; the task is mostly format and action choice
+batch_size: 1
+grad_accumulation_steps: 4   # effective batch 4; batch 4 pushed a shared 24 GB Mac into swap (262k-vocab logits)
+iters: 600                 # micro-batches = 150 optimizer steps (~600 examples): the shared Mac runs ~7 s/example; loss plateaued by ~75 steps in a batch-4 trial
 learning_rate: 1.0e-4
 lr_schedule:
   name: cosine_decay
-  warmup: 30
-  arguments: [1.0e-4, 600, 1.0e-6]
-steps_per_report: 25
-steps_per_eval: 200
-val_batches: 15
-save_every: 200
+  warmup: 10
+  arguments: [1.0e-4, 150, 1.0e-6]
+steps_per_report: 100
+steps_per_eval: 600
+val_batches: 60
+save_every: 300
 max_seq_length: 3072
 grad_checkpoint: true
 seed: 21
