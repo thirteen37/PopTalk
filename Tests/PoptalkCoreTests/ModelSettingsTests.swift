@@ -53,6 +53,7 @@ private func suite(_ saved: [String: String] = [:]) -> UserDefaults {
     #expect(ModelStatus(downloaded: 1) == .loading)  // download done, weights still loading
     #expect(ModelStatus.ready.title == "ready")
     #expect(ModelStatus.failed("offline").title == "⚠️ failed: offline")
+    #expect(ModelStatus.failed("x").isFailed && !ModelStatus.loading.isFailed)
 }
 
 @Test func dictationBeforeModelIsReadyInsertsRawWithHint() async {

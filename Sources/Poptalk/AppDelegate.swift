@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import PoptalkCore
+import PoptalkMLX
 import PoptalkSpeech
 import SwiftUI
 
@@ -29,6 +30,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
         loadTranscriber()
+        prepareModels()
+        // Text fields save on every keystroke: wait for a pause before loading what was typed.
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.settingsWork?.cancel()
+                let work = DispatchWorkItem { self?.prepareModels() }
+                self?.settingsWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+            }
+        }
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() })
@@ -44,6 +55,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do { transcriber = try await Transcriber(); transcriberError = nil } catch {
                 transcriberError = error.localizedDescription
             }
+        }
+    }
+
+    /// MLX models of the current selection and their load state; a press before `.ready` skips the model.
+    private var modelStatus: [String: ModelStatus] = [:]
+    private var settingsWork: DispatchWorkItem?
+
+    /// Loads and prewarms the selected MLX models in the background, unloading any others; on a repeat
+    /// call, only retries failed loads (so presses and unrelated settings changes are cheap).
+    private func prepareModels() {
+        let ids = Settings.selection.mlxModels
+        let todo = ids.filter { modelStatus[$0]?.isFailed ?? true }
+        guard Set(ids) != Set(modelStatus.keys) || !todo.isEmpty else { return }
+        modelStatus = modelStatus.filter { ids.contains($0.key) }
+        Task { await MLXProvider.keepOnly(ids) }
+        for id in todo {
+            modelStatus[id] = .loading
+            Task {
+                do {
+                    try await MLXProvider.prepare(id) { f in
+                        Task { @MainActor [weak self] in
+                            // Progress hops can land late: never step back from ready or for a deselected model.
+                            if let s = self?.modelStatus[id], s != .ready { self?.modelStatus[id] = ModelStatus(downloaded: f) }
+                        }
+                    }
+                    if modelStatus[id] != nil { modelStatus[id] = .ready }
+                } catch {
+                    if modelStatus[id] != nil { modelStatus[id] = .failed(error.localizedDescription) }
+                }
+            }
+        }
+    }
+
+    /// The selected provider's completion function. MLX models still loading throw `ModelLoading`.
+    private func makeComplete() async throws -> Pipeline.Complete {
+        let sel = Settings.selection
+        let base = sel.provider == "mlx" ? try await MLXProvider.make(preload: []).0
+            : try Providers.make(sel.provider, baseURL: Settings.baseURL).0
+        guard sel.provider == "mlx" else { return base }
+        let ready = Set(modelStatus.filter { $0.value == .ready }.keys)
+        return { model, messages, json, timeout in
+            guard ready.contains(model) else { throw Pipeline.ModelLoading() }
+            return try await base(model, messages, json, timeout)
         }
     }
 
@@ -65,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func pressed() {
         guard !busy else { return }  // one request at a time
         loadTranscriber()  // retries after a failed load
+        prepareModels()  // likewise for the MLX models
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
@@ -126,9 +181,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 overlay.showError("Transcription failed"); return
             }
-            let client = LLMClient(baseURL: Settings.baseURL)
-            let pipeline = Pipeline(complete: { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) },
-                                    vocabulary: store, cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
+            // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
+            // Apple Intelligence off) still dictates raw.
+            let complete: Pipeline.Complete
+            do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
+            let models = Settings.selection
+            let pipeline = Pipeline(complete: complete, vocabulary: store,
+                                    cleanupModel: models.cleanupModel, editModel: models.editModel)
             let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
             await apply(result, cursorKnown: snapshot.cursorOffset != nil)
         }
@@ -198,6 +257,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         if transcriber == nil {
             menu.addItem(withTitle: transcriberError.map { "⚠️ Speech model failed: \($0)" } ?? "Speech model loading…",
+                         action: nil, keyEquivalent: "")
+        }
+        let sel = Settings.selection
+        for id in sel.mlxModels {
+            let role = sel.cleanupModel == sel.editModel ? "Model" : id == sel.cleanupModel ? "Cleanup model" : "Edit model"
+            menu.addItem(withTitle: "\(role) \((id as NSString).lastPathComponent): \(modelStatus[id]?.title ?? ModelStatus.loading.title)",
                          action: nil, keyEquivalent: "")
         }
         let perms: [(String, Bool, String)] = [

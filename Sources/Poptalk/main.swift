@@ -23,13 +23,14 @@ if args.count >= 3, args[1] == "--transcribe" {
 if args.count >= 3, args[1] == "--pipeline" {
     func opt(_ name: String) -> String? { args.firstIndex(of: name).map { args[$0 + 1] } }
     Settings.register()
-    // -provider lmstudio (default) | apple (on-device FoundationModels) | apple-pcc (Private Cloud Compute)
-    //   | mlx (in-process; -cleanupModel/-editModel are Hugging Face ids or local MLX directories)
-    let provider = UserDefaults.standard.string(forKey: "provider") ?? "lmstudio"
+    // Uses the saved settings; override with -provider mlx (in-process; -mlxCleanupModel/-mlxEditModel are
+    //   Hugging Face ids or local MLX directories) | lmstudio (-lmstudioCleanupModel/-lmstudioEditModel) | apple.
+    let sel = Settings.selection
+    let provider = sel.provider
     let complete: Pipeline.Complete
     do {
         var meta: [String: String]
-        (complete, meta) = provider == "mlx" ? try await MLXProvider.make(preload: [Settings.cleanupModel, Settings.editModel])
+        (complete, meta) = provider == "mlx" ? try await MLXProvider.make(preload: sel.mlxModels)
             : try Providers.make(provider, baseURL: Settings.baseURL)
         if provider == "mlx" { print("loaded in \(meta["loadSeconds"]!)s, footprint \(meta["footprintMB"]!) MB") }
     }
@@ -37,7 +38,7 @@ if args.count >= 3, args[1] == "--pipeline" {
     let pipeline = Pipeline(
         complete: complete,
         vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-debug-vocab.json")),
-        cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
+        cleanupModel: sel.cleanupModel, editModel: sel.editModel)
     let ctx = opt("--context").map { ScreenSnapshot(text: $0) } ?? ScreenSnapshot()
     let start = Date()
     let r = await pipeline.run(Request(transcript: args[2], selection: opt("--selection"), context: ctx))

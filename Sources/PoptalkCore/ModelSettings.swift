@@ -46,6 +46,8 @@ public enum ModelStatus: Equatable, Sendable {
     /// From a download progress fraction: once complete, the weights are still loading.
     public init(downloaded f: Double) { self = f < 1 ? .downloading(f) : .loading }
 
+    public var isFailed: Bool { if case .failed = self { true } else { false } }
+
     public var title: String {
         switch self {
         case .loading: "loading…"
