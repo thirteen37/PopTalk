@@ -1,6 +1,7 @@
 import AppKit
 import FluidAudio
 import Foundation
+import FoundationModels
 import PoptalkCore
 
 // Debug entry point: Poptalk --transcribe <file> [boost terms…]
@@ -22,8 +23,19 @@ if args.count >= 3, args[1] == "--pipeline" {
     func opt(_ name: String) -> String? { args.firstIndex(of: name).map { args[$0 + 1] } }
     Settings.register()
     let client = LLMClient(baseURL: Settings.baseURL)
+    var complete: Pipeline.Complete = { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) }
+    // -provider apple: Apple Intelligence on-device model (FoundationModels), for comparison.
+    if UserDefaults.standard.string(forKey: "provider") == "apple", #available(macOS 26, *) {
+        guard case .available = SystemLanguageModel.default.availability else {
+            print("Apple Intelligence unavailable: \(SystemLanguageModel.default.availability)"); exit(1)
+        }
+        complete = { _, messages, _, _ in
+            let session = LanguageModelSession(instructions: messages.first { $0.role == "system" }?.content ?? "")
+            return try await session.respond(to: messages.last!.content, options: GenerationOptions(temperature: 0)).content
+        }
+    }
     let pipeline = Pipeline(
-        complete: { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) },
+        complete: complete,
         vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-debug-vocab.json")),
         cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
     let ctx = opt("--context").map { ScreenSnapshot(text: $0) } ?? ScreenSnapshot()
