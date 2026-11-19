@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Poptalk concept 2 "pop": a waveform bubble bursting open. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34E3C3"/>
+      <stop offset="1" stop-color="#0A7A92"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#04424F" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <g filter="url(#lift)">
+    <!-- bubble ring, popped open at the top-right -->
+    <path d="M792.1 436.9 A290 290 0 1 1 587.1 231.9" fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round"/>
+    <!-- sparks flying out of the gap -->
+    <path d="M748.9 275.1 L805.4 218.6" fill="none" stroke="#FFE07A" stroke-width="40" stroke-linecap="round"/>
+    <g fill="#FFE07A">
+      <circle cx="840.4" cy="424" r="24"/>
+      <circle cx="600" cy="183.6" r="24"/>
+    </g>
+    <g fill="#fff">
+      <rect x="350" y="442" width="44" height="140" rx="22"/>
+      <rect x="420" y="382" width="44" height="260" rx="22"/>
+      <rect x="490" y="342" width="44" height="340" rx="22"/>
+      <rect x="560" y="392" width="44" height="240" rx="22"/>
+      <rect x="630" y="437" width="44" height="150" rx="22"/>
+    </g>
+  </g>
+</svg>
