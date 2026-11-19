@@ -136,7 +136,7 @@ extension Pipeline {
 
     /// Drops pure hesitation sounds (um, uh, er, erm, hmm). Context-dependent fillers
     /// ("like", "basically", "you know") are left to the LLM, since they can be real words.
-    static func stripHesitations(_ s: String) -> String {
+    public static func stripHesitations(_ s: String) -> String {
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
         var out = hesitation.stringByReplacingMatches(
             in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length), withTemplate: "")

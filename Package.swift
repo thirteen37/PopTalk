@@ -29,6 +29,8 @@ let package = Package(
             dependencies: ["PoptalkCore", "PoptalkSpeech", "PoptalkMLX", .product(name: "FluidAudio", package: "FluidAudio")]
         ),
         .executableTarget(name: "PoptalkBench", dependencies: ["PoptalkCore", "PoptalkSpeech", "PoptalkMLX"]),
+        // Fine-tuning data (#21): batch transcription, production prompt rendering, teacher completions.
+        .executableTarget(name: "PoptalkDatagen", dependencies: ["PoptalkCore", "PoptalkSpeech", "PoptalkMLX"]),
         .testTarget(name: "PoptalkCoreTests", dependencies: ["PoptalkCore"]),
     ]
 )
