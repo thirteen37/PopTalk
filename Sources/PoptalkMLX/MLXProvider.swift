@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 import HuggingFace
 import MLXHuggingFace
 import MLXLLM
@@ -36,6 +37,7 @@ public enum MLXProvider {
         }
     }
     private static let models = Models()
+    static let timing = Logger(subsystem: "io.lyx.poptalk", category: "timing")
 
     /// Loads `id` (downloading it into the HF cache on first use, reporting the download fraction) and runs
     /// one generation, so the first real request doesn't pay the ~3 s Metal warm-up.
@@ -71,7 +73,13 @@ public enum MLXProvider {
                 var out = ""
                 // Leaving the loop on cancellation terminates the stream, which stops generation.
                 for await g in try await container.generate(input: lm, parameters: GenerateParameters(maxTokens: maxTokens, temperature: 0)) {
-                    if case .chunk(let s) = g { out += s }
+                    switch g {
+                    case .chunk(let s): out += s
+                    // Timing only (no text), for diagnosing latency: `log stream --predicate 'subsystem == "io.lyx.poptalk"'`.
+                    case .info(let i):
+                        timing.info("llm \((model as NSString).lastPathComponent, privacy: .public) prompt \(i.promptTokenCount) tok \(i.promptTime, format: .fixed(precision: 2))s, gen \(i.generationTokenCount) tok \(i.generateTime, format: .fixed(precision: 2))s")
+                    default: break
+                    }
                 }
                 try Task.checkCancellation()
                 return out
