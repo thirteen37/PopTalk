@@ -2,7 +2,7 @@ import AppKit
 import PoptalkCore
 
 /// Small non-activating HUD at the bottom of the screen. While an outcome is shown,
-/// Esc undoes it and Return accepts a vocabulary offer; those two keys are consumed only then.
+/// bare Esc undoes it and bare Return accepts a vocabulary offer; those two keys are consumed only then.
 @MainActor
 final class Overlay {
     private let panel: NSPanel
@@ -46,17 +46,17 @@ final class Overlay {
         var parts = [text]
         if undo != nil { parts.append("esc to undo") }
         if let v = vocabularyOffer { parts.append("⏎ add “\(v.text)” to vocabulary") }
-        show(parts.joined(separator: "  ·  "), for: 4)
-        keys = KeyCatcher { [weak self] code in
-            switch code {
+        show(parts.joined(separator: "  ·  "), for: 2)
+        keys = KeyCatcher { [weak self] code, flags in
+            switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
             // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
-            case 53 where undo != nil:
+            case .undo:
                 DispatchQueue.main.async { undo?(); self?.show("Undone", for: 1) }
                 return true
-            case 36 where vocabularyOffer != nil:
+            case .accept:
                 DispatchQueue.main.async { onAccept(); self?.show("Added “\(vocabularyOffer!.text)”", for: 1.5) }
                 return true
-            default: return false
+            case nil: return false
             }
         }
     }
@@ -75,7 +75,8 @@ final class Overlay {
         let width = min(max(fit.width + 40, 160), 640)
         let height = max(44, ceil(fit.height) + 24)
         label.preferredMaxLayoutWidth = width - 28
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
+                ?? NSScreen.main ?? NSScreen.screens.first else { return }
         let f = screen.visibleFrame
         panel.setFrame(NSRect(x: f.midX - width / 2, y: f.minY + 50, width: width, height: height), display: true)
         panel.orderFrontRegardless()
@@ -91,18 +92,21 @@ final class Overlay {
 private final class KeyCatcher {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
-    private let handler: (Int64) -> Bool
+    private let handler: (Int64, CGEventFlags) -> Bool
 
-    init(handler: @escaping (Int64) -> Bool) {
+    init(handler: @escaping (Int64, CGEventFlags) -> Bool) {
         self.handler = handler
         tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
             eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
             callback: { _, type, event, ctx in
-                guard type == .keyDown else { return Unmanaged.passUnretained(event) }
                 let me = Unmanaged<KeyCatcher>.fromOpaque(ctx!).takeUnretainedValue()
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    MainActor.assumeIsolated { if let tap = me.tap { CGEvent.tapEnable(tap: tap, enable: true) } }
+                }
+                guard type == .keyDown else { return Unmanaged.passUnretained(event) }
                 let code = event.getIntegerValueField(.keyboardEventKeycode)
-                let consumed = MainActor.assumeIsolated { me.handler(code) }
+                let consumed = MainActor.assumeIsolated { me.handler(code, event.flags) }
                 return consumed ? nil : Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque())

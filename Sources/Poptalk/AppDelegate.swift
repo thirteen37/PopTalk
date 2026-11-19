@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let store = VocabularyStore()
     private let recorder = AudioRecorder()
     private var transcriber: Transcriber?
+    private var loadingTranscriber = false
+    private var transcriberError: String?
     private var hotkey: Hotkey!
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -20,14 +22,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        // Set on the system-wide element, this is the process-wide AX timeout (default ~6 s): a hung app can't freeze us.
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.25)
         if !AXIsProcessTrusted() {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
-        Task { transcriber = try? await Transcriber() }
+        loadTranscriber()
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() })
         installHotkeyWhenTrusted()
+    }
+
+    /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and menu.
+    private func loadTranscriber() {
+        guard transcriber == nil, !loadingTranscriber else { return }
+        loadingTranscriber = true
+        Task {
+            defer { loadingTranscriber = false }
+            do { transcriber = try await Transcriber(); transcriberError = nil } catch {
+                transcriberError = error.localizedDescription
+            }
+        }
     }
 
     /// The event tap needs Accessibility; retry until the user grants it.
@@ -47,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func pressed() {
         guard !busy else { return }  // one request at a time
+        loadTranscriber()  // retries after a failed load
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
@@ -89,7 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let (ctx, sel) = (contextTask, selectionTask)
         (contextTask, selectionTask) = (nil, nil)
         guard AudioGate.hasSpeech(samples) else { overlay.hide(); return }
-        guard let transcriber else { overlay.showError("Speech model still loading…"); return }
+        guard let transcriber else {
+            overlay.showError(transcriberError.map { "Speech model failed to load (retrying): \($0)" } ?? "Speech model still loading…")
+            return
+        }
         busy = true
         overlay.showWorking()
         let store = store
@@ -145,8 +165,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let label: String
+        var pasted = true
         switch result.outcome {
-        case .insert(let s, let l): await TextIO.insert(s); label = l
+        case .insert(let s, let l):
+            pasted = await TextIO.insert(s)
+            label = pasted ? l : "No text field found — copied to clipboard"
         case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
         case .insertBefore(let s): await TextIO.insertBeforeSelection(s); label = "Inserted"
         case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
@@ -154,7 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
-        overlay.showOutcome(shown, undo: { TextIO.undo() }, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
+        overlay.showOutcome(shown, undo: pasted ? { TextIO.undo() } : nil, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
         }
@@ -164,6 +188,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
+        if transcriber == nil {
+            menu.addItem(withTitle: transcriberError.map { "⚠️ Speech model failed: \($0)" } ?? "Speech model loading…",
+                         action: nil, keyEquivalent: "")
+        }
         let perms: [(String, Bool, String)] = [
             ("Microphone", AVCaptureDevice.authorizationStatus(for: .audio) == .authorized, "Privacy_Microphone"),
             ("Accessibility", AXIsProcessTrusted(), "Privacy_Accessibility"),
