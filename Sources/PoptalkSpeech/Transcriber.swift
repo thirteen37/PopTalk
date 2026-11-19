@@ -19,10 +19,17 @@ public actor Transcriber {
 
     /// - Parameter version: Parakeet TDT `v2` (English, the app's default) or `v3` (multilingual).
     public init(version: AsrModelVersion = .v2) async throws {
+        Self.quietLogs()
         let models = try await AsrModels.downloadAndLoad(version: version)
         asr = AsrManager()
         try await asr.loadModels(models)
         ctcModels = try await CtcModels.downloadAndLoad(variant: .ctc110m)
+    }
+
+    /// Drops FluidAudio's debug and info logs, which include transcripts (the rescorer's
+    /// "Final: …" and each replacement), from stderr and the unified log. Warnings and errors stay.
+    public static func quietLogs() {
+        AppLogger.minimumLevel = .warning
     }
 
     /// - Parameter samples: 16 kHz mono Float32.
