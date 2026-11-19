@@ -497,6 +497,111 @@ def teacher_target(it, reply):
     return ej("edit", text)
 
 
+# ---------- held-out eval ----------
+# Templates, sentences and phrasings below are used only here, never in training, so the held-out
+# set measures generalization to new wording (names and tools still come from the shared lexicon).
+HO_NAMED = ["Could {P} send the {T} runbook to {P2} before the incident review?",
+            "I'm meeting {P} {S} from {C} next {D} to talk about pricing.",
+            "The {C} invoice still lists {T} as a line item.", "Please add {P} as a reviewer on the {T} change.",
+            "{P} thinks we should drop {T} and keep {T2}.", "Our {PRJ} demo uses {T} for the backend.",
+            "Can you check whether {C} renewed their {T} seats?", "Thank {P} for the {T} workshop notes.",
+            "The {PRJ} retro moved to {D} because {P} is traveling.", "{P} wrote the {C} onboarding checklist in {T}."]
+HO_CORRECT = [("Set the alarm for {X} tomorrow.", "time"), ("Send the draft to {X} instead.", "person"),
+              ("The party is on {X} evening.", "day"), ("We need {X} extra chairs.", "num")]
+HO_KEEP = ["I actually think the old version was faster.", "No, the review is still on for today.",
+           "Sorry, I didn't catch your name at the start.", "It sounds like the speakers are broken."]
+HO_ASK = ["Can you remind everyone about the deadline?", "What should we name the new project?",
+          "Write a summary of today's standup.", "How long does the battery last on these headphones?"]
+HO_PLAIN = ["The bakery on the corner closes early on Sundays.", "My cousin is visiting for a few days next month.",
+            "The elevator in our building is out of order again.", "We planted tomatoes and herbs on the balcony."]
+HO_SHORTER = ["keep it short", "less wordy please", "make this tighter"]
+HO_CORES = ["the shuttle to the venue leaves at eight", "the cafeteria is closed for renovation this week",
+            "the board meeting has been moved to the afternoon"]
+HO_LISTS = [["buy stamps", "mail the package", "return the library books"], ["carrots", "yogurt", "bananas", "honey"],
+            ["back up the laptop", "update the router", "reset the guest password"]]
+HO_BULLETS = ["make this into bullets", "can you bulletize this", "bulleted list please"]
+
+
+def heldout(train_keys):
+    r, cases = R("heldout"), []
+    def ctx_fields(ctx):
+        out = {"context": ctx.get("text", "")}
+        if ctx.get("cursorOffset") is not None:
+            out["cursor"] = ctx["cursorOffset"]
+        if ctx.get("ocrText"):
+            out["ocr"] = ctx["ocrText"]
+        return out
+    for i in range(16):  # names misheard toward forms the screen fixes
+        clean, ents = fill(r, HO_NAMED[i % len(HO_NAMED)])
+        heard = clean
+        for e in ents:
+            heard = heard.replace(e[0], r.choice(e[1]), 1)
+        bad = [a for e in ents for a in e[1] if a.lower() not in clean.lower() and a.replace(" ", "") != e[0].lower()]
+        cases.append({"id": f"h-d-names-{i}", "kind": "dictation", "transcript": lower_transcript(heard),
+                      **ctx_fields(context(r, ents, long=i % 3 == 0)), "mustContain": [e[0] for e in ents],
+                      "mustNotContain": [a for a in bad if a.lower() in lower_transcript(heard)], "maxLengthRatio": 1.6})
+    for i in range(8):
+        tmpl, kind = HO_CORRECT[i % len(HO_CORRECT)]
+        pool = {"time": L.TIMES, "num": L.NUMBERS, "day": L.DAYS, "person": [p for p, _ in L.PEOPLE if p.isascii()]}[kind]
+        a, b = r.sample(pool, 2)
+        said = tmpl.replace("{X}", f"{a} {r.choice(L.CUES)} {b}")
+        cases.append({"id": f"h-d-correction-{i}", "kind": "dictation", "transcript": lower_transcript(add_fillers(r, said, 1) if i % 2 else said),
+                      "mustContain": [b], "mustNotContain": [a], "maxLengthRatio": 1.3})
+    for i, s in enumerate(HO_KEEP + HO_ASK):
+        cases.append({"id": f"h-d-keep-{i}", "kind": "dictation", "transcript": lower_transcript(s),
+                      **ctx_fields(unrelated_context(r) or {"text": ""}), "mustContain": [s[:-1]], "maxLengthRatio": 1.3})
+    for i, s in enumerate(HO_PLAIN):  # screen with a look-alike term: don't echo or "fix" toward it
+        w = re.findall(r"[a-z]{5,}", s)[0]
+        trap = w.capitalize() + "ly"
+        cases.append({"id": f"h-d-noecho-{i}", "kind": "dictation", "transcript": lower_transcript(s),
+                      **ctx_fields(context(r, [(trap, [], "product")])), "mustContain": [s[:-1]], "mustNotContain": [trap],
+                      "maxLengthRatio": 1.3})
+    spellable = [e for e in [person(r) for _ in range(50)] + [invented(r) for _ in range(50)] if re.fullmatch(r"[A-Za-z]+", e[0])]
+    for i in range(8):
+        n, aliases, _ = spellable[i]
+        sel = aliases[0]
+        cases.append({"id": f"h-e-spelled-{i}", "kind": "edit", "transcript": f"no, it's {n}, spelled {spell(n, r)}", "selection": sel,
+                      "expectAction": "correct", "expectExact": n, "expectVocabOffer": n})
+    for i in range(8):
+        e = [person(r, True), invented(r), tech(r), invented(r)][i % 4]
+        sel = e[1][0] if e[1][0].lower() != e[0].lower() or " " in e[1][0] else e[0].lower()
+        kind = "company" if e[2] == "company" else e[2] if e[2] in L.CONTEXT_FIX else "product"
+        cases.append({"id": f"h-e-context-{i}", "kind": "edit", "transcript": r.choice(["the name is wrong, fix it", "spell that correctly",
+                      f"fix the {kind} name please"]), "selection": sel, **ctx_fields(context(r, [e], long=i % 2 == 0)),
+                      "expectAction": "correct", "expectExact": e[0]})
+    for i in range(6):
+        core = HO_CORES[i % 3]
+        sel = f"{L.PADDING_OPEN[i]} {core}{L.PADDING_CLOSE[i % len(L.PADDING_CLOSE)]}"
+        cases.append({"id": f"h-e-shorter-{i}", "kind": "edit", "transcript": HO_SHORTER[i % 3], "selection": sel,
+                      "expectAction": "edit", "mustContain": [core.split()[1]], "maxLengthRatio": 0.6})
+    for i in range(6):
+        items = HO_LISTS[i % 3]
+        sel = (f"Please pick up {', '.join(items[:-1])} and {items[-1]}." if i % 3 == 1
+               else f"Before Friday we have to {', '.join(items[:-1])}, and {items[-1]}.")
+        cases.append({"id": f"h-e-bullets-{i}", "kind": "edit", "transcript": HO_BULLETS[i % 3], "selection": sel,
+                      "expectAction": "edit", "mustContain": ["\n"] + [x.split()[-1] if " " in x else x[1:] for x in items], "maxLengthRatio": 2})
+    for i in range(6):
+        x = ["thanks for your patience", "the slides are in the shared folder", "see everyone next week"][i % 3]
+        sel = HO_PLAIN[i % 4]
+        after = i % 2 == 0
+        t = (f"add this at the end: {x}" if after else f"put this before it: {x}")
+        cases.append({"id": f"h-e-insert-{i}", "kind": "edit", "transcript": t, "selection": sel,
+                      "expectAction": "insertAfter" if after else "insertBefore", "mustContain": [cap(x)],
+                      "mustNotContain": [sel[:-1]], "expectVocabOffer": None})
+    for i in range(6):
+        new = ["Quarterly Planning Notes", "Lunch and Learn Ideas", "Vendor Shortlist",
+               "We should revisit this after the holidays.", "The kitchen will be cleaned on Thursday.", "Parking is free after six."][i]
+        cases.append({"id": f"h-e-replace-{i}", "kind": "edit", "transcript": new if i < 3 else lower_transcript(new),
+                      "selection": HO_PLAIN[i % 4] if i >= 3 else r.choice(L.TITLES), "expectExact": new, "expectVocabOffer": None})
+    cases = list({(c["transcript"], c.get("selection")): c for c in cases}.values())
+    checker = Checker()
+    as_item = lambda c: {"transcript": c["transcript"], "selection": c.get("selection"), "target": c.get("expectExact"),
+                         "context": {"text": c.get("context"), "ocrText": c.get("ocr")}}
+    keep = [c for c in cases if not checker.reason(as_item(c)) and (c["transcript"], c.get("selection")) not in train_keys]
+    print(f"held-out: {len(keep)}/{len(cases)} cases (rest overlapped bench or training)", file=sys.stderr)
+    return keep
+
+
 # ---------- main ----------
 
 def jl(path):
@@ -551,6 +656,9 @@ def main(cmd):
         write(OUT / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
         write(OUT / "data" / "train.jsonl", [{"messages": r["messages"]} for r in rows[n:]])
         Path("training/samples.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows[:40]))
+    elif cmd == "heldout":
+        keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
+        write(Path("training/heldout.jsonl"), heldout(keys))
     else:
         sys.exit(__doc__)
 
