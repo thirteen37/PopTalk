@@ -7,7 +7,7 @@ public enum ModelSettings {
         "provider": "mlx",  // mlx | lmstudio | apple
         "baseURL": "http://localhost:1234/v1",
         "mlxCleanupModel": "mlx-community/gemma-4-e2b-it-4bit",
-        "mlxEditModel": "mlx-community/gemma-4-e4b-it-4bit",
+        "mlxEditModel": "mlx-community/gemma-4-e2b-it-4bit",
         "lmstudioCleanupModel": "google/gemma-4-e4b",
         "lmstudioEditModel": "google/gemma-4-e4b",
     ]

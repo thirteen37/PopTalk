@@ -13,7 +13,7 @@ private func suite(_ saved: [String: String] = [:]) -> UserDefaults {
     let s = ModelSettings.selection(suite())
     #expect(s.provider == "mlx")
     #expect(s.cleanupModel == "mlx-community/gemma-4-e2b-it-4bit")
-    #expect(s.editModel == "mlx-community/gemma-4-e4b-it-4bit")
+    #expect(s.editModel == "mlx-community/gemma-4-e2b-it-4bit")
 }
 
 // Saved LM Studio ids move to the LM Studio fields; MLX keeps its defaults.
