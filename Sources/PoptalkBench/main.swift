@@ -135,7 +135,7 @@ for c in cases {
 }
 
 let day = DateFormatter()
-day.dateFormat = "yyyy-MM-dd-HHmm"
+day.dateFormat = BenchReport.dateFormat
 let date = day.string(from: Date())
 let report = BenchReport(date: date, provider: meta, cases: results)
 let details = report.failureDetails(cases)
@@ -143,7 +143,7 @@ print((details.isEmpty ? "\n" : "\n\(details)\n\n") + report.table())
 
 let model = (provider == "lmstudio" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : "-audio")
 let dir = URL(fileURLWithPath: opt("--out") ?? "bench/results")
-let file = dir.appendingPathComponent("\(date)-\(provider)-\(model.replacingOccurrences(of: "/", with: "_")).json")
+let file = dir.appendingPathComponent(BenchReport.fileName(date: date, provider: provider, model: model, filter: opt("--filter")))
 do {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     let enc = JSONEncoder()

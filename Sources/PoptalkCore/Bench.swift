@@ -148,7 +148,7 @@ public struct BenchSummary: Sendable {
     public var median: Double, p90: Double, max: Double
 }
 
-/// A results file: `bench/results/<date>-<provider>-<model>.json`.
+/// A results file: `bench/results/<date>-<provider>-<model>[-<filter>].json` (see `fileName`).
 public struct BenchReport: Codable, Sendable {
     public var date: String
     /// provider, models, Apple variant/contextSize, macOS build, hw.model, …
