@@ -43,7 +43,9 @@ private func suite(_ saved: [String: String] = [:]) -> UserDefaults {
 @Test func sharedMLXModelLoadsOnce() {
     let s = ModelSettings.selection(suite(["mlxEditModel": "mlx-community/gemma-4-e2b-it-4bit"]))
     #expect(s.mlxModels == ["mlx-community/gemma-4-e2b-it-4bit"])
-    #expect(ModelSettings.selection(suite()).mlxModels.count == 2)
+    // Defaults share one model; distinct cleanup and edit models load both.
+    #expect(ModelSettings.selection(suite()).mlxModels.count == 1)
+    #expect(ModelSettings.selection(suite(["mlxEditModel": "mlx-community/gemma-4-e4b-it-4bit"])).mlxModels.count == 2)
     #expect(ModelSettings.selection(suite(["provider": "lmstudio"])).mlxModels.isEmpty)
 }
 
