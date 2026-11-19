@@ -22,13 +22,27 @@ public struct LLMError: Error, CustomStringConvertible {
 
 /// Minimal OpenAI-compatible `/chat/completions` client (LM Studio, Ollama).
 public struct LLMClient: Sendable {
-    public typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    /// Response body as lines. Ending the stream early must drop the connection.
+    public typealias Transport = @Sendable (URLRequest) async throws -> (AsyncThrowingStream<String, Error>, URLResponse)
     let baseURL: URL
     let transport: Transport
 
-    public init(baseURL: URL, transport: @escaping Transport = { try await URLSession.shared.data(for: $0) }) {
+    public init(baseURL: URL, transport: @escaping Transport = LLMClient.urlSession) {
         self.baseURL = baseURL
         self.transport = transport
+    }
+
+    /// Cancels the URLSession task when the reader stops, so LM Studio aborts generation.
+    public static let urlSession: Transport = { req in
+        let (bytes, response) = try await URLSession.shared.bytes(for: req)
+        let task = bytes.task
+        let stream = AsyncThrowingStream<String, Error> { c in
+            let reader = Task {
+                do { for try await line in bytes.lines { c.yield(line) }; c.finish() } catch { c.finish(throwing: error) }
+            }
+            c.onTermination = { _ in reader.cancel(); task.cancel() }
+        }
+        return (stream, response)
     }
 
     nonisolated(unsafe) static let editSchema: [String: Any] = [
@@ -58,23 +72,40 @@ public struct LLMClient: Sendable {
             "model": model,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "temperature": 0,
-            "stream": false,
+            "stream": true,  // dropping the connection stops server-side generation
             "reasoning_effort": "none",  // LM Studio: skip thinking on reasoning models (0.7 s vs 17 s+)
         ]
         if json { body["response_format"] = ["type": "json_schema", "json_schema": Self.editSchema] }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await transport(req)
+        // Overall deadline; timeoutInterval alone only bounds the gap between chunks.
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask { [req] in try await self.read(req) }
+            group.addTask { try await Task.sleep(for: .seconds(timeout)); throw URLError(.timedOut) }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+    }
+
+    /// Concatenates the `delta.content` of each SSE `data:` chunk.
+    private func read(_ req: URLRequest) async throws -> String {
+        let (lines, response) = try await transport(req)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            throw LLMError(description: "HTTP \(status): \(String(decoding: data.prefix(300), as: UTF8.self))")
+            var body = ""
+            for try await line in lines where body.count < 300 { body += line }
+            throw LLMError(description: "HTTP \(status): \(body.prefix(300))")
         }
-        struct Reply: Decodable {
-            struct Choice: Decodable { struct Message: Decodable { var content: String }; var message: Message }
+        struct Chunk: Decodable {
+            struct Choice: Decodable { struct Delta: Decodable { var content: String? }; var delta: Delta }
             var choices: [Choice]
         }
-        guard let content = try JSONDecoder().decode(Reply.self, from: data).choices.first?.message.content else {
-            throw LLMError(description: "No choices in response")
+        var content = ""
+        for try await line in lines {
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            if payload == "[DONE]" { break }
+            content += try JSONDecoder().decode(Chunk.self, from: Data(payload.utf8)).choices.first?.delta.content ?? ""
         }
         return content
     }
