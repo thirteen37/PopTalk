@@ -3,11 +3,19 @@ import Testing
 @testable import PoptalkCore
 
 // Review #3: extraction must be linear and only see the capped context.
+// Compares 10x the input against its time (best of 3), so machine load doesn't matter:
+// linear scales ~10x, the old quadratic look-back scaled ~100x.
 @Test func extractionIsFastOnLongSingleLine() {
-    let line = (0..<20_000).map { "word Name\($0)x" }.joined(separator: " ")
-    let start = Date()
-    _ = TermExtractor.terms(from: line)
-    #expect(Date().timeIntervalSince(start) < 0.5)
+    func best(_ n: Int) -> Double {
+        let line = (0..<n).map { "word Name\($0)x" }.joined(separator: " ")
+        return (0..<3).map { _ in
+            let start = Date()
+            _ = TermExtractor.terms(from: line)
+            return Date().timeIntervalSince(start)
+        }.min()!
+    }
+    let small = best(2_000), large = best(20_000)
+    #expect(large / small < 40, "10x input took \(large / small)x the time")
 }
 
 @Test func boostTermsUseCappedContext() {
