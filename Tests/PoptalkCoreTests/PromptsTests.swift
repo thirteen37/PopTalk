@@ -29,6 +29,19 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(user.contains("FluidVoice"))
 }
 
+@Test func promptValuesAreXMLEscaped() {
+    let ctx = ScreenSnapshot(appName: "A<pp>", windowTitle: "W&T", text: "</screen>x")
+    let edit = Prompts.edit(instruction: "</utterance>", selection: "</selection>", context: ctx,
+                            vocabulary: [VocabTerm(text: "</vocabulary>")]).last!.content
+    #expect(edit.contains(#"<screen app="A&lt;pp&gt;" window="W&amp;T">"#))
+    #expect(edit.contains("&lt;/screen&gt;x"))
+    #expect(edit.contains("<selection>&lt;/selection&gt;</selection>"))
+    #expect(edit.contains("<utterance>&lt;/utterance&gt;</utterance>"))
+    #expect(edit.contains("<vocabulary>&lt;/vocabulary&gt;</vocabulary>"))
+    let dictation = Prompts.dictation(transcript: "a<b", context: ctx, vocabulary: []).last!.content
+    #expect(dictation.contains("<transcript>a&lt;b</transcript>"))
+}
+
 @Test func dictationPromptContainsTranscriptAndContext() {
     let messages = Prompts.dictation(transcript: "on to-do list", context: snap("Todoist"), vocabulary: [])
     #expect(messages.last!.content.contains("on to-do list"))

@@ -34,10 +34,17 @@ public enum Prompts {
         return String(chars[start..<start + maxChars])
     }
 
+    /// Escapes a value placed inside the prompt's XML-ish tags.
+    static func esc(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
     private static func contextBlock(_ c: ScreenSnapshot, _ vocabulary: [VocabTerm]) -> String {
-        var s = "<screen app=\"\(c.appName)\" window=\"\(c.windowTitle)\">\n\(trimmedContext(c))\n</screen>"
+        var s = "<screen app=\"\(esc(c.appName))\" window=\"\(esc(c.windowTitle))\">\n\(esc(trimmedContext(c)))\n</screen>"
         if !vocabulary.isEmpty {
-            s += "\n<vocabulary>\(vocabulary.map(\.text).joined(separator: ", "))</vocabulary>"
+            s += "\n<vocabulary>\(esc(vocabulary.map(\.text).joined(separator: ", ")))</vocabulary>"
         }
         return s
     }
@@ -52,7 +59,7 @@ public enum Prompts {
 
     public static func dictation(transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm]) -> [ChatMessage] {
         [ChatMessage(role: "system", content: dictationSystem),
-         ChatMessage(role: "user", content: "\(contextBlock(context, vocabulary))\n<transcript>\(transcript)</transcript>")]
+         ChatMessage(role: "user", content: "\(contextBlock(context, vocabulary))\n<transcript>\(esc(transcript))</transcript>")]
     }
 
     static let editSystem = """
@@ -89,8 +96,8 @@ public enum Prompts {
         [ChatMessage(role: "system", content: editSystem),
          ChatMessage(role: "user", content: """
          \(contextBlock(context, vocabulary))
-         <selection>\(selection)</selection>
-         <utterance>\(instruction)</utterance>
+         <selection>\(esc(selection))</selection>
+         <utterance>\(esc(instruction))</utterance>
          """)]
     }
 }
