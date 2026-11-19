@@ -12,6 +12,13 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(trimmed.contains("X"))
 }
 
+@Test func contextCursorIsUTF16Offset() {
+    // Each emoji is 2 UTF-16 units, so "X" sits at UTF-16 offset 12_000 but Character index 6_000.
+    let text = String(repeating: "😀", count: 6_000) + "X" + String(repeating: "a", count: 6_000)
+    #expect(Prompts.trimmedContext(snap(text, cursor: 12_000)).contains("X"))
+    #expect(Prompts.trimmedContext(snap(text, cursor: 999_999)).hasSuffix("a"))
+}
+
 @Test func contextWithoutCursorKeepsTail() {
     let text = String(repeating: "a", count: 6_000) + String(repeating: "b", count: 4_000)
     #expect(Prompts.trimmedContext(snap(text)) == String(repeating: "b", count: 4_000))

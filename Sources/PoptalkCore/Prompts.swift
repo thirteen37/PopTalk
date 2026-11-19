@@ -5,7 +5,7 @@ public struct ScreenSnapshot: Sendable, Equatable {
     public var windowTitle: String
     /// Accessibility or OCR text of what's on screen.
     public var text: String
-    /// Index into `text` of the cursor, when known.
+    /// UTF-16 offset into `text` of the cursor, when known.
     public var cursorOffset: Int?
 
     public init(appName: String = "", windowTitle: String = "", text: String = "", cursorOffset: Int? = nil) {
@@ -29,7 +29,10 @@ public enum Prompts {
     public static func trimmedContext(_ s: ScreenSnapshot, maxChars: Int = 4000) -> String {
         let chars = Array(s.text)
         guard chars.count > maxChars else { return s.text }
-        guard let cursor = s.cursorOffset else { return String(chars.suffix(maxChars)) }
+        guard let offset = s.cursorOffset else { return String(chars.suffix(maxChars)) }
+        // cursorOffset is UTF-16 (from AX); convert to a Character index.
+        let cursor = s.text.distance(from: s.text.startIndex,
+                                     to: String.Index(utf16Offset: min(max(0, offset), s.text.utf16.count), in: s.text))
         let start = min(max(0, cursor - maxChars / 2), chars.count - maxChars)
         return String(chars[start..<start + maxChars])
     }
