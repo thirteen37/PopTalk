@@ -8,6 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
     let store = VocabularyStore()
+    private let recorder = AudioRecorder()
+    private var transcriber: Transcriber?
+    private var hotkey: Hotkey!
 
     func applicationDidFinishLaunching(_ note: Notification) {
         Settings.register()
@@ -19,6 +22,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
         if !AXIsProcessTrusted() {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        }
+        Task { transcriber = try? await Transcriber() }
+        hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
+                        onRelease: { [weak self] in self?.released() },
+                        onCancel: { [weak self] in _ = self?.recorder.stop() })
+        installHotkeyWhenTrusted()
+    }
+
+    /// The event tap needs Accessibility; retry until the user grants it.
+    private func installHotkeyWhenTrusted() {
+        if hotkey.install() { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.installHotkeyWhenTrusted() }
+    }
+
+    private func pressed() {
+        try? recorder.start(deviceUID: Settings.inputDeviceUID)
+    }
+
+    private func released() {
+        let samples = recorder.stop()
+        guard let transcriber else { return }
+        Task {
+            let text = try await transcriber.transcribe(samples, boost: [])
+            NSLog("Poptalk transcript: %@", text)
         }
     }
 
