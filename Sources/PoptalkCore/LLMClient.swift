@@ -14,10 +14,19 @@ public struct EditResult: Codable, Sendable, Equatable {
         self.vocabulary = vocabulary
         self.remember = remember
     }
+
+    // Without a server-side schema, models omit `remember` when it would be false.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(action: try c.decode(EditAction.self, forKey: .action), text: try c.decode(String.self, forKey: .text),
+                  vocabulary: try c.decodeIfPresent(VocabTerm.self, forKey: .vocabulary),
+                  remember: try c.decodeIfPresent(Bool.self, forKey: .remember) ?? false)
+    }
 }
 
 public struct LLMError: Error, CustomStringConvertible {
     public var description: String
+    public init(description: String) { self.description = description }
 }
 
 /// Minimal OpenAI-compatible `/chat/completions` client (LM Studio, Ollama).

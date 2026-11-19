@@ -2,6 +2,7 @@ import AppKit
 import FluidAudio
 import Foundation
 import PoptalkCore
+import PoptalkMLX
 import PoptalkSpeech
 
 // Debug entry point: Poptalk --transcribe <file> [boost terms…]
@@ -23,8 +24,15 @@ if args.count >= 3, args[1] == "--pipeline" {
     func opt(_ name: String) -> String? { args.firstIndex(of: name).map { args[$0 + 1] } }
     Settings.register()
     // -provider lmstudio (default) | apple (on-device FoundationModels) | apple-pcc (Private Cloud Compute)
+    //   | mlx (in-process; -cleanupModel/-editModel are Hugging Face ids or local MLX directories)
+    let provider = UserDefaults.standard.string(forKey: "provider") ?? "lmstudio"
     let complete: Pipeline.Complete
-    do { (complete, _) = try Providers.make(UserDefaults.standard.string(forKey: "provider") ?? "lmstudio", baseURL: Settings.baseURL) }
+    do {
+        var meta: [String: String]
+        (complete, meta) = provider == "mlx" ? try await MLXProvider.make(preload: [Settings.cleanupModel, Settings.editModel])
+            : try Providers.make(provider, baseURL: Settings.baseURL)
+        if provider == "mlx" { print("loaded in \(meta["loadSeconds"]!)s, footprint \(meta["footprintMB"]!) MB") }
+    }
     catch { print(error); exit(1) }
     let pipeline = Pipeline(
         complete: complete,

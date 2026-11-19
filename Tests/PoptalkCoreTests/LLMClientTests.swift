@@ -63,6 +63,12 @@ private func client(status: Int = 200, lines: [String] = sse(#""hi""#), capture:
     #expect(r.text == "use {x} here")
 }
 
+// Without a server-side JSON schema (mlx, apple) models fence the JSON and drop keys that look optional.
+@Test func parsesFencedEditResultMissingOptionalKeys() throws {
+    let r = try LLMClient.parseEditResult("```json\n{\n  \"action\": \"edit\",\n  \"text\": \"Could you send the deck?\"\n}\n```")
+    #expect(r == EditResult(action: .edit, text: "Could you send the deck?"))
+}
+
 @Test func rejectsNonJSON() {
     #expect(throws: (any Error).self) { try LLMClient.parseEditResult("Todoist") }
 }
