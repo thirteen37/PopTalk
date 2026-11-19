@@ -43,7 +43,7 @@ public struct Pipeline: Sendable {
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
-                cleanupTimeout: TimeInterval = 3, editTimeout: TimeInterval = 20) {
+                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20) {
         self.complete = complete
         self.vocabulary = vocabulary
         self.cleanupModel = cleanupModel
@@ -61,8 +61,10 @@ public struct Pipeline: Sendable {
         guard let selection = r.selection, !selection.isEmpty else {
             let messages = Prompts.dictation(transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             let space = Self.leadingSpace(r.context)
+            // Base covers cold starts; 20 ms per word covers long dictations.
+            let words = transcript.split(whereSeparator: \.isWhitespace).count
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
-            if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout),
+            if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)),
                case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
                Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40 {
                 return PipelineResult(outcome: .insert(space + cleaned, label: "Dictated"))

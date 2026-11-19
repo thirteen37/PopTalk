@@ -2,13 +2,13 @@ import Foundation
 import Testing
 @testable import PoptalkCore
 
-private final class Calls: @unchecked Sendable { var models: [String] = []; var json: [Bool] = [] }
+private final class Calls: @unchecked Sendable { var models: [String] = []; var json: [Bool] = []; var timeouts: [TimeInterval] = [] }
 private struct Boom: Error {}
 
 private func pipeline(reply: String? = nil, store: VocabularyStore = VocabularyStore(url: tmp()),
                       calls: Calls = Calls()) -> Pipeline {
-    Pipeline(complete: { model, _, json, _ in
-        calls.models.append(model); calls.json.append(json)
+    Pipeline(complete: { model, _, json, timeout in
+        calls.models.append(model); calls.json.append(json); calls.timeouts.append(timeout)
         guard let reply else { throw Boom() }
         return reply
     }, vocabulary: store, cleanupModel: "small", editModel: "big")
@@ -35,6 +35,14 @@ private func req(_ t: String, selection: String? = nil) -> Request {
     #expect(r.outcome == .insert("Hello there.", label: "Dictated"))
     #expect(calls.models == ["small"])
     #expect(calls.json == [false])
+}
+
+// #3: 4 s base covers cold starts; long dictations get 20 ms per word on top.
+@Test func cleanupTimeoutScalesWithLength() async {
+    let calls = Calls()
+    _ = await pipeline(reply: "Hi.", calls: calls).run(req("hi"))
+    _ = await pipeline(reply: "x", calls: calls).run(req(Array(repeating: "word", count: 150).joined(separator: " ")))
+    #expect(zip(calls.timeouts, [4.02, 7.0]).allSatisfy { abs($0 - $1) < 1e-9 } && calls.timeouts.count == 2)
 }
 
 @Test func dictationFallsBackToRawWhenLLMFails() async {
