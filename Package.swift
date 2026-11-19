@@ -13,6 +13,7 @@ let package = Package(
             name: "Poptalk",
             dependencies: ["PoptalkCore", .product(name: "FluidAudio", package: "FluidAudio")]
         ),
+        .executableTarget(name: "PoptalkBench", dependencies: ["PoptalkCore"]),
         .testTarget(name: "PoptalkCoreTests", dependencies: ["PoptalkCore"]),
     ]
 )
