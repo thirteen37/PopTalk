@@ -7,3 +7,6 @@ xcuserdata/
 .superpowers/
 build/
 .claude/worktrees/
+bench/audio-cache/
+# Personal recordings for `audio` cases stay local until decided otherwise (#23).
+bench/audio/

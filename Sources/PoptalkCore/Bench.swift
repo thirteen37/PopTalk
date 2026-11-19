@@ -172,8 +172,8 @@ public struct BenchReport: Codable, Sendable {
             String(format: "%@ %3d/%-3d %5.0f%%  %6.2fs %6.2fs %6.2fs  %4d %4d", $0.kind.rawValue.padding(toLength: 9, withPad: " ", startingAt: 0),
                    $0.passed, $0.runs, 100 * Double($0.passed) / Double($0.runs), $0.median, $0.p90, $0.max, $0.rawFallbacks, $0.errors)
         }
-        return (["kind       pass        %   median    p90    max   raw  err"] + rows + [speechTable()].compactMap { $0.map { "\n" + $0 } })
-            .joined(separator: "\n")
+        let lm = rows.isEmpty ? nil : (["kind       pass        %   median    p90    max   raw  err"] + rows).joined(separator: "\n")
+        return [lm, speechTable()].compactMap { $0 }.joined(separator: "\n\n")
     }
 
     /// Failing cases, with each distinct output across runs and how often it occurred.
