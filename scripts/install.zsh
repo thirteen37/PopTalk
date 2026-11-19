@@ -25,10 +25,10 @@ fi
 swift build -c release
 app=build/Poptalk.app
 rm -rf -- $app
-mkdir -p $app/Contents/MacOS $app/Contents/Resources
+mkdir -p $app/Contents/MacOS
 cp .build/release/Poptalk $app/Contents/MacOS/
-# SwiftPM resource bundles (e.g. FluidAudio's) live next to the binary.
-for b in .build/release/*.bundle(N); do cp -R $b $app/Contents/Resources/; done
+# No SwiftPM resource bundles: Bundle.module would look at the app root (which codesign rejects), and the
+# only one built (FluidAudio's LuxTtsG2pResources, TTS) is unused by ASR.
 cat > $app/Contents/Info.plist <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -47,7 +47,7 @@ cat > $app/Contents/Info.plist <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --deep --sign "$identity" --options runtime --entitlements scripts/Poptalk.entitlements $app
+codesign --force --sign "$identity" --options runtime --entitlements scripts/Poptalk.entitlements $app
 print "Signed with: $identity"
 
 pkill -x Poptalk || true
