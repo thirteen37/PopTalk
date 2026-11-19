@@ -5,17 +5,20 @@ import os
 
 /// Captures the microphone while the hotkey is held; returns 16 kHz mono Float32.
 final class AudioRecorder: @unchecked Sendable {
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
     private let samples = OSAllocatedUnfairLock(initialState: [Float]())
     private var sampleRate: Double = 48_000
 
     func start(deviceUID: String?) throws {
+        // Fresh engine each time: a long-lived one keeps a stale format after device changes
+        // (AirPods connecting), and installTap then raises an uncatchable ObjC exception.
+        engine = AVAudioEngine()
         if let uid = deviceUID, var id = Self.deviceID(forUID: uid), let unit = engine.inputNode.audioUnit {
             AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
                                  &id, UInt32(MemoryLayout<AudioDeviceID>.size))
         }
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        let format = input.inputFormat(forBus: 0)
         sampleRate = format.sampleRate
         samples.withLock { $0.removeAll(keepingCapacity: true) }
         input.removeTap(onBus: 0)

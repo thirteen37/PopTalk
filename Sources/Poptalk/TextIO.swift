@@ -57,7 +57,7 @@ enum TextIO {
     }
 
     static func press(_ key: Key, flags: CGEventFlags = []) {
-        let src = CGEventSource(stateID: .combinedSessionState)
+        let src = CGEventSource(stateID: .privateState)
         for down in [true, false] {
             let e = CGEvent(keyboardEventSource: src, virtualKey: key.rawValue, keyDown: down)
             e?.flags = flags

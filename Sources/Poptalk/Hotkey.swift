@@ -48,11 +48,13 @@ final class Hotkey {
             cancelled = true
             onCancel()
         case .flagsChanged where event.getIntegerValueField(.keyboardEventKeycode) == Self.rightOption:
-            if event.flags.contains(.maskAlternate), pressedAt == nil {
+            // NX_DEVICERALTKEYMASK: right ⌥ specifically, so a held left ⌥ can't mask the release.
+            let rightDown = event.flags.rawValue & 0x40 != 0
+            if rightDown, pressedAt == nil {
                 pressedAt = Date()
                 cancelled = false
                 onPress()
-            } else if !event.flags.contains(.maskAlternate), let start = pressedAt {
+            } else if !rightDown, let start = pressedAt {
                 pressedAt = nil
                 if cancelled { return }
                 if Date().timeIntervalSince(start) < 0.15 { onCancel() } else { onRelease() }

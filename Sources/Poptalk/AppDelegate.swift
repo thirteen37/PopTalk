@@ -39,38 +39,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let overlay = Overlay()
     private var contextTask: Task<ScreenSnapshot, Never>?
     private var selectionTask: Task<String?, Never>?
+    private var startWork: DispatchWorkItem?
+    private var recording = false
+    private var busy = false
+    private var targetPID: pid_t?
 
     private func pressed() {
+        guard !busy else { return }  // one request at a time
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
-        // Capture while recording so it costs no latency; read the selection before anything changes focus.
-        contextTask = Task { await ScreenContext.capture() }
-        selectionTask = Task { await TextIO.selectedText() }
-        overlay.showRecording()
+        recording = true
+        targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        // Hotkey cancels holds under 150 ms; only then read the selection (may post ⌘C), OCR and show the HUD.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            contextTask = Task { await ScreenContext.capture() }
+            selectionTask = Task { await TextIO.selectedText() }
+            overlay.showRecording()
+        }
+        startWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
     }
 
     private func cancelled() {
+        guard recording else { return }
+        recording = false
         _ = recorder.stop()
+        startWork?.cancel()
+        // Don't cancel selectionTask: its clipboard guard must finish waiting before it restores.
         contextTask?.cancel()
-        selectionTask?.cancel()
         overlay.hide()
     }
 
     private func released() {
+        guard recording else { return }
+        recording = false
+        // Released right at 150 ms, before the delayed start ran: run it now and stop the scheduled copy.
+        if let work = startWork, !work.isCancelled, contextTask == nil { work.perform(); work.cancel() }
+        startWork = nil
         let samples = recorder.stop()
+        let (ctx, sel) = (contextTask, selectionTask)
+        (contextTask, selectionTask) = (nil, nil)
+        guard AudioGate.hasSpeech(samples) else { overlay.hide(); return }
         guard let transcriber else { overlay.showError("Speech model still loading…"); return }
+        busy = true
         overlay.showWorking()
         let store = store
         Task {
-            let snapshot = await contextTask?.value ?? ScreenSnapshot()
-            let selection = await selectionTask?.value
-            let saved = Set(store.terms.map { $0.text.lowercased() })
-            let boost = store.terms + TermExtractor.terms(from: snapshot.text)
-                .filter { !saved.contains($0.lowercased()) }.map { VocabTerm(text: $0) }
-
+            defer { busy = false }
+            let snapshot = await ctx?.value ?? ScreenSnapshot()
+            let selection = await sel?.value
             let transcript: String
-            do { transcript = samples.isEmpty ? "" : try await transcriber.transcribe(samples, boost: boost) } catch {
+            do {
+                transcript = try await transcriber.transcribe(
+                    samples, boost: Pipeline.boostTerms(saved: store.terms, context: snapshot))
+            } catch {
                 overlay.showError("Transcription failed"); return
             }
             let client = LLMClient(baseURL: Settings.baseURL)
@@ -82,18 +106,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func apply(_ result: PipelineResult) async {
-        let label: String
+        let text: String
         switch result.outcome {
         case .nothing: overlay.hide(); return
         case .error(let msg): overlay.showError(msg); return
+        case .insert(let s, _), .replaceSelection(let s, _), .insertBefore(let s), .insertAfter(let s): text = s
+        }
+        // Focus moved while we worked: don't paste into the wrong app; leave the result on the clipboard.
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != targetPID {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text.trimmingCharacters(in: .whitespaces), forType: .string)
+            overlay.showError("App changed — result copied to clipboard")
+            return
+        }
+        let label: String
+        switch result.outcome {
         case .insert(let s, let l): await TextIO.insert(s); label = l
         case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
         case .insertBefore(let s): await TextIO.insertBeforeSelection(s); label = "Inserted"
         case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
+        case .nothing, .error: return
         }
-        let text = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
+        let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
-        overlay.showOutcome(text, undo: { TextIO.undo() }, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        overlay.showOutcome(shown, undo: { TextIO.undo() }, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
         }
