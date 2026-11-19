@@ -1,6 +1,8 @@
 import Foundation
 
-/// One line of `bench/cases.jsonl`. Unknown keys (e.g. a future `audio`/`speak`) are ignored.
+/// One line of `bench/cases.jsonl`. Unknown keys are ignored.
+/// A case with `speak` (synthesized with `say`) or `audio` (a recording) starts from audio;
+/// its `transcript` defaults to `speak` and is the reference for WER.
 public struct BenchCase: Decodable, Sendable {
     public enum Kind: String, Codable, Sendable { case dictation, edit }
 
@@ -20,17 +22,28 @@ public struct BenchCase: Decodable, Sendable {
     public var expectVocabOffer: String??
     /// Output length must not exceed this times the selection (edits) or transcript (dictation).
     public var maxLengthRatio: Double?
+    /// Text to synthesize, with an optional `say` voice and rate (words per minute).
+    public var speak: String?
+    public var voice: String?
+    public var rate: Int?
+    /// Path to a recording, relative to the repo root.
+    public var audio: String?
+    public var hasAudio: Bool { speak != nil || audio != nil }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, transcript, selection, context, expectAction, expectExact, expectAnyOf
-        case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio
+        case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio, speak, voice, rate, audio
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         kind = try c.decode(Kind.self, forKey: .kind)
-        transcript = try c.decode(String.self, forKey: .transcript)
+        speak = try c.decodeIfPresent(String.self, forKey: .speak)
+        voice = try c.decodeIfPresent(String.self, forKey: .voice)
+        rate = try c.decodeIfPresent(Int.self, forKey: .rate)
+        audio = try c.decodeIfPresent(String.self, forKey: .audio)
+        transcript = try speak.map { try c.decodeIfPresent(String.self, forKey: .transcript) ?? $0 } ?? c.decode(String.self, forKey: .transcript)
         selection = try c.decodeIfPresent(String.self, forKey: .selection)
         context = try c.decodeIfPresent(String.self, forKey: .context)
         expectAction = try c.decodeIfPresent(String.self, forKey: .expectAction)
@@ -98,6 +111,8 @@ public struct BenchRun: Codable, Sendable {
     public var vocabOffer: String?
     public var seconds: Double
     public var failures: [String]
+    /// Only for audio cases; `seconds` is then the LLM stage alone.
+    public var speech: SpeechRun? = nil
     public var passed: Bool { failures.isEmpty }
 
     public init(output: String, action: String, vocabOffer: String?, seconds: Double, failures: [String]) {
@@ -141,14 +156,13 @@ public struct BenchReport: Codable, Sendable {
 
     public func summaries() -> [BenchSummary] {
         [BenchCase.Kind.dictation, .edit].compactMap { kind in
-            let runs = cases.filter { $0.kind == kind }.flatMap(\.runs)
+            let runs = cases.filter { $0.kind == kind }.flatMap(\.runs).filter { $0.speech == nil }
             guard !runs.isEmpty else { return nil }
             let t = runs.map(\.seconds).sorted()
-            let mid = t.count / 2
             return BenchSummary(
                 kind: kind, runs: runs.count, passed: runs.filter(\.passed).count,
                 rawFallbacks: runs.filter { $0.action == "raw" }.count, errors: runs.filter { $0.action == "error" }.count,
-                median: t.count % 2 == 1 ? t[mid] : (t[mid - 1] + t[mid]) / 2,
+                median: median(t),
                 p90: t[Int((0.9 * Double(t.count)).rounded(.up)) - 1], max: t.last!)
         }
     }
@@ -158,7 +172,8 @@ public struct BenchReport: Codable, Sendable {
             String(format: "%@ %3d/%-3d %5.0f%%  %6.2fs %6.2fs %6.2fs  %4d %4d", $0.kind.rawValue.padding(toLength: 9, withPad: " ", startingAt: 0),
                    $0.passed, $0.runs, 100 * Double($0.passed) / Double($0.runs), $0.median, $0.p90, $0.max, $0.rawFallbacks, $0.errors)
         }
-        return (["kind       pass        %   median    p90    max   raw  err"] + rows).joined(separator: "\n")
+        return (["kind       pass        %   median    p90    max   raw  err"] + rows + [speechTable()].compactMap { $0.map { "\n" + $0 } })
+            .joined(separator: "\n")
     }
 
     /// Failing cases, with each distinct output across runs and how often it occurred.
@@ -186,7 +201,7 @@ public struct BenchReport: Codable, Sendable {
     /// Lines describing what changed from `a` to `b`: metadata warnings, then per-case pass-rate changes.
     public static func compare(_ a: BenchReport, _ b: BenchReport) -> [String] {
         var lines = Set(a.provider.keys).union(b.provider.keys).sorted().compactMap { k -> String? in
-            guard ["provider", "variant", "cleanupModel", "editModel", "quantization"].contains(k), a.provider[k] != b.provider[k] else { return nil }
+            guard ["provider", "variant", "cleanupModel", "editModel", "quantization", "speechModel", "boost", "cbw", "minSimilarity"].contains(k), a.provider[k] != b.provider[k] else { return nil }
             return "warning: \(k) differs: \(a.provider[k] ?? "-") vs \(b.provider[k] ?? "-")"
         }
         let bByID = Dictionary(b.cases.map { ($0.id, $0) }, uniquingKeysWith: { x, _ in x })
@@ -199,6 +214,6 @@ public struct BenchReport: Codable, Sendable {
             lines.append("\(rb < ra ? "regressed" : "improved ") \(ca.id): \(ca.runs.filter(\.passed).count)/\(ca.runs.count) → \(cb.runs.filter(\.passed).count)/\(cb.runs.count)")
         }
         lines += b.cases.filter { !aIDs.contains($0.id) }.map { "only in b: \($0.id)" }
-        return lines
+        return lines + compareSpeech(a, b)
     }
 }
