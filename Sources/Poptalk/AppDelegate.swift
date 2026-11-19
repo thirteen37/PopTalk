@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var contextTask: Task<ScreenSnapshot, Never>?
     private var selectionTask: Task<String?, Never>?
     private var startWork: DispatchWorkItem?
+    private var previewTask: Task<Void, Never>?
     private var recording = false
     private var busy = false
     private var targetPID: pid_t?
@@ -57,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             contextTask = Task { await ScreenContext.capture() }
             selectionTask = Task { await TextIO.selectedText() }
             overlay.showRecording()
+            startPreview()
         }
         startWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
@@ -67,6 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recording = false
         _ = recorder.stop()
         startWork?.cancel()
+        previewTask?.cancel()
+        previewTask = nil
         // Don't cancel selectionTask: its clipboard guard must finish waiting before it restores.
         contextTask?.cancel()
         overlay.hide()
@@ -78,6 +82,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Released right at 150 ms, before the delayed start ran: run it now and stop the scheduled copy.
         if let work = startWork, !work.isCancelled, contextTask == nil { work.perform(); work.cancel() }
         startWork = nil
+        let preview = previewTask
+        previewTask = nil
+        preview?.cancel()
         let samples = recorder.stop()
         let (ctx, sel) = (contextTask, selectionTask)
         (contextTask, selectionTask) = (nil, nil)
@@ -90,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             defer { busy = false }
             let snapshot = await ctx?.value ?? ScreenSnapshot()
             let selection = await sel?.value
+            await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
             let transcript: String
             do {
                 transcript = try await transcriber.transcribe(
@@ -102,6 +110,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                     vocabulary: store, cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
             let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
             await apply(result)
+        }
+    }
+
+    /// While held, re-transcribes the growing recording (no boosting) for the overlay only.
+    /// The loop is sequential, so a slow pass delays the next tick instead of overlapping it.
+    /// ponytail: re-runs the whole buffer each tick; window the tail if long dictations get slow.
+    private func startPreview() {
+        guard let transcriber else { return }
+        previewTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                let samples = recorder.snapshot()
+                guard !Task.isCancelled, AudioGate.hasSpeech(samples),
+                      let text = try? await transcriber.transcribe(samples, boost: []),
+                      !Task.isCancelled, !text.isEmpty else { continue }
+                overlay.showPreview(text)
+            }
         }
     }
 

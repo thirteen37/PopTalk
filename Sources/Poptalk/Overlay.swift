@@ -6,7 +6,7 @@ import PoptalkCore
 @MainActor
 final class Overlay {
     private let panel: NSPanel
-    private let label = NSTextField(labelWithString: "")
+    private let label = NSTextField(wrappingLabelWithString: "")
     private var hideWork: DispatchWorkItem?
     private var keys: KeyCatcher?
 
@@ -25,7 +25,7 @@ final class Overlay {
         blur.layer?.cornerRadius = 12
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.alignment = .center
-        label.lineBreakMode = .byTruncatingTail
+        label.isSelectable = false
         label.translatesAutoresizingMaskIntoConstraints = false
         blur.addSubview(label)
         NSLayoutConstraint.activate([
@@ -37,6 +37,8 @@ final class Overlay {
     }
 
     func showRecording() { show("● Listening…", for: nil) }
+    /// Provisional live transcript; long text keeps its tail so the latest words stay visible.
+    func showPreview(_ text: String) { show("● " + PreviewText.tail(text, limit: 400), for: nil) }
     func showWorking() { show("Working…", for: nil) }
     func showError(_ msg: String) { show("⚠️ \(msg)", for: 3) }
 
@@ -69,10 +71,13 @@ final class Overlay {
         hideWork?.cancel()
         keys = nil
         label.stringValue = text
-        let width = min(max(label.intrinsicContentSize.width + 40, 160), 640)
+        let fit = label.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: 600, height: CGFloat.greatestFiniteMagnitude))
+        let width = min(max(fit.width + 40, 160), 640)
+        let height = max(44, ceil(fit.height) + 24)
+        label.preferredMaxLayoutWidth = width - 28
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
         let f = screen.visibleFrame
-        panel.setFrame(NSRect(x: f.midX - width / 2, y: f.minY + 50, width: width, height: 44), display: true)
+        panel.setFrame(NSRect(x: f.midX - width / 2, y: f.minY + 50, width: width, height: height), display: true)
         panel.orderFrontRegardless()
         guard let seconds else { return }
         let work = DispatchWorkItem { [weak self] in self?.hide() }

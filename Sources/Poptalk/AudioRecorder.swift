@@ -35,6 +35,11 @@ final class AudioRecorder: @unchecked Sendable {
     func stop() -> [Float] {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        return snapshot()
+    }
+
+    /// The recording so far, resampled to 16 kHz mono, without stopping capture.
+    func snapshot() -> [Float] {
         let raw = samples.withLock { $0 }
         guard !raw.isEmpty else { return [] }
         return (try? AudioConverter().resample(raw, from: sampleRate)) ?? []
