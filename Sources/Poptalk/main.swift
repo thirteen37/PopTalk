@@ -34,7 +34,7 @@ if args.count >= 3, args[1] == "--pipeline" {
 }
 
 let app = NSApplication.shared
-let delegate = await AppDelegate()
+let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()
