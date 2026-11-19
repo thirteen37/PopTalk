@@ -43,7 +43,7 @@ public struct Pipeline: Sendable {
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
-                cleanupTimeout: TimeInterval = 3, editTimeout: TimeInterval = 20) {
+                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20) {
         self.complete = complete
         self.vocabulary = vocabulary
         self.cleanupModel = cleanupModel
@@ -61,8 +61,10 @@ public struct Pipeline: Sendable {
         guard let selection = r.selection, !selection.isEmpty else {
             let messages = Prompts.dictation(transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             let space = Self.leadingSpace(r.context)
+            // Base covers cold starts; 20 ms per word covers long dictations.
+            let words = transcript.split(whereSeparator: \.isWhitespace).count
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
-            if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout),
+            if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)),
                case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
                Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40 {
                 return PipelineResult(outcome: .insert(space + cleaned, label: "Dictated"))
@@ -72,24 +74,31 @@ public struct Pipeline: Sendable {
 
         let ns = transcript as NSString
         if let m = Self.literally.firstMatch(in: transcript, range: NSRange(location: 0, length: ns.length)) {
-            return PipelineResult(outcome: .replaceSelection(ns.substring(from: m.range.length), label: "Replaced"))
+            let text = ns.substring(from: m.range.length)
+            return PipelineResult(outcome: Self.isBlank(text) ? .nothing : .replaceSelection(text, label: "Replaced"))
         }
 
         let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
         let raw: String
         do { raw = try await complete(editModel, messages, true, editTimeout) } catch {
-            return PipelineResult(outcome: .error("Couldn't reach the language model"))
+            let timedOut = (error as? URLError)?.code == .timedOut
+            return PipelineResult(outcome: .error(timedOut ? "Model took too long" : "Couldn't reach the language model"))
         }
         guard let edit = try? LLMClient.parseEditResult(raw) else {
             return PipelineResult(outcome: .error("Didn't understand the model's reply"))
         }
 
+        // An empty replacement would silently delete the selection.
+        if edit.action != .insertBefore, edit.action != .insertAfter, Self.isBlank(edit.text) {
+            return PipelineResult(outcome: .nothing)
+        }
         let outcome: Outcome = switch edit.action {
         case .replace: .replaceSelection(edit.text, label: "Replaced")
         case .correct: .replaceSelection(edit.text, label: "Corrected")
         case .edit: .replaceSelection(edit.text, label: "Edited")
-        case .insertBefore: .insertBefore(edit.text)
-        case .insertAfter: .insertAfter(edit.text)
+        // Models sometimes repeat the selection in an insert; drop it so it isn't duplicated.
+        case .insertBefore: .insertBefore(edit.text.hasSuffix(selection) ? String(edit.text.dropLast(selection.count)) : edit.text)
+        case .insertAfter: .insertAfter(edit.text.hasPrefix(selection) ? String(edit.text.dropFirst(selection.count)) : edit.text)
         }
         guard let term = edit.vocabulary else { return PipelineResult(outcome: outcome) }
         if edit.remember, (try? vocabulary.add(term)) != nil {
@@ -124,6 +133,10 @@ extension Pipeline {
             .trimmingCharacters(in: CharacterSet.whitespaces.union(.punctuationCharacters).subtracting(CharacterSet(charactersIn: ".!?\"')")))
         if trimmed.first?.isUppercase == true, let f = out.first { out = f.uppercased() + out.dropFirst() }
         return out
+    }
+
+    static func isBlank(_ s: String) -> Bool {
+        s.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)).isEmpty
     }
 
     /// Removes reasoning blocks and echoed tags from a model reply.

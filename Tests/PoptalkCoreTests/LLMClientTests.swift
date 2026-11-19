@@ -4,11 +4,15 @@ import Testing
 
 private final class Capture: @unchecked Sendable { var request: URLRequest? }
 
-private func client(status: Int = 200, body: String = #"{"choices":[{"message":{"content":"hi"}}]}"#,
-                    capture: Capture = Capture()) -> LLMClient {
+private func sse(_ chunks: String...) -> [String] {
+    chunks.flatMap { [#"data: {"choices":[{"delta":{"content":\#($0)}}]}"#, ""] } + ["data: [DONE]"]
+}
+
+private func client(status: Int = 200, lines: [String] = sse(#""hi""#), capture: Capture = Capture()) -> LLMClient {
     LLMClient(baseURL: URL(string: "http://localhost:1234/v1")!) { req in
         capture.request = req
-        return (Data(body.utf8), HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        let stream = AsyncThrowingStream<String, Error> { c in lines.forEach { c.yield($0) }; c.finish() }
+        return (stream, HTTPURLResponse(url: req.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
     }
 }
 
@@ -43,7 +47,7 @@ private func client(status: Int = 200, body: String = #"{"choices":[{"message":{
 
 @Test func non2xxThrows() async {
     await #expect(throws: (any Error).self) {
-        try await client(status: 404, body: "{}").complete(model: "g", messages: [], json: false, timeout: 3)
+        try await client(status: 404, lines: ["{}"]).complete(model: "g", messages: [], json: false, timeout: 3)
     }
 }
 
@@ -69,4 +73,34 @@ private func client(status: Int = 200, body: String = #"{"choices":[{"message":{
     _ = try await client(capture: cap).complete(model: "g", messages: [], json: false, timeout: 3)
     let body = try JSONSerialization.jsonObject(with: cap.request!.httpBody!) as! [String: Any]
     #expect(body["reasoning_effort"] as? String == "none")
+}
+
+// #4: stream so that dropping the connection stops server-side generation.
+@Test func requestsStreaming() async throws {
+    let cap = Capture()
+    _ = try await client(capture: cap).complete(model: "g", messages: [], json: false, timeout: 3)
+    let body = try JSONSerialization.jsonObject(with: cap.request!.httpBody!) as! [String: Any]
+    #expect(body["stream"] as? Bool == true)
+}
+
+@Test func assemblesSSEChunks() async throws {
+    let lines = [": keep-alive", #"data: {"choices":[{"delta":{"role":"assistant"}}]}"#] + sse(#""Hello""#, #"" there""#)
+    #expect(try await client(lines: lines).complete(model: "g", messages: [], json: false, timeout: 3) == "Hello there")
+}
+
+private final class Flag: @unchecked Sendable { var set = false }
+
+@Test func timeoutCancelsStreamAndThrowsTimedOut() async {
+    let cancelled = Flag()
+    let c = LLMClient(baseURL: URL(string: "http://localhost:1234/v1")!) { req in
+        let stream = AsyncThrowingStream<String, Error> { c in c.onTermination = { _ in cancelled.set = true } }  // never ends
+        return (stream, HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+    do {
+        _ = try await c.complete(model: "g", messages: [], json: false, timeout: 0.05)
+        Issue.record("expected timeout")
+    } catch {
+        #expect((error as? URLError)?.code == .timedOut)
+    }
+    #expect(cancelled.set)
 }
