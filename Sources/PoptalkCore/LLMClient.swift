@@ -80,7 +80,7 @@ public struct LLMClient: Sendable {
 
     /// Decodes the first balanced JSON object in `raw`, tolerating prose and code fences around it.
     public static func parseEditResult(_ raw: String) throws -> EditResult {
-        let chars = Array(raw)
+        let chars = Array(Pipeline.stripChatter(raw))
         guard let start = chars.firstIndex(of: "{") else { throw LLMError(description: "No JSON in reply") }
         var depth = 0, inString = false, escaped = false
         for i in start..<chars.count {

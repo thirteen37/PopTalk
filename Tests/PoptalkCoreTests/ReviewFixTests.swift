@@ -1,0 +1,83 @@
+import Foundation
+import Testing
+@testable import PoptalkCore
+
+// Review #3: extraction must be linear and only see the capped context.
+@Test func extractionIsFastOnLongSingleLine() {
+    let line = (0..<20_000).map { "word Name\($0)x" }.joined(separator: " ")
+    let start = Date()
+    _ = TermExtractor.terms(from: line)
+    #expect(Date().timeIntervalSince(start) < 0.5)
+}
+
+@Test func boostTermsUseCappedContext() {
+    let far = "Farawayterm " + String(repeating: "a ", count: 5_000) + " near Todoist"
+    let snap = ScreenSnapshot(text: far)  // no cursor → tail kept
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice")], context: snap).map(\.text)
+    #expect(terms.first == "FluidVoice")
+    #expect(terms.contains("Todoist"))
+    #expect(!terms.contains("Farawayterm"))
+}
+
+@Test func boostTermsSkipSavedDuplicates() {
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "Todoist", aliases: ["todo list"])],
+                                    context: ScreenSnapshot(text: "open Todoist")).map(\.text)
+    #expect(terms == ["Todoist"])
+}
+
+// Review #1: accidental taps and silence do nothing.
+@Test func audioGateRejectsShortAudio() {
+    #expect(!AudioGate.hasSpeech([Float](repeating: 0.2, count: 16_000 / 4)))
+}
+
+@Test func audioGateRejectsSilence() {
+    #expect(!AudioGate.hasSpeech([Float](repeating: 0.0005, count: 16_000)))
+}
+
+@Test func audioGateAcceptsSpeechLevelAudio() {
+    let tone = (0..<16_000).map { Float(sin(Double($0) * 0.1) * 0.1) }
+    #expect(AudioGate.hasSpeech(tone))
+}
+
+// Review #7 + thinking models: never paste model chatter.
+private func dictate(_ reply: String, transcript: String = "send me the report", context: ScreenSnapshot = ScreenSnapshot()) async -> Outcome {
+    let p = Pipeline(complete: { _, _, _, _ in reply },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                     cleanupModel: "s", editModel: "b")
+    return await p.run(Request(transcript: transcript, selection: nil, context: context)).outcome
+}
+
+@Test func cleanupStripsThinkBlocksAndTags() async {
+    #expect(await dictate("<think>user wants…</think>\n<transcript>Send me the report.</transcript>")
+        == .insert("Send me the report.", label: "Dictated"))
+}
+
+@Test func cleanupChatterFallsBackToRaw() async {
+    let chatter = "Sure! Here is the report you asked for. I have attached the quarterly figures and a summary of the key findings below."
+    #expect(await dictate(chatter) == .insert("send me the report", label: "Dictated (raw)"))
+}
+
+@Test func editParserSkipsThinkBlock() throws {
+    let raw = #"<think>maybe {"action":"edit"}?</think>{"action":"correct","text":"Todoist","vocabulary":null,"remember":false}"#
+    #expect(try LLMClient.parseEditResult(raw).text == "Todoist")
+}
+
+// Review #8: consecutive dictations get a separating space.
+@Test func dictationAddsSpaceAfterText() async {
+    let ctx = ScreenSnapshot(text: "Hello world.", cursorOffset: 12)
+    #expect(await dictate("How are you?", transcript: "how are you", context: ctx) == .insert(" How are you?", label: "Dictated"))
+}
+
+@Test func dictationNoSpaceAfterWhitespaceOrBracket() async {
+    #expect(await dictate("Hi.", transcript: "hi", context: ScreenSnapshot(text: "Hello ", cursorOffset: 6)) == .insert("Hi.", label: "Dictated"))
+    #expect(await dictate("Hi.", transcript: "hi", context: ScreenSnapshot(text: "(", cursorOffset: 1)) == .insert("Hi.", label: "Dictated"))
+    #expect(await dictate("Hi.", transcript: "hi", context: ScreenSnapshot(text: "Hello")) == .insert("Hi.", label: "Dictated"))
+}
+
+@Test func rawFallbackAlsoGetsSpace() async {
+    let p = Pipeline(complete: { _, _, _, _ in throw LLMError(description: "down") },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                     cleanupModel: "s", editModel: "b")
+    let r = await p.run(Request(transcript: "hi", selection: nil, context: ScreenSnapshot(text: "Hello.", cursorOffset: 6)))
+    #expect(r.outcome == .insert(" hi", label: "Dictated (raw)"))
+}

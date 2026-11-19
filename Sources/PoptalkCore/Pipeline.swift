@@ -60,11 +60,14 @@ public struct Pipeline: Sendable {
 
         guard let selection = r.selection, !selection.isEmpty else {
             let messages = Prompts.dictation(transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
-            if let cleaned = try? await complete(cleanupModel, messages, false, cleanupTimeout)
-                .trimmingCharacters(in: .whitespacesAndNewlines), !cleaned.isEmpty {
-                return PipelineResult(outcome: .insert(cleaned, label: "Dictated"))
+            let space = Self.leadingSpace(r.context)
+            // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
+            if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout),
+               case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
+               Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40 {
+                return PipelineResult(outcome: .insert(space + cleaned, label: "Dictated"))
             }
-            return PipelineResult(outcome: .insert(transcript, label: "Dictated (raw)"))
+            return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw)"))
         }
 
         let ns = transcript as NSString
@@ -93,5 +96,32 @@ public struct Pipeline: Sendable {
             return PipelineResult(outcome: outcome, remembered: term)
         }
         return PipelineResult(outcome: outcome, vocabularyOffer: term)
+    }
+}
+
+extension Pipeline {
+    /// Saved vocabulary plus terms from the capped on-screen context, for speech-recognition boosting.
+    public static func boostTerms(saved: [VocabTerm], context: ScreenSnapshot) -> [VocabTerm] {
+        let known = Set(saved.map { $0.text.lowercased() })
+        return saved + TermExtractor.terms(from: Prompts.trimmedContext(context))
+            .filter { !known.contains($0.lowercased()) }
+            .map { VocabTerm(text: $0) }
+    }
+
+    private static let think = try! NSRegularExpression(pattern: #"<think>[\s\S]*?</think>|</?transcript>"#)
+
+    /// Removes reasoning blocks and echoed tags from a model reply.
+    static func stripChatter(_ s: String) -> String {
+        think.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A space before inserted text when the cursor follows a non-space, non-opening character.
+    static func leadingSpace(_ c: ScreenSnapshot) -> String {
+        let ns = c.text as NSString  // AX offsets are UTF-16
+        guard let at = c.cursorOffset, at > 0, at <= ns.length,
+              let prev = Character(ns.substring(with: NSRange(location: at - 1, length: 1))) as Character?
+        else { return "" }
+        return prev.isWhitespace || "([{\"'“‘".contains(prev) ? "" : " "
     }
 }
