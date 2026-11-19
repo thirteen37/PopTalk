@@ -1,3 +1,4 @@
+import AppKit
 import FluidAudio
 import Foundation
 import PoptalkCore
@@ -15,3 +16,9 @@ if args.count >= 3, args[1] == "--transcribe" {
                  Date().timeIntervalSince(start), await t.lastRescoreSeconds, terms.count))
     exit(0)
 }
+
+let app = NSApplication.shared
+let delegate = await AppDelegate()
+app.delegate = delegate
+app.setActivationPolicy(.accessory)
+app.run()
