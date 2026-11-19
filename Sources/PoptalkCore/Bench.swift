@@ -9,6 +9,10 @@ public struct BenchCase: Decodable, Sendable {
     public var transcript: String
     public var selection: String?
     public var context: String?
+    /// UTF-16 cursor offset into `context` (the AX text), like `ScreenSnapshot.cursorOffset`.
+    public var cursor: Int?
+    /// OCR'd window text, as captured when the AX text is thin.
+    public var ocr: String?
     public var expectAction: String?
     public var expectExact: String?
     public var expectAnyOf: [String]?
@@ -22,7 +26,7 @@ public struct BenchCase: Decodable, Sendable {
     public var maxLengthRatio: Double?
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, transcript, selection, context, expectAction, expectExact, expectAnyOf
+        case id, kind, transcript, selection, context, cursor, ocr, expectAction, expectExact, expectAnyOf
         case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio
     }
 
@@ -33,6 +37,8 @@ public struct BenchCase: Decodable, Sendable {
         transcript = try c.decode(String.self, forKey: .transcript)
         selection = try c.decodeIfPresent(String.self, forKey: .selection)
         context = try c.decodeIfPresent(String.self, forKey: .context)
+        cursor = try c.decodeIfPresent(Int.self, forKey: .cursor)
+        ocr = try c.decodeIfPresent(String.self, forKey: .ocr)
         expectAction = try c.decodeIfPresent(String.self, forKey: .expectAction)
         expectExact = try c.decodeIfPresent(String.self, forKey: .expectExact)
         expectAnyOf = try c.decodeIfPresent([String].self, forKey: .expectAnyOf)
@@ -54,7 +60,9 @@ public struct BenchCase: Decodable, Sendable {
     }
 
     public var request: Request {
-        Request(transcript: transcript, selection: selection, context: ScreenSnapshot(text: context ?? ""))
+        Request(transcript: transcript, selection: selection, context: ScreenSnapshot(
+            // Same shape ScreenContext captures today: AX text, then OCR appended.
+            text: [context, ocr].compactMap { $0 }.joined(separator: "\n"), cursorOffset: cursor))
     }
 
     public func score(_ r: PipelineResult, seconds: Double) -> BenchRun {
