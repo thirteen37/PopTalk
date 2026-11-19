@@ -2,6 +2,7 @@ import AppKit
 import FluidAudio
 import Foundation
 import PoptalkCore
+import PoptalkSpeech
 
 // Debug entry point: Poptalk --transcribe <file> [boost terms…]
 let args = CommandLine.arguments

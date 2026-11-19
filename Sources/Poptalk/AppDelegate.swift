@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import PoptalkCore
+import PoptalkSpeech
 import SwiftUI
 
 @MainActor
