@@ -40,10 +40,11 @@ public enum MLXProvider {
     static let timing = Logger(subsystem: "io.lyx.poptalk", category: "timing")
 
     /// Loads `id` (downloading it into the HF cache on first use, reporting the download fraction) and runs
-    /// one generation, so the first real request doesn't pay the ~3 s Metal warm-up.
+    /// a dictation and an edit at full context length, so the first real request pays neither the ~3 s Metal
+    /// warm-up nor the first long (>512-token, chunked) prefill, which a short warm-up prompt never reaches (#33).
     public static func prepare(_ id: String, download: @escaping @Sendable (Double) -> Void) async throws {
         _ = try await models.container(id, download: download)
-        _ = try await complete(id, Prompts.dictation(transcript: "Hello world.", context: ScreenSnapshot(), vocabulary: []), false, 60)
+        for messages in Prompts.warmup { _ = try await complete(id, messages, false, 60) }
     }
 
     /// Unloads every model not in `ids`; memory returns once in-flight requests release theirs.
@@ -52,11 +53,11 @@ public enum MLXProvider {
     /// Generous for edits that rewrite a selection; the caller's timeout bounds runaways.
     static let maxTokens = 1024
 
-    /// Loads `preload` (so its time isn't charged to the first request) and returns the completion
-    /// function plus metadata: load time and memory after loading.
+    /// Loads and prewarms `preload`, like the app, so neither is charged to the first request. Returns
+    /// the completion function plus metadata: load + warm-up time and memory after loading.
     public static func make(preload: [String]) async throws -> (Pipeline.Complete, [String: String]) {
         let start = Date()
-        for id in Set(preload) { _ = try await models.container(id) }
+        for id in Set(preload) { try await prepare(id) { _ in } }
         let meta = ["loadSeconds": String(format: "%.2f", Date().timeIntervalSince(start)),
                     "footprintMB": "\(footprintMB())"]
         return (complete, meta)

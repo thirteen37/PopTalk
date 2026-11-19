@@ -102,3 +102,11 @@ private func filler(_ n: Int) -> String { String(repeating: "a ", count: n / 2) 
     let s = ScreenSnapshot(text: "Thanks ", cursorOffset: 7, ocrText: "Tomasz Wrzesniewski: I'll take it")
     #expect(Pipeline.boostTerms(saved: [], context: s).map(\.text).contains("Tomasz Wrzesniewski"))
 }
+
+@Test func warmupCoversBothPromptsAtAFullContextWindow() {
+    // #33: prewarm with the real prompt types at the longest screen context a request can carry.
+    #expect(Prompts.warmup.map { $0[0].content } == [Prompts.dictationSystem, Prompts.editSystem])
+    for messages in Prompts.warmup {
+        #expect(messages[1].content.count >= 3_900)
+    }
+}

@@ -29,6 +29,47 @@ if let i = args.firstIndex(of: "--compare") {
     exit(0)
 }
 
+// Warm-up probe (#33): prepares models as the app does, then times rounds 1–4 of ASR + rescore, a
+// long-context dictation and an edit. Prefill/gen splits are in the timing log (see Transcriber/MLXProvider).
+//   PoptalkBench --warmup-probe [--cleanup-model ID] [--edit-model ID]
+if args.contains("--warmup-probe") {
+    let cleanup = opt("--cleanup-model") ?? "mlx-community/gemma-4-e2b-it-4bit"
+    let edit = opt("--edit-model") ?? "mlx-community/gemma-4-e4b-it-4bit"
+    func elapsed(_ start: Date) -> String { String(format: "%.2fs", Date().timeIntervalSince(start)) }
+    do {
+        let all = try BenchCase.load(jsonl: String(contentsOfFile: "bench/cases.jsonl", encoding: .utf8))
+        func find(_ id: String) -> BenchCase { all.first { $0.id == id }! }
+        // --dictation a,b,…: cycled per round, to see whether each new prompt length is cold.
+        let ds = (opt("--dictation") ?? "d-long-name-before-cursor").split(separator: ",").map { find(String($0)) }
+        let (e, s) = (find("e-long-correct-far-name"), find("s-priya-q3"))
+        let audio = try Speech.synthesize(s.speak!, voice: s.voice, rate: s.rate, cache: URL(fileURLWithPath: "bench/audio-cache"))
+        var t = Date()
+        // --idle N: wait N s after preparing, like a user would.
+        for id in Set([cleanup, edit]) { try await MLXProvider.prepare(id) { _ in } }
+        print("prepare models \(elapsed(t))")
+        t = Date()
+        let transcriber = try await Transcriber()
+        print("transcriber init \(elapsed(t))")
+        let complete = try await MLXProvider.make(preload: []).0
+        let pipeline = Pipeline(complete: complete,
+                                vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-probe-\(UUID()).json")),
+                                cleanupModel: cleanup, editModel: edit)
+        let boost = Pipeline.boostTerms(saved: [], context: s.request.context)
+        if let idle = opt("--idle").flatMap(Double.init) { try await Task.sleep(for: .seconds(idle)) }
+        for round in 1...max(4, 2 * ds.count) {
+            let h = try await transcriber.transcribeDetailed(audio, boost: boost)
+            t = Date()
+            let dr = await pipeline.run(ds[(round - 1) % ds.count].request)
+            let ds = elapsed(t)
+            t = Date()
+            let er = await pipeline.run(e.request)
+            print(String(format: "round %d: asr %.2fs rescore(%d terms) %.2fs | dictation %@ %@ | edit %@ %@", round, h.asrSeconds, boost.count,
+                         h.rescoreSeconds, ds, "\(dr.outcome)".contains("raw") ? "RAW" : "ok", elapsed(t), "\(er.outcome)".hasPrefix("error") ? "ERR" : "ok"))
+        }
+    } catch { fail(error) }
+    exit(0)
+}
+
 let provider = opt("--provider") ?? "lmstudio"
 let baseURL = URL(string: opt("--base-url") ?? "http://localhost:1234/v1")!
 let cleanupModel = opt("--cleanup-model") ?? "google/gemma-4-e4b"
