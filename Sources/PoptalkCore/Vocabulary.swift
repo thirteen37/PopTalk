@@ -27,14 +27,20 @@ public final class VocabularyStore: @unchecked Sendable {
     }
 
     private let url: URL
-    public private(set) var terms: [VocabTerm]
+    private let lock = NSLock()
+    private var _terms: [VocabTerm]
+    public var terms: [VocabTerm] { lock.withLock { _terms } }
 
     public init(url: URL = VocabularyStore.defaultURL) {
         self.url = url
-        terms = (try? JSONDecoder().decode([VocabTerm].self, from: Data(contentsOf: url))) ?? []
+        _terms = (try? JSONDecoder().decode([VocabTerm].self, from: Data(contentsOf: url))) ?? []
     }
 
+    /// Locks across the file write too, so concurrent saves can't interleave.
     public func add(_ term: VocabTerm) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        var terms = _terms
         if let i = terms.firstIndex(where: { $0.text.lowercased() == term.text.lowercased() }) {
             for alias in term.aliases where !terms[i].aliases.contains(where: { $0.lowercased() == alias.lowercased() }) {
                 terms[i].aliases.append(alias)
@@ -42,6 +48,7 @@ public final class VocabularyStore: @unchecked Sendable {
         } else {
             terms.append(term)
         }
+        _terms = terms
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]

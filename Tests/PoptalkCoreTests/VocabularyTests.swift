@@ -21,6 +21,16 @@ private func tempURL() -> URL {
     #expect(store.terms == [VocabTerm(text: "Todoist", aliases: ["todo list", "to do list"])])
 }
 
+@Test func concurrentAddsAndReadsAreSafe() {
+    let store = VocabularyStore(url: tempURL())
+    DispatchQueue.concurrentPerform(iterations: 200) { i in
+        try? store.add(VocabTerm(text: "term\(i)"))
+        _ = store.terms.count
+    }
+    #expect(Set(store.terms.map(\.text)).count == 200)
+    #expect(store.terms.count == 200)
+}
+
 @Test func missingFileIsEmpty() {
     #expect(VocabularyStore(url: tempURL()).terms.isEmpty)
 }
