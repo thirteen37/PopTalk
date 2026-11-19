@@ -81,3 +81,17 @@ private func dictate(_ reply: String, transcript: String = "send me the report",
     let r = await p.run(Request(transcript: "hi", selection: nil, context: ScreenSnapshot(text: "Hello.", cursorOffset: 6)))
     #expect(r.outcome == .insert(" hi", label: "Dictated (raw)"))
 }
+
+// Hesitation sounds are never content: strip them even when the LLM is unavailable.
+@Test func rawFallbackStripsHesitations() async {
+    let p = Pipeline(complete: { _, _, _, _ in throw LLMError(description: "down") },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                     cleanupModel: "s", editModel: "b")
+    let r = await p.run(Request(transcript: "Um, so we need to uh ship this, er, by Friday. Hmm.", selection: nil, context: ScreenSnapshot()))
+    #expect(r.outcome == .insert("So we need to ship this, by Friday.", label: "Dictated (raw)"))
+}
+
+@Test func hesitationStripKeepsRealWords() {
+    #expect(Pipeline.stripHesitations("I like the umbrella and the Uhuru park") == "I like the umbrella and the Uhuru park")
+    #expect(Pipeline.stripHesitations("uh") == "")
+}

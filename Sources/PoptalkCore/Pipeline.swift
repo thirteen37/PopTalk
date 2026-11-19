@@ -55,7 +55,7 @@ public struct Pipeline: Sendable {
     private static let literally = try! NSRegularExpression(pattern: #"^\s*literally\s*[:,]?\s*"#, options: .caseInsensitive)
 
     public func run(_ r: Request) async -> PipelineResult {
-        let transcript = r.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let transcript = Self.stripHesitations(r.transcript)
         guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
 
         guard let selection = r.selection, !selection.isEmpty else {
@@ -109,6 +109,22 @@ extension Pipeline {
     }
 
     private static let think = try! NSRegularExpression(pattern: #"<think>[\s\S]*?</think>|</?transcript>"#)
+
+    private static let hesitation = try! NSRegularExpression(
+        pattern: #"\b(?:u+m+|u+h+|e+r+m*|h+m+)\b[,.!?]?"#, options: .caseInsensitive)
+
+    /// Drops pure hesitation sounds (um, uh, er, erm, hmm). Context-dependent fillers
+    /// ("like", "basically", "you know") are left to the LLM, since they can be real words.
+    static func stripHesitations(_ s: String) -> String {
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        var out = hesitation.stringByReplacingMatches(
+            in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length), withTemplate: "")
+        out = out.replacingOccurrences(of: #"\s+([,.!?])"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespaces.union(.punctuationCharacters).subtracting(CharacterSet(charactersIn: ".!?\"')")))
+        if trimmed.first?.isUppercase == true, let f = out.first { out = f.uppercased() + out.dropFirst() }
+        return out
+    }
 
     /// Removes reasoning blocks and echoed tags from a model reply.
     static func stripChatter(_ s: String) -> String {
