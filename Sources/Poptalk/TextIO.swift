@@ -31,10 +31,11 @@ enum TextIO {
     }
 
     static func replaceSelection(_ s: String) async { await paste(s) }
-    /// Pastes `s`. Returns false if no focused editable field was found: the paste is still sent
-    /// (Electron and terminals often hide their fields from AX) but `s` stays on the clipboard so it isn't lost.
+    /// Pastes `s`. Returns false if nothing is focused at all: the paste is still sent, but `s` stays on
+    /// the clipboard so it isn't lost. Any focused element (including Electron/terminal fields that don't
+    /// report a settable value) gets the normal paste-and-restore, so the user's clipboard survives.
     static func insert(_ s: String) async -> Bool {
-        guard focusedIsEditable() else {
+        guard hasFocusedElement() else {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(s, forType: .string)
             press(.v, flags: .maskCommand)
@@ -44,14 +45,12 @@ enum TextIO {
         return true
     }
 
-    private static func focusedIsEditable() -> Bool {
+    private static func hasFocusedElement() -> Bool {
         var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
-                                            &focused) == .success, let focused else { return false }
-        var settable: DarwinBoolean = false
-        return AXUIElementIsAttributeSettable(focused as! AXUIElement, kAXValueAttribute as CFString, &settable) == .success
-            && settable.boolValue
+        return AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString,
+                                             &focused) == .success && focused != nil
     }
+
 
     static func insertAfterSelection(_ s: String) async {
         press(.right)
