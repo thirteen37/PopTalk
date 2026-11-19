@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        // Set on the system-wide element, this is the process-wide AX timeout (default ~6 s): a hung app can't freeze us.
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.25)
         if !AXIsProcessTrusted() {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
