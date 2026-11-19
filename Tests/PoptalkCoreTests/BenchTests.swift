@@ -90,3 +90,12 @@ private func report(_ runs: [String: [Bool]], variant: String = "AFM 3 Core Adva
     #expect(lines.contains("only in a: e2"))
     #expect(lines.contains("only in b: e3"))
 }
+
+// replace / correct / edit all replace the selection; only the overlay label differs.
+@Test func replaceFamilyActionsAreEquivalent() throws {
+    let c = try one(#"{"id":"t","kind":"edit","transcript":"make it shorter","selection":"long text","expectAction":"edit"}"#)
+    let r = c.score(PipelineResult(outcome: .replaceSelection("short", label: "Replaced")), seconds: 0.1)
+    #expect(r.failures.isEmpty)
+    let ins = c.score(PipelineResult(outcome: .insertAfter(" more")), seconds: 0.1)
+    #expect(!ins.failures.isEmpty)
+}

@@ -1,6 +1,7 @@
 import CryptoKit
 import FluidAudio
 import Foundation
+import os
 import PoptalkCore
 
 /// One recognition pass: the unboosted TDT text, the boosted text, and how long each stage took.
@@ -34,7 +35,11 @@ public actor Transcriber {
 
     /// - Parameter samples: 16 kHz mono Float32.
     public func transcribe(_ samples: [Float], boost: [VocabTerm]) async throws -> String {
-        try await transcribeDetailed(samples, boost: boost).text
+        let t = try await transcribeDetailed(samples, boost: boost)
+        // Timing only (no text).
+        Logger(subsystem: "io.lyx.poptalk", category: "timing").info(
+            "asr \(Double(samples.count) / 16_000, format: .fixed(precision: 1))s audio: \(t.asrSeconds, format: .fixed(precision: 2))s, rescore \(boost.count) terms \(t.rescoreSeconds, format: .fixed(precision: 2))s")
+        return t.text
     }
 
     /// Conservative default thresholds: FluidAudio's docs show these avoid replacing correctly heard words.

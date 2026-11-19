@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import PoptalkCore
+import PoptalkMLX
 import PoptalkSpeech
 import SwiftUI
 
@@ -10,15 +11,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     let store = VocabularyStore()
     private let recorder = AudioRecorder()
-    private var transcriber: Transcriber?
-    private var loadingTranscriber = false
-    private var transcriberError: String?
+    let status = StatusModel()
+    private var transcriber: Transcriber? { didSet { syncSpeech() } }
+    private var loadingTranscriber = false { didSet { syncSpeech() } }
+    private var transcriberError: String? { didSet { syncSpeech() } }
     private var hotkey: Hotkey!
 
     func applicationDidFinishLaunching(_ note: Notification) {
         Settings.register()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Poptalk")
+        status.onChange = { [weak self] in self?.updateIcon() }
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -29,13 +32,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
         loadTranscriber()
+        prepareModels()
+        // Text fields save on every keystroke: wait for a pause before loading what was typed.
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.settingsWork?.cancel()
+                let work = DispatchWorkItem { self?.prepareModels() }
+                self?.settingsWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+            }
+        }
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() })
-        installHotkeyWhenTrusted()
+        installHotkeyWhenTrusted()  // also checks permissions
+        if let tab = status.value.launchTab { openSettings(at: tab) }
     }
 
-    /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and menu.
+    private func syncSpeech() {
+        status.value.speech = transcriber != nil ? .ready : loadingTranscriber ? .loading
+            : transcriberError.map { .failed($0) } ?? .loading
+    }
+
+    private func updateIcon() {
+        let attention = status.value.needsAttention
+        statusItem.button?.image = NSImage(systemSymbolName: attention ? "exclamationmark.triangle" : "waveform",
+                                           accessibilityDescription: attention ? "Poptalk needs attention" : "Poptalk")
+    }
+
+    /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and Settings.
     private func loadTranscriber() {
         guard transcriber == nil, !loadingTranscriber else { return }
         loadingTranscriber = true
@@ -47,9 +72,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// MLX models of the current selection and their load state; a press before `.ready` skips the model.
+    private var modelStatus: [String: ModelStatus] = [:] { didSet { status.value.models = modelStatus } }
+    private var settingsWork: DispatchWorkItem?
+
+    /// Loads and prewarms the selected MLX models in the background, unloading any others; on a repeat
+    /// call, only retries failed loads (so presses and unrelated settings changes are cheap).
+    private func prepareModels() {
+        let ids = Settings.selection.mlxModels
+        let todo = ids.filter { modelStatus[$0]?.isFailed ?? true }
+        guard Set(ids) != Set(modelStatus.keys) || !todo.isEmpty else { return }
+        modelStatus = modelStatus.filter { ids.contains($0.key) }
+        Task { await MLXProvider.keepOnly(ids) }
+        for id in todo {
+            modelStatus[id] = .loading
+            Task {
+                do {
+                    try await MLXProvider.prepare(id) { f in
+                        Task { @MainActor [weak self] in
+                            // Progress hops can land late: never step back from ready or for a deselected model.
+                            if let s = self?.modelStatus[id], s != .ready { self?.modelStatus[id] = ModelStatus(downloaded: f) }
+                        }
+                    }
+                    if modelStatus[id] != nil { modelStatus[id] = .ready }
+                } catch {
+                    if modelStatus[id] != nil { modelStatus[id] = .failed(error.localizedDescription) }
+                }
+            }
+        }
+    }
+
+    /// The selected provider's completion function. MLX models still loading throw `ModelLoading`.
+    private func makeComplete() async throws -> Pipeline.Complete {
+        let sel = Settings.selection
+        let base = sel.provider == "mlx" ? try await MLXProvider.make(preload: []).0
+            : try Providers.make(sel.provider, baseURL: Settings.baseURL).0
+        guard sel.provider == "mlx" else { return base }
+        let ready = Set(modelStatus.filter { $0.value == .ready }.keys)
+        return { model, messages, json, timeout in
+            guard ready.contains(model) else { throw Pipeline.ModelLoading() }
+            return try await base(model, messages, json, timeout)
+        }
+    }
+
     /// The event tap needs Accessibility; retry until the user grants it.
     private func installHotkeyWhenTrusted() {
-        if hotkey.install() { return }
+        status.value.hotkeyInstalled = hotkey.install()
+        status.refreshPermissions()
+        if status.value.hotkeyInstalled { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.installHotkeyWhenTrusted() }
     }
 
@@ -65,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func pressed() {
         guard !busy else { return }  // one request at a time
         loadTranscriber()  // retries after a failed load
+        prepareModels()  // likewise for the MLX models
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
@@ -126,9 +197,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 overlay.showError("Transcription failed"); return
             }
-            let client = LLMClient(baseURL: Settings.baseURL)
-            let pipeline = Pipeline(complete: { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) },
-                                    vocabulary: store, cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
+            // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
+            // Apple Intelligence off) still dictates raw.
+            let complete: Pipeline.Complete
+            do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
+            let models = Settings.selection
+            let pipeline = Pipeline(complete: complete, vocabulary: store,
+                                    cleanupModel: models.cleanupModel, editModel: models.editModel)
             let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
             await apply(result, cursorKnown: snapshot.cursorOffset != nil)
         }
@@ -193,56 +268,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        status.refreshPermissions()
         menu.removeAllItems()
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: status.value.summary, action: nil, keyEquivalent: "")
         menu.addItem(.separator())
-        if transcriber == nil {
-            menu.addItem(withTitle: transcriberError.map { "⚠️ Speech model failed: \($0)" } ?? "Speech model loading…",
-                         action: nil, keyEquivalent: "")
-        }
-        let perms: [(String, Bool, String)] = [
-            ("Microphone", AVCaptureDevice.authorizationStatus(for: .audio) == .authorized, "Privacy_Microphone"),
-            ("Accessibility", AXIsProcessTrusted(), "Privacy_Accessibility"),
-            ("Screen Recording", CGPreflightScreenCaptureAccess(), "Privacy_ScreenCapture"),
-        ]
-        for (name, ok, pane) in perms {
-            let item = menu.addItem(withTitle: "\(ok ? "✅" : "⚠️") \(name)", action: #selector(openPane(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = pane
-        }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Import FluidVoice Vocabulary", action: #selector(importFluidVoice), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Quit Poptalk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
 
-    @objc private func openSettings() {
+    @objc private func showSettings() {
+        // Lands on the problem when there is one.
+        openSettings(at: status.value.needsAttention ? (status.value.missing.isEmpty ? .models : .permissions) : status.tab)
+    }
+
+    private func openSettings(at tab: SettingsTab) {
+        status.tab = tab
         if settingsWindow == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+            let view = SettingsView(status: status, store: store) { [weak self] in
+                self?.loadTranscriber()  // each only retries what failed
+                self?.prepareModels()
+            }
+            let host = NSHostingController(rootView: view)
+            host.sizingOptions = .preferredContentSize  // window tracks the content's fitting size
+            let w = NSWindow(contentViewController: host)
+            w.styleMask.remove(.resizable)
             w.title = "Poptalk Settings"
             w.isReleasedWhenClosed = false
             settingsWindow = w
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
-    }
-
-    @objc private func openPane(_ sender: NSMenuItem) {
-        if sender.representedObject as? String == "Privacy_ScreenCapture" { CGRequestScreenCaptureAccess() }
-        let pane = sender.representedObject as! String
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
-    }
-
-    @objc private func importFluidVoice() {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("FluidVoice/parakeet_custom_vocabulary.json")
-        let alert = NSAlert()
-        do {
-            let terms = try VocabularyStore.importFluidVoice(from: url)
-            for t in terms { try store.add(t) }
-            alert.messageText = "Imported \(terms.count) term(s) from FluidVoice."
-        } catch {
-            alert.messageText = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
-        }
-        alert.runModal()
     }
 }

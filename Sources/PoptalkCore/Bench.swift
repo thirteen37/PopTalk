@@ -91,7 +91,9 @@ public struct BenchCase: Decodable, Sendable {
         var f: [String] = []
         if action == "error" { f.append("error: \(text)") }
         if action == "raw" { f.append("raw fallback") }
-        if let a = expectAction, a != action, action != "error" { f.append("action \(action), expected \(a)") }
+        // replace / correct / edit all replace the selection identically; only the overlay label differs.
+        let family: (String) -> String = { ["replace", "correct", "edit"].contains($0) ? "replaceSelection" : $0 }
+        if let a = expectAction, family(a) != family(action), action != "error" { f.append("action \(action), expected \(a)") }
         if let e = expectExact, e != text { f.append("not exactly \"\(e)\"") }
         if let any = expectAnyOf, !any.contains(text) { f.append("not any of \(any)") }
         f += mustContain.filter { !text.contains($0) }.map { "missing \"\($0)\"" }
