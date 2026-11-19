@@ -59,3 +59,11 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(messages.last!.content.contains("on to-do list"))
     #expect(messages.last!.content.contains("Todoist"))
 }
+
+@Test func attributeQuotesAreEscaped() {
+    let m = Prompts.dictation(transcript: "hi", context: ScreenSnapshot(appName: "Say \"Hi\"", windowTitle: "a\"b", text: "keep \"quotes\""), vocabulary: [])
+    let user = m.last!.content
+    #expect(user.contains("app=\"Say &quot;Hi&quot;\""))
+    #expect(user.contains("window=\"a&quot;b\""))
+    #expect(user.contains("keep \"quotes\""))
+}

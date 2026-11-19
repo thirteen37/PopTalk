@@ -38,6 +38,9 @@ public enum Prompts {
     }
 
     /// Escapes a value placed inside the prompt's XML-ish tags.
+    /// Attribute values also need `"` escaped.
+    static func attr(_ s: String) -> String { esc(s).replacingOccurrences(of: "\"", with: "&quot;") }
+
     static func esc(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
@@ -45,7 +48,7 @@ public enum Prompts {
     }
 
     private static func contextBlock(_ c: ScreenSnapshot, _ vocabulary: [VocabTerm]) -> String {
-        var s = "<screen app=\"\(esc(c.appName))\" window=\"\(esc(c.windowTitle))\">\n\(esc(trimmedContext(c)))\n</screen>"
+        var s = "<screen app=\"\(attr(c.appName))\" window=\"\(attr(c.windowTitle))\">\n\(esc(trimmedContext(c)))\n</screen>"
         if !vocabulary.isEmpty {
             s += "\n<vocabulary>\(esc(vocabulary.map(\.text).joined(separator: ", ")))</vocabulary>"
         }
