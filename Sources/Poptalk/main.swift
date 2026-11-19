@@ -24,6 +24,16 @@ if args.count >= 3, args[1] == "--pipeline" {
     Settings.register()
     let client = LLMClient(baseURL: Settings.baseURL)
     var complete: Pipeline.Complete = { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) }
+    // -provider apple-pcc: Apple's larger Private Cloud Compute model (macOS 27+). Off-device.
+    if UserDefaults.standard.string(forKey: "provider") == "apple-pcc", #available(macOS 27, *) {
+        let pcc = PrivateCloudComputeLanguageModel()
+        guard case .available = pcc.availability else { print("PCC unavailable: \(pcc.availability)"); exit(1) }
+        complete = { _, messages, _, _ in
+            let session = LanguageModelSession(model: pcc, instructions: messages.first { $0.role == "system" }?.content ?? "")
+            do { return try await session.respond(to: messages.last!.content, options: GenerationOptions(temperature: 0)).content }
+            catch { FileHandle.standardError.write(Data("PCC error: \(error)\n".utf8)); throw error }
+        }
+    }
     // -provider apple: Apple Intelligence on-device model (FoundationModels), for comparison.
     if UserDefaults.standard.string(forKey: "provider") == "apple", #available(macOS 26, *) {
         guard case .available = SystemLanguageModel.default.availability else {
