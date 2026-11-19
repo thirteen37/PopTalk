@@ -26,3 +26,18 @@ import Testing
     #expect(!CapturePolicy.isPrivateWindow(bundleID: "com.apple.Notes", title: "Incognito mode notes"))
     #expect(!CapturePolicy.isPrivateWindow(bundleID: nil, title: "Private Browsing"))
 }
+
+@Test func electronGetsManualAccessibilityOnly() {
+    #expect(CapturePolicy.axEnableAttributes(bundleID: "com.tinyspeck.slackmacgap", isElectron: true) == ["AXManualAccessibility"])
+}
+
+@Test func chromiumBrowsersFallBackToEnhancedUserInterface() {
+    #expect(CapturePolicy.axEnableAttributes(bundleID: "com.google.Chrome", isElectron: false)
+        == ["AXManualAccessibility", "AXEnhancedUserInterface"])
+}
+
+@Test func otherAppsGetNothingSet() {
+    #expect(CapturePolicy.axEnableAttributes(bundleID: "com.apple.Safari", isElectron: false).isEmpty)
+    #expect(CapturePolicy.axEnableAttributes(bundleID: "org.mozilla.firefox", isElectron: false).isEmpty)
+    #expect(CapturePolicy.axEnableAttributes(bundleID: nil, isElectron: false).isEmpty)
+}

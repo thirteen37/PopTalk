@@ -12,6 +12,8 @@ enum ScreenContext {
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
         guard !isSensitive() else { return snap }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        exposeTree(axApp, app)
+        let isPrivate = { CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle) }
 
         var windowFrame: CGRect?
         if let window: AXUIElement = attr(axApp, kAXFocusedWindowAttribute) {
@@ -22,7 +24,8 @@ enum ScreenContext {
                 windowFrame = CGRect(origin: origin, size: size)
             }
         }
-        if let focused: AXUIElement = attr(axApp, kAXFocusedUIElementAttribute) {
+        let focused: AXUIElement? = attr(axApp, kAXFocusedUIElementAttribute)
+        if let focused {
             let parent: AXUIElement? = attr(focused, kAXParentAttribute)
             snap.text = attr(focused, kAXValueAttribute) ?? parent.flatMap { attr($0, kAXValueAttribute) } ?? ""
             if let range: AXValue = attr(focused, kAXSelectedTextRangeAttribute) {
@@ -32,11 +35,41 @@ enum ScreenContext {
         }
 
         if snap.text.count < 200, CGPreflightScreenCaptureAccess(),
-           !CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle),
-           let ocr = await ocrFocusedWindow(pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle) {
+           !isPrivate(), let ocr = await ocrFocusedWindow(
+            pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle) {
             snap.text += (snap.text.isEmpty ? "" : "\n") + ocr
         }
+        // ponytail: domain rides in the window title until ScreenSnapshot/<screen> grow a domain field.
+        if !isPrivate(), let domain = focused.flatMap(webDomain) {
+            snap.windowTitle += snap.windowTitle.isEmpty ? domain : " (\(domain))"
+        }
         return snap
+    }
+
+    /// Chromium and Electron build their AX tree only when asked. Skips attributes already on, so it's
+    /// once per process; the first press after enabling may still see a thin tree and fall back to OCR.
+    private static func exposeTree(_ axApp: AXUIElement, _ app: NSRunningApplication) {
+        let isElectron = app.bundleURL.map {
+            FileManager.default.fileExists(atPath: $0.appendingPathComponent(
+                "Contents/Frameworks/Electron Framework.framework").path)
+        } ?? false
+        for name in CapturePolicy.axEnableAttributes(bundleID: app.bundleIdentifier, isElectron: isElectron) {
+            if (attr(axApp, name) as Bool?) == true { return }
+            if AXUIElementSetAttributeValue(axApp, name as CFString, kCFBooleanTrue) == .success { return }
+        }
+    }
+
+    /// Host of the page containing `el`: the nearest `AXWebArea` ancestor's `AXURL`.
+    private static func webDomain(_ el: AXUIElement) -> String? {
+        var node: AXUIElement? = el
+        for _ in 0..<64 {
+            guard let n = node else { return nil }
+            if (attr(n, kAXRoleAttribute) as String?) == "AXWebArea" {
+                return (attr(n, kAXURLAttribute) as URL?)?.host()
+            }
+            node = attr(n, kAXParentAttribute)
+        }
+        return nil
     }
 
     /// A password field is focused or a password manager is frontmost (see `CapturePolicy.isSensitive`).
