@@ -75,7 +75,8 @@ final class Overlay {
         let width = min(max(fit.width + 40, 160), 640)
         let height = max(44, ceil(fit.height) + 24)
         label.preferredMaxLayoutWidth = width - 28
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
+                ?? NSScreen.main ?? NSScreen.screens.first else { return }
         let f = screen.visibleFrame
         panel.setFrame(NSRect(x: f.midX - width / 2, y: f.minY + 50, width: width, height: height), display: true)
         panel.orderFrontRegardless()

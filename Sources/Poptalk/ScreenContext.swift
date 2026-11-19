@@ -12,8 +12,14 @@ enum ScreenContext {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
 
+        var windowFrame: CGRect?
         if let window: AXUIElement = attr(axApp, kAXFocusedWindowAttribute) {
             snap.windowTitle = attr(window, kAXTitleAttribute) ?? ""
+            var origin = CGPoint.zero, size = CGSize.zero
+            if let p: AXValue = attr(window, kAXPositionAttribute), let s: AXValue = attr(window, kAXSizeAttribute),
+               AXValueGetValue(p, .cgPoint, &origin), AXValueGetValue(s, .cgSize, &size) {
+                windowFrame = CGRect(origin: origin, size: size)
+            }
         }
         if let focused: AXUIElement = attr(axApp, kAXFocusedUIElementAttribute) {
             let parent: AXUIElement? = attr(focused, kAXParentAttribute)
@@ -24,7 +30,8 @@ enum ScreenContext {
             }
         }
 
-        if snap.text.count < 200, CGPreflightScreenCaptureAccess(), let ocr = await ocrFrontWindow(pid: app.processIdentifier) {
+        if snap.text.count < 200, CGPreflightScreenCaptureAccess(), let ocr = await ocrFocusedWindow(
+            pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle) {
             snap.text += (snap.text.isEmpty ? "" : "\n") + ocr
         }
         return snap
@@ -36,10 +43,14 @@ enum ScreenContext {
         return v as? T
     }
 
-    private static func ocrFrontWindow(pid: pid_t) async -> String? {
-        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
-              let window = content.windows.first(where: { $0.owningApplication?.processID == pid && $0.windowLayer == 0 })
+    /// `SCShareableContent` window order isn't front-to-back, so match the AX focused window.
+    private static func ocrFocusedWindow(pid: pid_t, frame: CGRect?, title: String) async -> String? {
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         else { return nil }
+        let windows = content.windows.filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 }
+        guard let i = WindowMatch.index(of: windows.map { ($0.frame, $0.title) }, frame: frame, title: title)
+        else { return nil }
+        let window = windows[i]
         let config = SCStreamConfiguration()
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         config.width = Int(window.frame.width * scale)
