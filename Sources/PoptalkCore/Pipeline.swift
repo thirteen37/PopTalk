@@ -66,7 +66,9 @@ public struct Pipeline: Sendable {
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
             if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)),
                case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
-               Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40 {
+               Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40,
+               !Self.echoesContext(cleaned, transcript: transcript,
+                                   context: r.context.windowTitle + " " + Prompts.trimmedContext(r.context)) {
                 return PipelineResult(outcome: .insert(space + cleaned, label: "Dictated"))
             }
             return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw)"))
@@ -138,6 +140,15 @@ extension Pipeline {
 
     static func isBlank(_ s: String) -> Bool {
         s.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)).isEmpty
+    }
+
+    /// True when most of `output`'s words (and at least 3) weren't said but are on screen:
+    /// the model echoed `<screen>` instead of cleaning the transcript (#29).
+    static func echoesContext(_ output: String, transcript: String, context: String) -> Bool {
+        func words(_ s: String) -> [Substring] { s.lowercased().split { !$0.isLetter && !$0.isNumber } }
+        let said = Set(words(transcript)), shown = Set(words(context)), out = words(output)
+        let echoed = out.filter { !said.contains($0) && shown.contains($0) }.count
+        return echoed >= 3 && echoed * 2 > out.count
     }
 
     /// Removes reasoning blocks and echoed tags from a model reply.

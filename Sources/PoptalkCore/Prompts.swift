@@ -83,7 +83,8 @@ public enum Prompts {
     words (um, uh, filler "like"), and apply spoken self-corrections ("Tuesday, no, \
     Thursday" → "Thursday"; "two PM, sorry, four PM" → "four PM"). Fix misheard words ONLY toward names and terms that \
     appear in <screen> or <vocabulary>, matching their spelling and capitalization \
-    exactly. Never add, answer, or summarize content. Output only the cleaned text.
+    exactly. <screen> is reference only: never output its text. Never add, answer, or \
+    summarize content. Output only the cleaned transcript.
     """
 
     public static func dictation(transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm]) -> [ChatMessage] {
