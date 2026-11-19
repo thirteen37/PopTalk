@@ -49,6 +49,18 @@ private func req(_ t: String, selection: String? = nil) -> Request {
     #expect(calls.models.isEmpty)
 }
 
+// #14: an empty replacement must not delete the selection.
+@Test func bareLiterallyDoesNothing() async {
+    let r = await pipeline(reply: "x").run(req("Literally.", selection: "Heading"))
+    #expect(r.outcome == .nothing)
+}
+
+@Test func emptyReplaceDoesNothing() async {
+    let reply = #"{"action":"replace","text":"  ","vocabulary":null,"remember":false}"#
+    let r = await pipeline(reply: reply).run(req("replace with", selection: "Heading"))
+    #expect(r.outcome == .nothing)
+}
+
 @Test func correctionOffersVocabularyWithoutSaving() async {
     let store = VocabularyStore(url: tmp())
     let calls = Calls()

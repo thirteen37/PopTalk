@@ -72,7 +72,8 @@ public struct Pipeline: Sendable {
 
         let ns = transcript as NSString
         if let m = Self.literally.firstMatch(in: transcript, range: NSRange(location: 0, length: ns.length)) {
-            return PipelineResult(outcome: .replaceSelection(ns.substring(from: m.range.length), label: "Replaced"))
+            let text = ns.substring(from: m.range.length)
+            return PipelineResult(outcome: Self.isBlank(text) ? .nothing : .replaceSelection(text, label: "Replaced"))
         }
 
         let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
@@ -84,6 +85,10 @@ public struct Pipeline: Sendable {
             return PipelineResult(outcome: .error("Didn't understand the model's reply"))
         }
 
+        // An empty replacement would silently delete the selection.
+        if edit.action != .insertBefore, edit.action != .insertAfter, Self.isBlank(edit.text) {
+            return PipelineResult(outcome: .nothing)
+        }
         let outcome: Outcome = switch edit.action {
         case .replace: .replaceSelection(edit.text, label: "Replaced")
         case .correct: .replaceSelection(edit.text, label: "Corrected")
@@ -125,6 +130,10 @@ extension Pipeline {
             .trimmingCharacters(in: CharacterSet.whitespaces.union(.punctuationCharacters).subtracting(CharacterSet(charactersIn: ".!?\"')")))
         if trimmed.first?.isUppercase == true, let f = out.first { out = f.uppercased() + out.dropFirst() }
         return out
+    }
+
+    static func isBlank(_ s: String) -> Bool {
+        s.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)).isEmpty
     }
 
     /// Removes reasoning blocks and echoed tags from a model reply.
