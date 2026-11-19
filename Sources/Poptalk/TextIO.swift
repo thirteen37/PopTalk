@@ -67,8 +67,7 @@ enum TextIO {
     private static func paste(_ s: String) async {
         let pb = NSPasteboard.general
         await ClipboardGuard.withPreserved(pb) {
-            pb.clearContents()
-            pb.setString(s, forType: .string)
+            ClipboardGuard.setTemporary(s, on: pb)
             press(.v, flags: .maskCommand)
             // Give the target app time to read the pasteboard before restoring it.
             try? await Task.sleep(for: .milliseconds(300))
