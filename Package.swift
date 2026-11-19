@@ -9,11 +9,13 @@ let package = Package(
     ],
     targets: [
         .target(name: "PoptalkCore"),
+        // Speech recognition (FluidAudio), shared by the app and the benchmark; keeps PoptalkCore dependency-free.
+        .target(name: "PoptalkSpeech", dependencies: ["PoptalkCore", .product(name: "FluidAudio", package: "FluidAudio")]),
         .executableTarget(
             name: "Poptalk",
-            dependencies: ["PoptalkCore", .product(name: "FluidAudio", package: "FluidAudio")]
+            dependencies: ["PoptalkCore", "PoptalkSpeech", .product(name: "FluidAudio", package: "FluidAudio")]
         ),
-        .executableTarget(name: "PoptalkBench", dependencies: ["PoptalkCore"]),
+        .executableTarget(name: "PoptalkBench", dependencies: ["PoptalkCore", "PoptalkSpeech"]),
         .testTarget(name: "PoptalkCoreTests", dependencies: ["PoptalkCore"]),
     ]
 )
