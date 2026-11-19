@@ -1,0 +1,457 @@
+{
+  "cases" : [
+    {
+      "id" : "s-meal-prep",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.4276679754257202,
+          "speech" : {
+            "asrSeconds" : 0.08080101013183594,
+            "boostBroken" : 0,
+            "boostFixed" : 1,
+            "boostTerms" : 8,
+            "boosted" : "Refer to my meal prep project on Todoist.",
+            "raw" : "Refer to my meal prep project on to-do list.",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 0.5,
+            "rescoreSeconds" : 0.1562659740447998,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0.375
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-meal-prep-daniel",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.2910330295562744,
+          "speech" : {
+            "asrSeconds" : 0.0555189847946167,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 8,
+            "boosted" : "Refer to my meal prep project on Todoist.",
+            "raw" : "Refer to my meal prep project on Todoist.",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0.13371801376342773,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-todoist-inbox",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Add Buy oat milk to my Todoist Inbox.",
+          "seconds" : 0.3135240077972412,
+          "speech" : {
+            "asrSeconds" : 0.08082807064056396,
+            "boostBroken" : 0,
+            "boostFixed" : 3,
+            "boostTerms" : 8,
+            "boosted" : "Add Buy milk to my Todoist Inbox.",
+            "raw" : "Add biote milk to my Toddoist in box.",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 0,
+            "rescoreSeconds" : 0.17923200130462646,
+            "werBoosted" : 0.125,
+            "werFinal" : 0,
+            "werRaw" : 0.625
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-priya-q3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Q3\""
+          ],
+          "output" : "Remind me to call Priya about the OKRs.",
+          "seconds" : 0.3310980796813965,
+          "speech" : {
+            "asrSeconds" : 0.08056294918060303,
+            "boostBroken" : 0,
+            "boostFixed" : 1,
+            "boostTerms" : 8,
+            "boosted" : "Remind me to call Priya about the OKRs.",
+            "raw" : "Remind me to call Priya about the Q3OKRs.",
+            "recallBoosted" : 0.6666666666666666,
+            "recallFinal" : 0.6666666666666666,
+            "recallRaw" : 0.3333333333333333,
+            "rescoreSeconds" : 0.13992094993591309,
+            "werBoosted" : 0.1111111111111111,
+            "werFinal" : 0.1111111111111111,
+            "werRaw" : 0.2222222222222222
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-priya-q3-samantha",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "length 89 > 1.5 × 42"
+          ],
+          "output" : "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy oat milk, Call Priya re: Q3 OKRs",
+          "seconds" : 0.6119730472564697,
+          "speech" : {
+            "asrSeconds" : 0.08058691024780273,
+            "boostBroken" : 0,
+            "boostFixed" : 1,
+            "boostTerms" : 8,
+            "boosted" : "Remind me to call Priya about the OKRs.",
+            "raw" : "Remind me to call Priya about the Q3OKRs.",
+            "recallBoosted" : 0.6666666666666666,
+            "recallFinal" : 1,
+            "recallRaw" : 0.3333333333333333,
+            "rescoreSeconds" : 0.14138996601104736,
+            "werBoosted" : 0.1111111111111111,
+            "werFinal" : 1.3333333333333333,
+            "werRaw" : 0.2222222222222222
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-fluidaudio",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I will review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.37823593616485596,
+          "speech" : {
+            "asrSeconds" : 0.09226000308990479,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 4,
+            "boosted" : "I will review the Kubernetes PR for fluid audio this afternoon",
+            "raw" : "I will review the Kubernetes PR for fluid audio this afternoon",
+            "recallBoosted" : 0.5,
+            "recallFinal" : 1,
+            "recallRaw" : 0.5,
+            "rescoreSeconds" : 0.1615920066833496,
+            "werBoosted" : 0.2,
+            "werFinal" : 0,
+            "werRaw" : 0.2
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-fluidaudio-karen",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I will review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.34066200256347656,
+          "speech" : {
+            "asrSeconds" : 0.08404695987701416,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 4,
+            "boosted" : "I will review the Kubernetes PR for fluid audio this afternoon.",
+            "raw" : "I will review the Kubernetes PR for fluid audio this afternoon.",
+            "recallBoosted" : 0.5,
+            "recallFinal" : 1,
+            "recallRaw" : 0.5,
+            "rescoreSeconds" : 0.15571701526641846,
+            "werBoosted" : 0.2,
+            "werFinal" : 0,
+            "werRaw" : 0.2
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-priya-marcus",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks Priya, I will ping Marcus about the FluidAudio release.",
+          "seconds" : 0.3764920234680176,
+          "speech" : {
+            "asrSeconds" : 0.08868598937988281,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 4,
+            "boosted" : "Thanks Priya, I will ping Marcus about the fluid audio release",
+            "raw" : "Thanks Priya, I will ping Marcus about the fluid audio release",
+            "recallBoosted" : 0.6666666666666666,
+            "recallFinal" : 1,
+            "recallRaw" : 0.6666666666666666,
+            "rescoreSeconds" : 0.18338191509246826,
+            "werBoosted" : 0.2,
+            "werFinal" : 0,
+            "werRaw" : 0.2
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-kubernetes",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you restart the Kubernetes cluster before the demo?",
+          "seconds" : 0.3142939805984497,
+          "speech" : {
+            "asrSeconds" : 0.08027398586273193,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 4,
+            "boosted" : "Can you restart the Kubernetes cluster before the demo?",
+            "raw" : "Can you restart the Kubernetes cluster before the demo?",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0.17572903633117676,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-plain-friday",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.29084599018096924,
+          "speech" : {
+            "asrSeconds" : 0.07815098762512207,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 0,
+            "boosted" : "Can you send me the report by Friday?",
+            "raw" : "Can you send me the report by Friday?",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-plain-meeting",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The meeting is moved to four in the afternoon in the main room.",
+          "seconds" : 0.3879280090332031,
+          "speech" : {
+            "asrSeconds" : 0.08702695369720459,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 0,
+            "boosted" : "The meeting is moved to 4 in the afternoon in the main room",
+            "raw" : "The meeting is moved to 4 in the afternoon in the main room",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0,
+            "werBoosted" : 0.07692307692307693,
+            "werFinal" : 0,
+            "werRaw" : 0.07692307692307693
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-plain-store",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"We went to the store yesterday\"",
+            "contains \"Priya\"",
+            "contains \"oat\"",
+            "length 89 > 1.5 × 52"
+          ],
+          "output" : "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy oat milk, Call Priya re: Q3 OKRs",
+          "seconds" : 0.6618419885635376,
+          "speech" : {
+            "asrSeconds" : 0.0803060531616211,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 8,
+            "boosted" : "We went to the store yesterday and bought some milk",
+            "raw" : "We went to the store yesterday and bought some milk",
+            "recallBoosted" : 1,
+            "recallFinal" : 0,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0.1934911012649536,
+            "werBoosted" : 0,
+            "werFinal" : 1.4,
+            "werRaw" : 0
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-plain-todo",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I need to make a list of things to do this weekend.",
+          "seconds" : 0.3754349946975708,
+          "speech" : {
+            "asrSeconds" : 0.08359503746032715,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 8,
+            "boosted" : "I need to make a list of things to do this weekend",
+            "raw" : "I need to make a list of things to do this weekend",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0.14090800285339355,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-plain-launch",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.35878193378448486,
+          "speech" : {
+            "asrSeconds" : 0.08242392539978027,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 4,
+            "boosted" : "What do you think about moving the launch to March?",
+            "raw" : "What do you think about moving the launch to March?",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0.14868390560150146,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0
+          }
+        }
+      ]
+    },
+    {
+      "id" : "s-plain-river",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The weather was lovely, so we walked along the river after lunch.",
+          "seconds" : 0.4188350439071655,
+          "speech" : {
+            "asrSeconds" : 0.08576703071594238,
+            "boostBroken" : 0,
+            "boostFixed" : 0,
+            "boostTerms" : 8,
+            "boosted" : "The weather was lovely so we walked along the river after lunch.",
+            "raw" : "The weather was lovely so we walked along the river after lunch.",
+            "recallBoosted" : 1,
+            "recallFinal" : 1,
+            "recallRaw" : 1,
+            "rescoreSeconds" : 0.1561969518661499,
+            "werBoosted" : 0,
+            "werFinal" : 0,
+            "werRaw" : 0
+          }
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-19-2308",
+  "provider" : {
+    "baseURL" : "http://localhost:1234/v1",
+    "boost" : "on",
+    "cbw" : "0.0",
+    "cleanupModel" : "google/gemma-4-e4b",
+    "editModel" : "google/gemma-4-e4b",
+    "hwModel" : "Mac16,7",
+    "macOS" : "Version 27.0.1 (Build 26A434)",
+    "minSimilarity" : "0.7",
+    "provider" : "lmstudio",
+    "quantization" : "Q4_K_M",
+    "runs" : "1",
+    "speechModel" : "v2"
+  }
+}
