@@ -48,6 +48,18 @@ public final class VocabularyStore: @unchecked Sendable {
         } else {
             terms.append(term)
         }
+        try save(terms)
+    }
+
+    /// Removes the term with this text (case-insensitive).
+    public func remove(_ text: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try save(_terms.filter { $0.text.lowercased() != text.lowercased() })
+    }
+
+    /// Callers hold the lock.
+    private func save(_ terms: [VocabTerm]) throws {
         _terms = terms
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let enc = JSONEncoder()

@@ -31,6 +31,16 @@ private func tempURL() -> URL {
     #expect(store.terms.count == 200)
 }
 
+@Test func removeDeletesCaseInsensitivelyAndPersists() throws {
+    let url = tempURL()
+    let store = VocabularyStore(url: url)
+    try store.add(VocabTerm(text: "Todoist"))
+    try store.add(VocabTerm(text: "Poptalk"))
+    try store.remove("todoist")
+    #expect(store.terms == [VocabTerm(text: "Poptalk")])
+    #expect(VocabularyStore(url: url).terms == [VocabTerm(text: "Poptalk")])
+}
+
 @Test func missingFileIsEmpty() {
     #expect(VocabularyStore(url: tempURL()).terms.isEmpty)
 }
