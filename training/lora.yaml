@@ -1,0 +1,28 @@
+# mlx_lm.lora config for the Poptalk E2B fine-tune (#21). From the repo root:
+#   uv run --project training mlx_lm.lora --config training/lora.yaml
+model: mlx-community/gemma-4-e2b-it-4bit
+train: true
+data: training/out/data
+adapter_path: training/out/adapters
+fine_tune_type: lora
+mask_prompt: true          # loss on the assistant turn only
+num_layers: 16             # last 16 of 35 layers: halves backward cost vs all layers
+batch_size: 4
+iters: 600                 # ~0.4 epoch of 5.7k examples; the task is mostly format and action choice
+learning_rate: 1.0e-4
+lr_schedule:
+  name: cosine_decay
+  warmup: 30
+  arguments: [1.0e-4, 600, 1.0e-6]
+steps_per_report: 25
+steps_per_eval: 200
+val_batches: 15
+save_every: 200
+max_seq_length: 3072
+grad_checkpoint: true
+seed: 21
+lora_parameters:
+  keys: [self_attn.q_proj, self_attn.k_proj, self_attn.v_proj, self_attn.o_proj, mlp.gate_proj, mlp.up_proj, mlp.down_proj]
+  rank: 16
+  scale: 2.0
+  dropout: 0.0
