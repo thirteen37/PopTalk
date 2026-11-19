@@ -109,12 +109,13 @@ public struct Pipeline: Sendable {
 }
 
 extension Pipeline {
-    /// Saved vocabulary plus terms from the capped on-screen context, for speech-recognition boosting.
+    /// Saved vocabulary, then up to 60 screen terms ranked by closeness to the cursor in the
+    /// window the LLM sees, for speech-recognition boosting.
     public static func boostTerms(saved: [VocabTerm], context: ScreenSnapshot) -> [VocabTerm] {
         let known = Set(saved.map { $0.text.lowercased() })
-        return saved + TermExtractor.terms(from: Prompts.trimmedContext(context))
-            .filter { !known.contains($0.lowercased()) }
-            .map { VocabTerm(text: $0) }
+        let w = Prompts.window(context)
+        return saved + TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.windowTitle)
+            .filter { !known.contains($0.text.lowercased()) }
     }
 
     private static let think = try! NSRegularExpression(pattern: #"<think>[\s\S]*?</think>|</?transcript>"#)

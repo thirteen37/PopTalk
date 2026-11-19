@@ -70,6 +70,8 @@ public enum Prompts {
 
     private static func contextBlock(_ c: ScreenSnapshot, _ vocabulary: [VocabTerm]) -> String {
         var s = "<screen app=\"\(attr(c.appName))\" window=\"\(attr(c.windowTitle))\">\n\(esc(trimmedContext(c)))\n</screen>"
+        // Screen terms are left out on purpose: listing the top 20 here (#26) made gemma-4-e4b
+        // echo the screen and time out on long contexts (bench 2026-11-19-2300).
         if !vocabulary.isEmpty {
             s += "\n<vocabulary>\(esc(vocabulary.map(\.text).joined(separator: ", ")))</vocabulary>"
         }
