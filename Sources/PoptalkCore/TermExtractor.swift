@@ -29,9 +29,11 @@ public enum TermExtractor {
 
             for (i, m) in token.matches(in: line, range: NSRange(location: 0, length: ns.length)).enumerated() {
                 let word = ns.substring(with: m.range)
-                let before = ns.substring(to: m.range.location).trimmingCharacters(in: .whitespaces)
                 // Line starts count as labels (UI text), not sentence starts.
-                let sentenceStart = i > 0 && (before.last.map { ".!?".contains($0) } ?? false)
+                // O(1) look-back: previous non-space UTF-16 unit before the token.
+                var j = m.range.location - 1
+                while j >= 0, ns.character(at: j) == 0x20 || ns.character(at: j) == 0x09 { j -= 1 }
+                let sentenceStart = i > 0 && j >= 0 && [0x2E, 0x21, 0x3F].contains(ns.character(at: j))
                 let isIdentifier = word.contains { $0.isNumber || $0 == "_" || $0 == "-" }
                 let isCamel = zip(word, word.dropFirst()).contains { $0.isLowercase && $1.isUppercase }
                 let isAllCaps = word.count >= 2 && word.allSatisfy { $0.isUppercase }

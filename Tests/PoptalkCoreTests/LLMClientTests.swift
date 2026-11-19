@@ -62,3 +62,11 @@ private func client(status: Int = 200, body: String = #"{"choices":[{"message":{
 @Test func rejectsNonJSON() {
     #expect(throws: (any Error).self) { try LLMClient.parseEditResult("Todoist") }
 }
+
+// Reasoning models think for 15 s+ by default; Poptalk needs fast, direct answers.
+@Test func disablesThinking() async throws {
+    let cap = Capture()
+    _ = try await client(capture: cap).complete(model: "g", messages: [], json: false, timeout: 3)
+    let body = try JSONSerialization.jsonObject(with: cap.request!.httpBody!) as! [String: Any]
+    #expect(body["reasoning_effort"] as? String == "none")
+}

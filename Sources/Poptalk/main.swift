@@ -17,6 +17,22 @@ if args.count >= 3, args[1] == "--transcribe" {
     exit(0)
 }
 
+// Debug entry point: Poptalk --pipeline <transcript> [--selection <text>] [--context <screen text>]
+if args.count >= 3, args[1] == "--pipeline" {
+    func opt(_ name: String) -> String? { args.firstIndex(of: name).map { args[$0 + 1] } }
+    Settings.register()
+    let client = LLMClient(baseURL: Settings.baseURL)
+    let pipeline = Pipeline(
+        complete: { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) },
+        vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-debug-vocab.json")),
+        cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
+    let ctx = opt("--context").map { ScreenSnapshot(text: $0) } ?? ScreenSnapshot()
+    let start = Date()
+    let r = await pipeline.run(Request(transcript: args[2], selection: opt("--selection"), context: ctx))
+    print(r.outcome, r.vocabularyOffer.map { "offer: \($0)" } ?? "", String(format: "(%.2fs)", Date().timeIntervalSince(start)))
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = await AppDelegate()
 app.delegate = delegate

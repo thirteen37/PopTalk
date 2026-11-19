@@ -59,6 +59,7 @@ public struct LLMClient: Sendable {
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "temperature": 0,
             "stream": false,
+            "reasoning_effort": "none",  // LM Studio: skip thinking on reasoning models (0.7 s vs 17 s+)
         ]
         if json { body["response_format"] = ["type": "json_schema", "json_schema": Self.editSchema] }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
