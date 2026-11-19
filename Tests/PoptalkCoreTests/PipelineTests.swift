@@ -154,3 +154,11 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     let r = await pipeline(reply: "Sure, here you go: Hey.").run(req("make it formal", selection: "hey"))
     guard case .error = r.outcome else { Issue.record("expected error, got \(r.outcome)"); return }
 }
+
+// A vocabulary offer only makes sense for a term the edit actually produced.
+@Test func bogusVocabularyOfferIsDropped() async {
+    let reply = #"{"action":"correct","text":"Quarterly Review","vocabulary":{"text":"Q3 Notes","aliases":["q3 notes"]},"remember":false}"#
+    let r = await pipeline(reply: reply).run(req("Quarterly Review", selection: "Q3 Notes"))
+    #expect(r.outcome == .replaceSelection("Quarterly Review", label: "Corrected"))
+    #expect(r.vocabularyOffer == nil)
+}

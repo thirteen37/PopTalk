@@ -102,7 +102,11 @@ public struct Pipeline: Sendable {
         case .insertBefore: .insertBefore(edit.text.hasSuffix(selection) ? String(edit.text.dropLast(selection.count)) : edit.text)
         case .insertAfter: .insertAfter(edit.text.hasPrefix(selection) ? String(edit.text.dropFirst(selection.count)) : edit.text)
         }
-        guard let term = edit.vocabulary else { return PipelineResult(outcome: outcome) }
+        // Only a term the edit actually produced, and not just the selection, is worth saving.
+        guard let term = edit.vocabulary,
+              edit.text.localizedCaseInsensitiveContains(term.text),
+              term.text.caseInsensitiveCompare(selection) != .orderedSame
+        else { return PipelineResult(outcome: outcome) }
         if edit.remember, (try? vocabulary.add(term)) != nil {
             return PipelineResult(outcome: outcome, remembered: term)
         }
