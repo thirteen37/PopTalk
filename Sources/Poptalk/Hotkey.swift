@@ -39,6 +39,8 @@ final class Hotkey {
     }
 
     private func handle(_ type: CGEventType, _ event: CGEvent) {
+        // Ignore keystrokes Poptalk itself posts (⌘C fallback while the key is held).
+        if event.getIntegerValueField(.eventSourceUnixProcessID) == Int64(getpid()) { return }
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }

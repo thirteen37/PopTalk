@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { transcriber = try? await Transcriber() }
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
-                        onCancel: { [weak self] in _ = self?.recorder.stop() })
+                        onCancel: { [weak self] in self?.cancelled() })
         installHotkeyWhenTrusted()
     }
 
@@ -36,16 +36,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.installHotkeyWhenTrusted() }
     }
 
+    private let overlay = Overlay()
+    private var contextTask: Task<ScreenSnapshot, Never>?
+    private var selectionTask: Task<String?, Never>?
+
     private func pressed() {
-        try? recorder.start(deviceUID: Settings.inputDeviceUID)
+        do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
+            overlay.showError("Microphone unavailable"); return
+        }
+        // Capture while recording so it costs no latency; read the selection before anything changes focus.
+        contextTask = Task { await ScreenContext.capture() }
+        selectionTask = Task { await TextIO.selectedText() }
+        overlay.showRecording()
+    }
+
+    private func cancelled() {
+        _ = recorder.stop()
+        contextTask?.cancel()
+        selectionTask?.cancel()
+        overlay.hide()
     }
 
     private func released() {
         let samples = recorder.stop()
-        guard let transcriber else { return }
+        guard let transcriber else { overlay.showError("Speech model still loading…"); return }
+        overlay.showWorking()
+        let store = store
         Task {
-            let text = try await transcriber.transcribe(samples, boost: [])
-            NSLog("Poptalk transcript: %@", text)
+            let snapshot = await contextTask?.value ?? ScreenSnapshot()
+            let selection = await selectionTask?.value
+            let saved = Set(store.terms.map { $0.text.lowercased() })
+            let boost = store.terms + TermExtractor.terms(from: snapshot.text)
+                .filter { !saved.contains($0.lowercased()) }.map { VocabTerm(text: $0) }
+
+            let transcript: String
+            do { transcript = samples.isEmpty ? "" : try await transcriber.transcribe(samples, boost: boost) } catch {
+                overlay.showError("Transcription failed"); return
+            }
+            let client = LLMClient(baseURL: Settings.baseURL)
+            let pipeline = Pipeline(complete: { try await client.complete(model: $0, messages: $1, json: $2, timeout: $3) },
+                                    vocabulary: store, cleanupModel: Settings.cleanupModel, editModel: Settings.editModel)
+            let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
+            await apply(result)
+        }
+    }
+
+    private func apply(_ result: PipelineResult) async {
+        let label: String
+        switch result.outcome {
+        case .nothing: overlay.hide(); return
+        case .error(let msg): overlay.showError(msg); return
+        case .insert(let s, let l): await TextIO.insert(s); label = l
+        case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
+        case .insertBefore(let s): await TextIO.insertBeforeSelection(s); label = "Inserted"
+        case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
+        }
+        let text = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
+        let store = store
+        overlay.showOutcome(text, undo: { TextIO.undo() }, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+            guard let term = result.vocabularyOffer else { return }
+            do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
         }
     }
 
