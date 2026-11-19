@@ -37,6 +37,9 @@ public struct PipelineResult: Equatable, Sendable {
 public struct Pipeline: Sendable {
     public typealias Complete = @Sendable (_ model: String, _ messages: [ChatMessage], _ json: Bool, _ timeout: TimeInterval) async throws -> String
 
+    /// Thrown by a `Complete` whose model isn't loaded yet: dictation falls back to the raw transcript.
+    public struct ModelLoading: Error { public init() {} }
+
     let complete: Complete
     let vocabulary: VocabularyStore
     let cleanupModel: String, editModel: String
@@ -64,8 +67,11 @@ public struct Pipeline: Sendable {
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
-            if let reply = try? await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)),
-               case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
+            let reply: String?
+            do { reply = try await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)) }
+            catch is ModelLoading { return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw) · model loading")) }
+            catch { reply = nil }
+            if let reply, case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
                Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40,
                !Self.echoesContext(cleaned, transcript: transcript,
                                    context: r.context.windowTitle + " " + Prompts.trimmedContext(r.context)) {
@@ -82,7 +88,9 @@ public struct Pipeline: Sendable {
 
         let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
         let raw: String
-        do { raw = try await complete(editModel, messages, true, editTimeout) } catch {
+        do { raw = try await complete(editModel, messages, true, editTimeout) }
+        catch is ModelLoading { return PipelineResult(outcome: .error("Model loading…")) }
+        catch {
             let timedOut = (error as? URLError)?.code == .timedOut
             return PipelineResult(outcome: .error(timedOut ? "Model took too long" : "Couldn't reach the language model"))
         }
