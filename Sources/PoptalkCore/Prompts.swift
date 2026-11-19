@@ -7,12 +7,15 @@ public struct ScreenSnapshot: Sendable, Equatable {
     public var text: String
     /// UTF-16 offset into `text` of the cursor, when known.
     public var cursorOffset: Int?
+    /// OCR'd window text, budgeted separately from `text` so a long field can't crowd it out.
+    public var ocrText: String
 
-    public init(appName: String = "", windowTitle: String = "", text: String = "", cursorOffset: Int? = nil) {
+    public init(appName: String = "", windowTitle: String = "", text: String = "", cursorOffset: Int? = nil, ocrText: String = "") {
         self.appName = appName
         self.windowTitle = windowTitle
         self.text = text
         self.cursorOffset = cursorOffset
+        self.ocrText = ocrText
     }
 }
 
@@ -26,15 +29,33 @@ public struct ChatMessage: Codable, Sendable, Equatable {
 }
 
 public enum Prompts {
-    public static func trimmedContext(_ s: ScreenSnapshot, maxChars: Int = 4000) -> String {
-        let chars = Array(s.text)
-        guard chars.count > maxChars else { return s.text }
-        guard let offset = s.cursorOffset else { return String(chars.suffix(maxChars)) }
-        // cursorOffset is UTF-16 (from AX); convert to a Character index.
-        let cursor = s.text.distance(from: s.text.startIndex,
-                                     to: String.Index(utf16Offset: min(max(0, offset), s.text.utf16.count), in: s.text))
-        let start = min(max(0, cursor - maxChars / 2), chars.count - maxChars)
-        return String(chars[start..<start + maxChars])
+    public static func trimmedContext(_ s: ScreenSnapshot) -> String { window(s).text }
+
+    /// The context the LLM and term extraction see: the tail of the OCR text (its own budget;
+    /// it's the window around the field), then the field text clipped to `before` chars before
+    /// the cursor and `after` after it. `cursor` is a UTF-16 offset into `text`.
+    static func window(_ s: ScreenSnapshot, before: Int = 3000, after: Int = 1000, ocr: Int = 3000) -> (text: String, cursor: Int) {
+        // cursorOffset is UTF-16 (from AX); convert to a Character index. No cursor → end.
+        let c = s.cursorOffset.map {
+            s.text.distance(from: s.text.startIndex, to: String.Index(utf16Offset: min(max(0, $0), s.text.utf16.count), in: s.text))
+        }
+        let (ax, axCursor) = clip(s.text, at: c ?? s.text.count, before: before, after: after)
+        let text = [clip(s.ocrText, at: s.ocrText.count, before: ocr, after: 0).0, ax].filter { !$0.isEmpty }.joined(separator: "\n")
+        return (text, text.utf16.count - (ax.utf16.count - axCursor))
+    }
+
+    /// `text` cut to `before` Characters before index `c` and `after` after it, unused budget moved
+    /// to the other side, edges snapped to whitespace. Returns the cursor as a UTF-16 offset.
+    private static func clip(_ text: String, at c: Int, before: Int, after: Int) -> (String, Int) {
+        let chars = Array(text)
+        guard chars.count > before + after else { return (text, String(chars[..<c]).utf16.count) }
+        var lo = max(0, c - before), hi = min(chars.count, c + after)
+        let spare = before + after - (hi - lo)
+        lo = max(0, lo - spare); hi = min(chars.count, hi + spare)
+        // Look at most 40 chars in, so text without spaces (CJK) keeps its window.
+        if lo > 0, !chars[lo - 1].isWhitespace, let i = chars[lo..<min(c, lo + 40)].firstIndex(where: \.isWhitespace) { lo = i + 1 }
+        if hi < chars.count, !chars[hi].isWhitespace, let i = chars[max(c, hi - 40)..<hi].lastIndex(where: \.isWhitespace) { hi = i }
+        return (String(chars[lo..<hi]), String(chars[lo..<c]).utf16.count)
     }
 
     /// Escapes a value placed inside the prompt's XML-ish tags.

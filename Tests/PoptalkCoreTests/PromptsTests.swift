@@ -67,3 +67,38 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(user.contains("window=\"a&quot;b\""))
     #expect(user.contains("keep \"quotes\""))
 }
+
+// #25: asymmetric window, word-boundary edges, separate OCR budget.
+private func filler(_ n: Int) -> String { String(repeating: "a ", count: n / 2) }
+
+@Test func contextKeepsMoreBeforeCursorThanAfter() {
+    let pre = "Before3100 " + filler(200) + "Before2900 " + filler(2_900)
+    let post = filler(900) + " After900 " + filler(200) + " After1100 " + filler(3_000)
+    let trimmed = Prompts.trimmedContext(snap(pre + post, cursor: pre.utf16.count))
+    #expect(trimmed.contains("Before2900"))
+    #expect(!trimmed.contains("Before3100"))
+    #expect(trimmed.contains("After900"))
+    #expect(!trimmed.contains("After1100"))
+}
+
+@Test func contextEdgesSnapToWords() {
+    let words = (0..<2_000).map { "w" + String(1_000_000 + $0).dropFirst() }  // "w000000"…
+    let text = words.joined(separator: " ")
+    let tokens = Prompts.trimmedContext(snap(text, cursor: text.utf16.count / 2 + 3)).split(separator: " ")
+    #expect(tokens.allSatisfy { words.contains(String($0)) })
+}
+
+@Test func ocrTextHasItsOwnBudget() {
+    let ax = filler(3_000) + "NearCursor " + filler(6_000)
+    let ocr = "OldestMessage\n" + filler(5_000) + "\nLatestMessage"
+    let s = ScreenSnapshot(text: ax, cursorOffset: (filler(3_000) + "NearCursor").utf16.count, ocrText: ocr)
+    let trimmed = Prompts.trimmedContext(s)
+    #expect(trimmed.contains("NearCursor"))
+    #expect(trimmed.contains("LatestMessage"))
+    #expect(!trimmed.contains("OldestMessage"))
+}
+
+@Test func boostTermsIncludeOCRText() {
+    let s = ScreenSnapshot(text: "Thanks ", cursorOffset: 7, ocrText: "Tomasz Wrzesniewski: I'll take it")
+    #expect(Pipeline.boostTerms(saved: [], context: s).map(\.text).contains("Tomasz Wrzesniewski"))
+}

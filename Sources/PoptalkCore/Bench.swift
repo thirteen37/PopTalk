@@ -60,9 +60,8 @@ public struct BenchCase: Decodable, Sendable {
     }
 
     public var request: Request {
-        Request(transcript: transcript, selection: selection, context: ScreenSnapshot(
-            // Same shape ScreenContext captures today: AX text, then OCR appended.
-            text: [context, ocr].compactMap { $0 }.joined(separator: "\n"), cursorOffset: cursor))
+        Request(transcript: transcript, selection: selection,
+                context: ScreenSnapshot(text: context ?? "", cursorOffset: cursor, ocrText: ocr ?? ""))
     }
 
     public func score(_ r: PipelineResult, seconds: Double) -> BenchRun {
