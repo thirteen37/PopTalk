@@ -9,6 +9,7 @@ enum TextIO {
     enum Key: CGKeyCode { case c = 8, v = 9, z = 6, left = 123, right = 124 }
 
     static func selectedText() async -> String? {
+        guard !ScreenContext.isSensitive() else { return nil }  // never ⌘C out of a password field or manager
         let system = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
         if AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,

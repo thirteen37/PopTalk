@@ -9,8 +9,9 @@ import Vision
 enum ScreenContext {
     static func capture() async -> ScreenSnapshot {
         guard let app = NSWorkspace.shared.frontmostApplication else { return ScreenSnapshot() }
-        let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
+        guard !isSensitive() else { return snap }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
 
         var windowFrame: CGRect?
         if let window: AXUIElement = attr(axApp, kAXFocusedWindowAttribute) {
@@ -30,11 +31,19 @@ enum ScreenContext {
             }
         }
 
-        if snap.text.count < 200, CGPreflightScreenCaptureAccess(), let ocr = await ocrFocusedWindow(
-            pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle) {
+        if snap.text.count < 200, CGPreflightScreenCaptureAccess(),
+           !CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle),
+           let ocr = await ocrFocusedWindow(pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle) {
             snap.text += (snap.text.isEmpty ? "" : "\n") + ocr
         }
         return snap
+    }
+
+    /// A password field is focused or a password manager is frontmost (see `CapturePolicy.isSensitive`).
+    static func isSensitive() -> Bool {
+        let focused: AXUIElement? = attr(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute)
+        return CapturePolicy.isSensitive(subrole: focused.flatMap { attr($0, kAXSubroleAttribute) },
+                                         bundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
     }
 
     private static func attr<T>(_ el: AXUIElement, _ name: String) -> T? {
