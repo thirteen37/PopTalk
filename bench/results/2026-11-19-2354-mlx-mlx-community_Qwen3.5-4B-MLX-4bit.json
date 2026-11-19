@@ -1,0 +1,511 @@
+{
+  "cases" : [
+    {
+      "id" : "d-meal-prep",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.36769700050354004
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.3706430196762085
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.3668479919433594
+        }
+      ]
+    },
+    {
+      "id" : "d-tuesday-no-thursday",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's meet on Thursday at three.",
+          "seconds" : 0.31547701358795166
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's meet on Thursday at three.",
+          "seconds" : 0.3143749237060547
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's meet on Thursday at three.",
+          "seconds" : 0.3143620491027832
+        }
+      ]
+    },
+    {
+      "id" : "d-friday",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.3228440284729004
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.32308804988861084
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.3225860595703125
+        }
+      ]
+    },
+    {
+      "id" : "d-priya-q3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Remind me to call Priya re: Q3 OKRs.",
+          "seconds" : 0.41402292251586914
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Remind me to call Priya re: Q3 OKRs.",
+          "seconds" : 0.41403305530548096
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Remind me to call Priya re: Q3 OKRs.",
+          "seconds" : 0.4143519401550293
+        }
+      ]
+    },
+    {
+      "id" : "d-fluidaudio",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.3898799419403076
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.39094090461730957
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.39162492752075195
+        }
+      ]
+    },
+    {
+      "id" : "d-filler-basically",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"basically\""
+          ],
+          "output" : "So, like, the thing is, we need to ship this by next week, basically.",
+          "seconds" : 0.44169795513153076
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"basically\""
+          ],
+          "output" : "So, like, the thing is, we need to ship this by next week, basically.",
+          "seconds" : 0.44267594814300537
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"basically\""
+          ],
+          "output" : "So, like, the thing is, we need to ship this by next week, basically.",
+          "seconds" : 0.44165492057800293
+        }
+      ]
+    },
+    {
+      "id" : "d-sorry-four-pm",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The meeting is at four PM in the main room.",
+          "seconds" : 0.34951305389404297
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The meeting is at four PM in the main room.",
+          "seconds" : 0.348471999168396
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The meeting is at four PM in the main room.",
+          "seconds" : 0.34905505180358887
+        }
+      ]
+    },
+    {
+      "id" : "d-question-not-answered",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.34767401218414307
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.34795594215393066
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.34737300872802734
+        }
+      ]
+    },
+    {
+      "id" : "d-i-mean",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "Call me at nine; I mean, ten, tomorrow.",
+          "seconds" : 0.3592040538787842
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "Call me at nine; I mean, ten, tomorrow.",
+          "seconds" : 0.3604789972305298
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "Call me at nine; I mean, ten, tomorrow.",
+          "seconds" : 0.3593590259552002
+        }
+      ]
+    },
+    {
+      "id" : "d-actually",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Book the table for six.",
+          "seconds" : 0.2913320064544678
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Book the table for six.",
+          "seconds" : 0.2907440662384033
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Book the table for six.",
+          "seconds" : 0.2911100387573242
+        }
+      ]
+    },
+    {
+      "id" : "d-no-invented-name",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We went to the store yesterday and bought some milk.",
+          "seconds" : 0.3800320625305176
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We went to the store yesterday and bought some milk.",
+          "seconds" : 0.37856507301330566
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We went to the store yesterday and bought some milk.",
+          "seconds" : 0.38000404834747314
+        }
+      ]
+    },
+    {
+      "id" : "d-filler-you-know",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"you know\"",
+            "contains \"basically\""
+          ],
+          "output" : "You know, I think we should basically just go with the first option.",
+          "seconds" : 0.3959149122238159
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"you know\"",
+            "contains \"basically\""
+          ],
+          "output" : "You know, I think we should basically just go with the first option.",
+          "seconds" : 0.3955199718475342
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"you know\"",
+            "contains \"basically\""
+          ],
+          "output" : "You know, I think we should basically just go with the first option.",
+          "seconds" : 0.3952369689941406
+        }
+      ]
+    },
+    {
+      "id" : "d-cjk-emoji-context",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "See you at the FluidAudio sync tomorrow.",
+          "seconds" : 0.3594939708709717
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "See you at the FluidAudio sync tomorrow.",
+          "seconds" : 0.3622620105743408
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "See you at the FluidAudio sync tomorrow.",
+          "seconds" : 0.3573150634765625
+        }
+      ]
+    },
+    {
+      "id" : "d-long-name-before-cursor",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The launch email should say Quillmate everywhere.",
+          "seconds" : 1.3202639818191528
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The launch email should say Quillmate everywhere.",
+          "seconds" : 1.3207449913024902
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The launch email should say Quillmate everywhere.",
+          "seconds" : 1.3179939985275269
+        }
+      ]
+    },
+    {
+      "id" : "d-long-ocr-thread",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Wrzesniewski\""
+          ],
+          "output" : "i'll send the questionnaire to tomasz vreshnevski today",
+          "seconds" : 3.20251202583313
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Wrzesniewski\""
+          ],
+          "output" : "i'll send the questionnaire to tomasz vreshnevski today",
+          "seconds" : 3.2080819606781006
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Wrzesniewski\""
+          ],
+          "output" : "i'll send the questionnaire to tomasz vreshnevski today",
+          "seconds" : 3.2233439683914185
+        }
+      ]
+    },
+    {
+      "id" : "d-long-emoji-utf16",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Kateryna\"",
+            "missing \"Shevchuk-Oyelaran\""
+          ],
+          "output" : "welcome katerina shevchuk oyelaran to the team",
+          "seconds" : 4.189064025878906
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Kateryna\"",
+            "missing \"Shevchuk-Oyelaran\""
+          ],
+          "output" : "welcome katerina shevchuk oyelaran to the team",
+          "seconds" : 4.26462996006012
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Kateryna\"",
+            "missing \"Shevchuk-Oyelaran\""
+          ],
+          "output" : "welcome katerina shevchuk oyelaran to the team",
+          "seconds" : 4.377587914466858
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-19-2354",
+  "provider" : {
+    "cleanupModel" : "mlx-community/Qwen3.5-4B-MLX-4bit",
+    "editModel" : "mlx-community/Qwen3.5-4B-MLX-4bit",
+    "footprintMB" : "2813",
+    "footprintMBAfterRun" : "2854",
+    "hwModel" : "Mac16,7",
+    "loadSeconds" : "87.52",
+    "macOS" : "Version 27.0.1 (Build 26A434)",
+    "provider" : "mlx",
+    "runs" : "3"
+  }
+}
