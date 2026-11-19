@@ -18,6 +18,7 @@ public struct EditResult: Codable, Sendable, Equatable {
 
 public struct LLMError: Error, CustomStringConvertible {
     public var description: String
+    public init(description: String) { self.description = description }
 }
 
 /// Minimal OpenAI-compatible `/chat/completions` client (LM Studio, Ollama).

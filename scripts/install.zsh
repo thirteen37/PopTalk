@@ -28,7 +28,11 @@ rm -rf -- $app
 mkdir -p $app/Contents/MacOS
 cp .build/release/Poptalk $app/Contents/MacOS/
 # No SwiftPM resource bundles: Bundle.module would look at the app root (which codesign rejects), and the
-# only one built (FluidAudio's LuxTtsG2pResources, TTS) is unused by ASR.
+# others built (FluidAudio's LuxTtsG2pResources for TTS, swift-transformers' Hub fallback tokenizer configs for
+# gpt2/t5, swift-crypto's privacy manifest) are unused.
+# Except MLX's Metal shaders: mlx-swift searches every loaded bundle's resources, so Contents/Resources works.
+mkdir -p $app/Contents/Resources
+cp -R .build/release/mlx-swift_Cmlx.bundle $app/Contents/Resources/
 cat > $app/Contents/Info.plist <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

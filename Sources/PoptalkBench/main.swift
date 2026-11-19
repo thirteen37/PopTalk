@@ -2,10 +2,11 @@ import Darwin
 import Foundation
 import FluidAudio
 import PoptalkCore
+import PoptalkMLX
 import PoptalkSpeech
 
 // PoptalkBench: scores Pipeline (cleanup + edits) against bench/cases.jsonl, from the repo root.
-//   swift run PoptalkBench [--provider lmstudio|apple|apple-pcc] [--apple-variant core3|coreAdvanced3]
+//   swift run PoptalkBench [--provider lmstudio|apple|apple-pcc|mlx] [--apple-variant core3|coreAdvanced3]
 //     [--base-url URL] [--cleanup-model ID] [--edit-model ID] [--runs 3] [--filter 'e-*'] [--cases FILE] [--out DIR]
 //     [--speech-model v2|v3] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
@@ -44,7 +45,11 @@ guard !cases.isEmpty else { fail("no cases match") }
 
 var meta: [String: String]
 let complete: Pipeline.Complete
-do { (complete, meta) = try Providers.make(provider, baseURL: baseURL, appleVariant: appleVariant) } catch { fail(error) }
+do {
+    // mlx: cleanup/edit models are Hugging Face ids or local MLX directories, loaded in-process.
+    (complete, meta) = provider == "mlx" ? try await MLXProvider.make(preload: [cleanupModel, editModel])
+        : try Providers.make(provider, baseURL: baseURL, appleVariant: appleVariant)
+} catch { fail(error) }
 meta["provider"] = provider
 meta["runs"] = "\(runs)"
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
@@ -137,11 +142,12 @@ for c in cases {
 let day = DateFormatter()
 day.dateFormat = "yyyy-MM-dd-HHmm"
 let date = day.string(from: Date())
+if provider == "mlx" { meta.merge(["cleanupModel": cleanupModel, "editModel": editModel, "footprintMBAfterRun": "\(MLXProvider.footprintMB())"]) { $1 } }
 let report = BenchReport(date: date, provider: meta, cases: results)
 let details = report.failureDetails(cases)
 print((details.isEmpty ? "\n" : "\n\(details)\n\n") + report.table())
 
-let model = (provider == "lmstudio" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : "-audio")
+let model = (provider == "lmstudio" || provider == "mlx" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : "-audio")
 let dir = URL(fileURLWithPath: opt("--out") ?? "bench/results")
 let file = dir.appendingPathComponent("\(date)-\(provider)-\(model.replacingOccurrences(of: "/", with: "_")).json")
 do {
