@@ -153,6 +153,8 @@ extension Pipeline {
         pattern: #"\b(?:u+m+|u+h+|e+r+m*|h+m+)\b[,.!?]?"#, options: .caseInsensitive)
 
     /// The utterance explicitly asks to add text rather than replace the selection.
+    /// English-only, like the speech model (Parakeet v2 transcribes English only): revisit the
+    /// keywords if v3 or another multilingual model is enabled.
     /// ponytail: English keyword list; extend if users phrase inserts differently.
     public static func asksToInsert(_ utterance: String) -> Bool {
         utterance.range(of: #"\b(add|append|prepend|insert|before|after|at the (start|end|beginning|top|bottom))\b"#,

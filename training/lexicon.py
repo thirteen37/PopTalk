@@ -394,7 +394,7 @@ GRAMMAR = ["fix grammar", "correct the grammar", "can you fix the grammar here",
            "make this grammatically correct", "fix the grammar in this"]
 INSERT_AFTER = ["add after this: {x}", "after this add {x}", "append {x}", "put {x} at the end", "add {x} after it",
                 "then add {x}", "add a line after: {x}", "add at the end: {x}"]
-INSERT_BEFORE = ["add before this: {x}", "put {x} in front", "start with {x}", "prepend {x}", "add {x} before it",
+INSERT_BEFORE = ["add before this: {x}", "put {x} at the start", "add {x} at the top", "prepend {x}", "add {x} before it",
                  "insert {x} at the beginning", "add at the start: {x}"]
 CASE = [("make this title case", "title"), ("all caps", "upper"), ("make it uppercase", "upper"),
         ("lowercase this", "lower"), ("make it all lowercase", "lower"), ("capitalize every word", "title")]
