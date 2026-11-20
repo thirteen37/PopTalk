@@ -149,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Hotkey cancels holds under 150 ms; only then read the selection (may post ⌘C), OCR and show the HUD.
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            Timing.log.info("press: capture start")
             contextTask = Task { await ScreenContext.capture() }
             selectionTask = Task { await TextIO.selectedText() }
             overlay.showRecording()
@@ -180,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previewTask = nil
         preview?.cancel()
         let samples = recorder.stop()
+        Timing.log.info("release: key up")
         let (ctx, sel) = (contextTask, selectionTask)
         (contextTask, selectionTask) = (nil, nil)
         guard AudioGate.hasSpeech(samples) else { overlay.hide(); return }
@@ -192,9 +194,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let store = store
         Task {
             defer { busy = false }
+            let t0 = ContinuousClock.now
             let snapshot = await ctx?.value ?? ScreenSnapshot()
+            Timing.mark("release: context awaited", since: t0)
             let selection = await sel?.value
+            Timing.mark("release: selection awaited", since: t0)
             await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
+            Timing.mark("release: preview drained", since: t0)
             let transcript: String
             do {
                 transcript = try await transcriber.transcribe(
@@ -202,6 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 overlay.showError("Transcription failed"); return
             }
+            Timing.mark("release: transcribed", since: t0)
             // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
             // Apple Intelligence off) still dictates raw.
             let complete: Pipeline.Complete
@@ -209,8 +216,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let models = Settings.selection
             let pipeline = Pipeline(complete: complete, vocabulary: store,
                                     cleanupModel: models.cleanupModel, editModel: models.editModel)
+            Timing.mark("release: provider ready", since: t0)
             let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
+            Timing.mark("release: pipeline done", since: t0)
             await apply(result, cursorKnown: snapshot.cursorOffset != nil)
+            Timing.mark("release: applied", since: t0)
         }
     }
 

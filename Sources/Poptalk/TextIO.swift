@@ -9,6 +9,8 @@ enum TextIO {
     enum Key: CGKeyCode { case c = 8, v = 9, z = 6, left = 123, right = 124 }
 
     static func selectedText() async -> String? {
+        let start = ContinuousClock.now
+        defer { Timing.mark("selection", since: start) }
         guard !ScreenContext.isSensitive() else { return nil }  // never ⌘C out of a password field or manager
         let system = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?

@@ -8,11 +8,14 @@ import Vision
 /// around the field when AX is thin. Held in memory for one request only; never persisted or logged.
 enum ScreenContext {
     static func capture() async -> ScreenSnapshot {
+        let start = ContinuousClock.now
+        defer { Timing.mark("context total", since: start) }
         guard let app = NSWorkspace.shared.frontmostApplication else { return ScreenSnapshot() }
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
         guard !isSensitive() else { return snap }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         exposeTree(axApp, app)
+        Timing.mark("context sensitive+exposeTree", since: start)
         let isPrivate = { CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle) }
 
         var windowFrame: CGRect?
@@ -30,14 +33,17 @@ enum ScreenContext {
             }
         }
 
+        Timing.mark("context focused field", since: start)
         let fieldChars = snap.text.count
         let nearby = isPrivate() ? [] : focused.map(nearbyText) ?? []
         for t in nearby { snap.text += (snap.text.isEmpty ? "" : "\n") + t }
+        Timing.mark("context nearby", since: start)
         if NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars),
            CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
             pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle, field: focused.flatMap(frame)) {
             snap.ocrText = ocr  // own budget in Prompts.window (#25)
         }
+        Timing.mark("context ocr done", since: start)
         // ponytail: domain rides in the window title until ScreenSnapshot/<screen> grow a domain field.
         if !isPrivate(), let domain = focused.flatMap(webDomain) {
             snap.windowTitle += snap.windowTitle.isEmpty ? domain : " (\(domain))"
@@ -115,8 +121,10 @@ enum ScreenContext {
     /// `SCShareableContent` window order isn't front-to-back, so match the AX focused window.
     /// OCRs a band around the focused field (`field`, global points), or the whole window without one.
     private static func ocrFocusedWindow(pid: pid_t, frame: CGRect?, title: String, field: CGRect?) async -> String? {
+        let start = ContinuousClock.now
         guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         else { return nil }
+        Timing.mark("ocr shareableContent", since: start)
         let windows = content.windows.filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 }
         guard let i = WindowMatch.index(of: windows.map { ($0.frame, $0.title) }, frame: frame, title: title)
         else { return nil }
@@ -128,6 +136,7 @@ enum ScreenContext {
         guard let shot = try? await SCScreenshotManager.captureImage(
             contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
         else { return nil }
+        Timing.mark("ocr screenshot", since: start)
         let px = CGFloat(shot.width) / window.frame.width
         let crop = NearbyText.ocrCrop(field: field, window: window.frame)
         let image = shot.cropping(to: CGRect(x: crop.minX * px, y: crop.minY * px,
@@ -137,6 +146,7 @@ enum ScreenContext {
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
         try? VNImageRequestHandler(cgImage: image).perform([request])
+        Timing.mark("ocr vision", since: start)
         let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
