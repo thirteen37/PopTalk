@@ -19,11 +19,15 @@ public enum MLXProvider {
             var progress = LoadProgressHandlers()
             if let download { progress.download = { @Sendable (p: Progress) in download(p.fractionCompleted) } }
             let t = Task {
-                let local = URL(fileURLWithPath: (id as NSString).expandingTildeInPath)
-                if FileManager.default.fileExists(atPath: local.appendingPathComponent("config.json").path) {
-                    return try await loadModelContainer(from: local, using: #huggingFaceTokenizerLoader(), progress: progress)
+                guard let (base, dir) = ModelSettings.adapter(id, roots: MLXProvider.roots) else {
+                    return try await load(id, progress)
                 }
-                return try await loadModelContainer(from: #hubDownloader(), using: #huggingFaceTokenizerLoader(), id: id, progress: progress)
+                // Base + LoRA adapter, fused in memory (QLoRALinear.fused(): dequantize, add, requantize, as
+                // mlx_lm.fuse). Lazy: the fused weights are computed on first use, i.e. by `prepare`'s warm-up.
+                let container = try await load(base, progress)
+                let adapter = try LoRAContainer.from(directory: dir)
+                try await container.perform { try $0.model.fuse(with: adapter) }
+                return container
             }
             loaded[id] = t
             return t
@@ -36,6 +40,17 @@ public enum MLXProvider {
             for (id, t) in loaded where !ids.contains(id) { t.cancel(); loaded[id] = nil }
         }
     }
+    /// A local model directory or a Hugging Face id.
+    private static func load(_ id: String, _ progress: LoadProgressHandlers) async throws -> ModelContainer {
+        let local = URL(fileURLWithPath: (id as NSString).expandingTildeInPath)
+        if FileManager.default.fileExists(atPath: local.appendingPathComponent("config.json").path) {
+            return try await loadModelContainer(from: local, using: #huggingFaceTokenizerLoader(), progress: progress)
+        }
+        return try await loadModelContainer(from: #hubDownloader(), using: #huggingFaceTokenizerLoader(), id: id, progress: progress)
+    }
+    /// Where relative adapter ids live: the app bundle's Resources (`scripts/install.zsh` copies `adapters/`
+    /// there), else the working directory (the repo, for `swift run`).
+    static let roots = [Bundle.main.resourceURL, URL(fileURLWithPath: FileManager.default.currentDirectoryPath)].compactMap { $0 }
     private static let models = Models()
     static let timing = Logger(subsystem: "io.lyx.poptalk", category: "timing")
 

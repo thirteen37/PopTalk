@@ -3,11 +3,15 @@ import Foundation
 /// Which language-model provider and models the app uses, stored per provider in UserDefaults
 /// so switching providers never hands one provider another's model ids.
 public enum ModelSettings {
+    public static let e2b = "mlx-community/gemma-4-e2b-it-4bit"
+    /// The E2B fine-tune (#21) as a LoRA adapter, fused into `e2b` at load (#36). Relative: see `adapter(_:roots:)`.
+    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v2"
+
     public static let defaults: [String: String] = [
         "provider": "mlx",  // mlx | lmstudio | apple
         "baseURL": "http://localhost:1234/v1",
-        "mlxCleanupModel": "mlx-community/gemma-4-e2b-it-4bit",
-        "mlxEditModel": "mlx-community/gemma-4-e2b-it-4bit",
+        "mlxCleanupModel": fineTune,
+        "mlxEditModel": fineTune,
         "lmstudioCleanupModel": "google/gemma-4-e4b",
         "lmstudioEditModel": "google/gemma-4-e4b",
     ]
@@ -20,6 +24,21 @@ public enum ModelSettings {
             if [nil, defaults[new]].contains(d.string(forKey: new)) { d.set(v, forKey: new) }
             d.removeObject(forKey: old)
         }
+    }
+
+    /// An MLX model id names a LoRA adapter when it is a directory holding an `adapter_config.json`, as
+    /// `mlx_lm.lora` writes it; that file's `model` is the base to fuse it into. A relative id is looked up
+    /// in each of `roots` in turn (the app's Resources, then the working directory).
+    public static func adapter(_ id: String, roots: [URL]) -> (base: String, dir: URL)? {
+        struct Config: Decodable { let model: String }
+        let path = (id as NSString).expandingTildeInPath
+        let dirs = path.hasPrefix("/") ? [URL(fileURLWithPath: path)] : roots.map { $0.appendingPathComponent(path) }
+        for dir in dirs {
+            guard let data = try? Data(contentsOf: dir.appendingPathComponent("adapter_config.json")),
+                  let config = try? JSONDecoder().decode(Config.self, from: data) else { continue }
+            return (config.model, dir)
+        }
+        return nil
     }
 
     public struct Selection: Equatable, Sendable {

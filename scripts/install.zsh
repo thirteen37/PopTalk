@@ -35,6 +35,8 @@ mkdir -p $app/Contents/Resources
 cp -R .build/release/mlx-swift_Cmlx.bundle $app/Contents/Resources/
 # Icons are pre-rendered and committed (regenerate: assets/icon/render.py build).
 cp assets/icon/AppIcon.icns assets/icon/MenuBar*.png $app/Contents/Resources/
+# LoRA adapters, fused into their base model at load (#36); relative model ids resolve here.
+cp -R adapters $app/Contents/Resources/
 # Build number: commit count (monotonic, as macOS expects); commit: short hash, -dirty with uncommitted changes.
 build=$(git rev-list --count HEAD)
 commit=$(git rev-parse --short HEAD)
