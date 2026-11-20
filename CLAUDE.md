@@ -17,4 +17,5 @@ macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). T
 - Fine-tune prompts must match `Prompts.swift` exactly; changing the prompt text or order needs a bench re-run (and possibly a retrain).
 - Never log or persist transcripts, screen text or replies outside the opt-in history (`HistoryStore`).
 - Training, retrains and long bench sweeps hog the GPU for hours: ask the user first.
+- FluidAudio is built with `traits: []` (no NeMo ITN, TTS, Diarizer; #66); after changing its traits, `rm -rf .build/out` or linking fails on undefined `_nemo_*` symbols.
 - Agent worktrees are ~5 GB each (their own `.build`); remove them as soon as the work merges.

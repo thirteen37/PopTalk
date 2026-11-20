@@ -1,11 +1,11 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "Poptalk",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.3"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.3", traits: []),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.33.0"),
         // mlx-swift-lm 3.x ships no tokenizer or downloader; these are its documented integration (MLXHuggingFace macros).
         .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.4.0"),
