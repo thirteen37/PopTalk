@@ -64,11 +64,27 @@ final class Overlay {
     /// How long an outcome (and its undo/accept keys) stays up: the "Undo window" setting, read per show.
     static var outcomeSeconds: TimeInterval { OutcomeKeys.undoWindow(.standard) }
 
-    func showOutcome(_ text: String, undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
-        var parts = [text]
+    /// `heard`/`result`: the transcript and the text applied, shown above the label (#56); `edit` puts the label
+    /// in front of the result as its action.
+    func showOutcome(_ text: String, heard: String? = nil, result: String? = nil, edit: Bool = false,
+                     undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
+        let lines = OutcomeText.lines(heard: heard, result: result, label: text, edit: edit)
+        var parts = lines.label.isEmpty ? [] : [lines.label]
         if undo != nil { parts.append("esc to undo") }
         if let v = vocabularyOffer { parts.append("⏎ add “\(v.text)” to vocabulary") }
-        show(parts.joined(separator: "  ·  "), for: Self.outcomeSeconds)
+        let out = NSMutableAttributedString()
+        func line(_ s: String, size: CGFloat, weight: NSFont.Weight, color: NSColor) {
+            if out.length > 0 { out.append(NSAttributedString(string: "\n")) }
+            out.append(NSAttributedString(string: s, attributes: [
+                .font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color, .paragraphStyle: Self.centered]))
+        }
+        if let h = lines.heard { line(h, size: 11, weight: .regular, color: .secondaryLabelColor) }
+        if let r = lines.result { line(r, size: 13, weight: .medium, color: .labelColor) }
+        if !parts.isEmpty {
+            let footer = lines.result == nil ? (CGFloat(13), NSFont.Weight.medium, NSColor.labelColor) : (11, .regular, .secondaryLabelColor)
+            line(parts.joined(separator: "  ·  "), size: footer.0, weight: footer.1, color: footer.2)
+        }
+        show(out, for: Self.outcomeSeconds)
         keys = KeyCatcher { [weak self] code, flags in
             switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
             // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
@@ -89,10 +105,18 @@ final class Overlay {
         panel.orderOut(nil)
     }
 
+    private static let centered = { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }()
+
     private func show(_ text: String, for seconds: TimeInterval?) {
+        show(NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: Self.centered]), for: seconds)
+    }
+
+    private func show(_ text: NSAttributedString, for seconds: TimeInterval?) {
         hideWork?.cancel()
         keys = nil
-        label.stringValue = text
+        label.attributedStringValue = text
         let fit = label.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: 600, height: CGFloat.greatestFiniteMagnitude))
         let width = min(max(fit.width + 40, 160), 640)
         let height = max(44, ceil(fit.height) + 24)

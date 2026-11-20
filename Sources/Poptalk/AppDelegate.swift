@@ -407,7 +407,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.lastInsert = nil
             self?.history.append(HistoryEvent(.undo, id: id))
         } : nil
-        overlay.showOutcome(shown, undo: undo, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        overlay.showOutcome(shown, heard: raw.request.transcript, result: text,
+                            edit: { if case .insert = result.outcome { false } else { true } }(),
+                            undo: undo, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
             self?.resolveOffer(id, .vocabularyAccepted)
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
