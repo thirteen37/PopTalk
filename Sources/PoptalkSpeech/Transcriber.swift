@@ -80,7 +80,12 @@ public actor Transcriber {
         let output = await session.rescore(
             text: result.text, tokenTimings: result.tokenTimings ?? [], audioSamples: samples)
         lastRescoreSeconds = Date().timeIntervalSince(start)
-        return Transcription(raw: result.text, text: Pipeline.splitFused(output?.text ?? result.text, terms: boost), asrSeconds: asrSeconds, rescoreSeconds: lastRescoreSeconds)
+        // Redone on our text rather than taking the rescorer's: its spotter rescue over-applies (#70).
+        let replaced = (output?.replacements ?? []).compactMap { r in
+            r.shouldReplace ? r.replacementWord.map { (span: r.originalWord, term: $0) } : nil
+        }
+        let text = Pipeline.applyBoosts(result.text, replaced, terms: boost, minSimilarity: Double(minSimilarity))
+        return Transcription(raw: result.text, text: Pipeline.splitFused(text, terms: boost), asrSeconds: asrSeconds, rescoreSeconds: lastRescoreSeconds)
     }
 }
 
