@@ -1,6 +1,6 @@
 import Foundation
 
-/// A text-only copy of E2B (#51): the upstream repo also ships vision and audio towers (~0.9 GB) that
+/// A text-only copy of E2B or E4B (#51, #72): the upstream repos also ship vision and audio towers (~0.9 GB) that
 /// PopTalk never loads. The copy keeps the `language_model.*` tensors, config, tokenizer and chat template.
 public enum TextOnlyModel {
     public static func isText(_ tensor: String) -> Bool { tensor.hasPrefix("language_model.") }
@@ -9,7 +9,8 @@ public enum TextOnlyModel {
 
     /// Where the text-only copy of `id` lives, for the ids that get one.
     public static func directory(for id: String, appSupport: URL) -> URL? {
-        id == ModelSettings.e2b ? models(appSupport).appendingPathComponent("gemma-4-e2b-it-4bit-text") : nil
+        [ModelSettings.e2b, ModelSettings.e4b].contains(id)
+            ? models(appSupport).appendingPathComponent((id as NSString).lastPathComponent + "-text") : nil
     }
     /// PopTalk's own Hugging Face cache for full downloads, deleted once stripped.
     public static func download(appSupport: URL) -> URL { models(appSupport).appendingPathComponent(".download") }

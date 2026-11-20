@@ -11,7 +11,7 @@ macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). T
 
 ## Gotchas
 - Default MLX model is `adapters/gemma-4-e2b-poptalk-v3`: a LoRA adapter fused in memory onto base E2B at load. Its `adapter_config.json` names the base.
-- `mlx-community/gemma-4-e2b-it-4bit` loads from a text-only copy in `~/Library/Application Support/Poptalk/models/gemma-4-e2b-it-4bit-text` (#51, `TextOnlyModel`), stripped at first use from the shared HF cache (read only) or from a download into `models/.download` (deleted after). Delete the copy to rebuild it.
+- `mlx-community/gemma-4-e2b-it-4bit` (and `-e4b-`, #72) loads from a text-only copy in `~/Library/Application Support/Poptalk/models/gemma-4-e2b-it-4bit-text` (#51, `TextOnlyModel`), stripped at first use from the shared HF cache (read only) or from a download into `models/.download` (deleted after). Delete the copy to rebuild it.
 - Gemma 4's per-layer embeddings (1.26 GB) are read per token from the mmap'd safetensors file, not GPU memory (`MappedPLE`, #52). Disable for A/B with `POPTALK_PLE_MMAP=0` or the `mlxMappedPLE` default. The gather runs on MLX's CPU stream (#62): a GPU op over the mapping wires all of it (check `vm_stat` wired memory, not just `footprintMB`).
 - The first Vision OCR per process takes ~15 s; `ScreenContext.prewarmOCR()` runs at launch and capture skips OCR until it is warm.
 - Fine-tune prompts must match `Prompts.swift` exactly; changing the prompt text or order needs a bench re-run (and possibly a retrain).
