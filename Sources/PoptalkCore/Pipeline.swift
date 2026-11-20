@@ -76,7 +76,7 @@ public struct Pipeline: Sendable {
 
         guard let selection = r.selection, !selection.isEmpty else {
             let transcript = Self.spokenNumbers(Self.spokenFormatting(transcript))
-            let messages = Prompts.dictation(transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
+            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             let space = Self.leadingSpace(r.context)
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count

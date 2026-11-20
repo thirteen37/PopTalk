@@ -37,6 +37,19 @@ private func req(_ t: String, selection: String? = nil) -> Request {
     #expect(calls.json == [false])
 }
 
+// #67: an S1-mini cleanup model gets its own prompt; edits keep the edit prompt.
+@Test func s1MiniCleanupGetsItsPromptAndEditsDont() async {
+    final class Seen: @unchecked Sendable { var systems: [String] = [] }
+    let seen = Seen()
+    let p = Pipeline(complete: { _, messages, json, _ in
+        seen.systems.append(messages[0].content)
+        return json ? #"{"action":"edit","text":"Hi.","vocabulary":null,"remember":false}"# : "Hello there."
+    }, vocabulary: VocabularyStore(url: tmp()), cleanupModel: "/models/s1-mini-4bit", editModel: "big")
+    _ = await p.run(req("hello there"))
+    _ = await p.run(req("make it shorter", selection: "Hello there."))
+    #expect(seen.systems == [Prompts.s1MiniSystem, Prompts.editSystem])
+}
+
 // #3: 4 s base covers cold starts; long dictations get 20 ms per word on top.
 @Test func cleanupTimeoutScalesWithLength() async {
     let calls = Calls()
