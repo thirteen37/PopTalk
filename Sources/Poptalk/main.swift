@@ -24,7 +24,7 @@ if args.count >= 3, args[1] == "--pipeline" {
     func opt(_ name: String) -> String? { args.firstIndex(of: name).map { args[$0 + 1] } }
     Settings.register()
     // Uses the saved settings; override with -provider mlx (in-process; -mlxCleanupModel/-mlxEditModel are
-    //   Hugging Face ids or local MLX directories) | lmstudio (-lmstudioCleanupModel/-lmstudioEditModel) | apple.
+    //   Hugging Face ids, local MLX directories, or LoRA adapter directories) | lmstudio (-lmstudioCleanupModel/-lmstudioEditModel) | apple.
     let sel = Settings.selection
     let provider = sel.provider
     let complete: Pipeline.Complete
