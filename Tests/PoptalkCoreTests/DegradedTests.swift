@@ -4,10 +4,10 @@ import Testing
 
 @Test func runModeFollowsReadiness() {
     #expect(RunMode(speech: .ready, llm: .ready) == .full)
-    #expect(RunMode(speech: .ready, llm: .loading) == .raw)
-    #expect(RunMode(speech: .ready, llm: .downloading(0.5)) == .raw)
+    #expect(RunMode(speech: .ready, llm: .loading) == .raw("raw — model loading"))
+    #expect(RunMode(speech: .ready, llm: .downloading(0.5)) == .raw("raw — downloading model 50%"))
     #expect(RunMode(speech: .loading, llm: .ready) == .noSpeech("Speech model loading…"))
-    #expect(RunMode(speech: .downloading(0.42), llm: .loading) == .noSpeech("Speech model loading… 42%"))
+    #expect(RunMode(speech: .downloading(0.42), llm: .loading) == .noSpeech("Downloading speech model 42%"))
     #expect(RunMode(speech: .failed("disk"), llm: .ready) == .noSpeech("Speech model failed to load (retrying): disk"))
 }
 

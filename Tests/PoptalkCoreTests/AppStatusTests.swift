@@ -69,5 +69,7 @@ private func ok() -> AppStatus {
     s.speech = .loading
     s.models = [:]
     #expect(s.summary == "Loading models…")
+    s.speech = .downloading(0.3)
+    #expect(s.summary == "Downloading model 30%")
     #expect(s.launchTab == nil)
 }
