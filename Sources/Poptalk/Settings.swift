@@ -50,6 +50,7 @@ struct SettingsView: View {
     let tab: SettingsTab
     let status: StatusModel
     let store: VocabularyStore
+    let history: HistoryStore
     /// Retries whatever failed to load (speech model and/or LLM models).
     let retry: () -> Void
 
@@ -103,6 +104,7 @@ struct SettingsView: View {
                     ForEach(devices, id: \.uniqueID) { Text($0.localizedName).tag($0.uniqueID) }
                 }
             }
+            HistorySection(history: history)
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
@@ -227,6 +229,45 @@ struct SettingsView: View {
             vocabMessage = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
         }
         terms = store.terms
+    }
+}
+
+/// Opt-in usage history (#38): toggles, what's stored, and a wipe.
+private struct HistorySection: View {
+    let history: HistoryStore
+    @AppStorage("historyEnabled") private var enabled = false
+    @AppStorage("historyAudio") private var audio = false
+    @State private var stats: HistoryStore.Stats?
+    @State private var confirmWipe = false
+
+    var body: some View {
+        Section {
+            Toggle("Keep usage history", isOn: $enabled)
+            Toggle("Also save audio", isOn: $audio).disabled(!enabled)
+            LabeledContent("Stored") {
+                HStack {
+                    Text(stats.map { "\($0.requests) requests · \(ByteCountFormatter.string(fromByteCount: Int64($0.bytes), countStyle: .file))" } ?? "…")
+                    Button("Wipe History…") { confirmWipe = true }.disabled(stats?.bytes == 0)
+                }
+            }
+        } header: {
+            Text("History")
+        } footer: {
+            Text("Keeps transcripts, the context sent to the model, its replies, and your undos and corrections on this Mac, to train a better model. Nothing leaves the Mac.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+        .task { await refresh() }
+        .confirmationDialog("Delete all usage history and saved audio?", isPresented: $confirmWipe) {
+            Button("Wipe History", role: .destructive) {
+                history.wipe()
+                Task { await refresh() }
+            }
+        }
+    }
+
+    private func refresh() async {
+        let h = history
+        stats = await Task.detached { h.stats() }.value
     }
 }
 

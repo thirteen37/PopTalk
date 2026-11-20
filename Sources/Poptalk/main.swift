@@ -12,7 +12,7 @@ if args.count >= 3, args[1] == "--transcribe" {
     let terms = args.dropFirst(3).map { VocabTerm(text: $0) }
     let t = try await Transcriber()
     let start = Date()
-    let text = try await t.transcribe(samples, boost: terms)
+    let text = try await t.transcribe(samples, boost: terms).text
     print(text)
     print(String(format: "total %.2fs, rescore %.3fs, %d terms",
                  Date().timeIntervalSince(start), await t.lastRescoreSeconds, terms.count))
