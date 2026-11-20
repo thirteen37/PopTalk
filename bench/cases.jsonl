@@ -67,3 +67,5 @@
 {"id": "d-num-units", "kind": "dictation", "transcript": "conversion went up twenty five percent and the plan costs twelve dollars a month", "mustContain": ["25%", "$12"], "mustNotContain": ["percent", "twenty"], "maxLengthRatio": 1.2}
 {"id": "d-num-time-cue", "kind": "dictation", "transcript": "let's go through issue three and version two at three thirty pm", "mustContain": ["issue 3", "version 2", "3:30 PM"], "mustNotContain": ["thirty"], "maxLengthRatio": 1.2}
 {"id": "d-num-small-words", "kind": "dictation", "transcript": "one of my two teammates said a hundred times that one or two tests are flaky", "mustContain": ["one of my", "two teammates", "a hundred times", "one or two"], "mustNotContain": ["100", "1 of"], "maxLengthRatio": 1.2}
+{"id": "e-spelled-spaced-misheard-name", "kind": "edit", "transcript": "Replace this with R J A J A Y.", "selection": "Arjee", "expectAction": "correct", "expectExact": "Ajay", "expectVocabOffer": "Ajay"}
+{"id": "e-spelled-hyphen-name", "kind": "edit", "transcript": "it's Priya, P-R-I-Y-A", "selection": "pria", "expectAction": "correct", "expectExact": "Priya", "expectVocabOffer": "Priya"}
