@@ -37,7 +37,14 @@ public enum MLXProvider {
             do { return try await get(id, download: download).value } catch { loaded[id] = nil; throw error }
         }
         func keepOnly(_ ids: Set<String>) {
-            for (id, t) in loaded where !ids.contains(id) { t.cancel(); loaded[id] = nil }
+            for (id, t) in loaded where !ids.contains(id) { t.cancel(); loaded[id] = nil; lastTokens[id] = nil }
+        }
+        /// The previous request's prompt tokens per model, to measure what a KV cache could reuse (#42).
+        var lastTokens: [String: [Int]] = [:]
+        /// Stores `tokens` as `id`'s latest prompt; returns the leading tokens shared with the previous one.
+        func shared(_ id: String, _ tokens: [Int]) -> Int {
+            defer { lastTokens[id] = tokens }
+            return sharedPrefix(lastTokens[id] ?? [], tokens)
         }
     }
     /// A local model directory or a Hugging Face id.
@@ -86,6 +93,9 @@ public enum MLXProvider {
                 let input = UserInput(messages: messages.map { ["role": $0.role, "content": $0.content] },
                                       additionalContext: ["enable_thinking": false])
                 let lm = try await container.prepare(input: input)
+                let tokens = lm.text.tokens.asArray(Int.self)
+                let shared = await models.shared(model, tokens)
+                timing.info("llm \((model as NSString).lastPathComponent, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
                 var out = ""
                 // Leaving the loop on cancellation terminates the stream, which stops generation.
                 for await g in try await container.generate(input: lm, parameters: GenerateParameters(maxTokens: maxTokens, temperature: 0)) {
