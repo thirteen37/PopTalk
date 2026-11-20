@@ -2,7 +2,7 @@ import AppKit
 import PoptalkCore
 
 /// Small non-activating HUD at the bottom of the screen. While an outcome is shown,
-/// bare Esc undoes it and bare Return accepts a vocabulary offer; those two keys are consumed only then.
+/// bare Esc undoes it and bare Return accepts a vocabulary or cleanup offer; those keys are consumed only then.
 @MainActor
 final class Overlay {
     private let panel: NSPanel
@@ -36,11 +36,30 @@ final class Overlay {
         panel.contentView = blur
     }
 
-    func showRecording() { show("● Listening…", for: nil) }
+    /// Shown after the recording text until the next recording, e.g. "raw — model loading" (#39).
+    private var note: String?
+    private func noted(_ s: String) -> String { note.map { "\(s)  ·  \($0)" } ?? s }
+
+    func showRecording(note: String? = nil) { self.note = note; show(noted("● Listening…"), for: nil) }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible.
-    func showPreview(_ text: String) { show("● " + PreviewText.tail(text, limit: 400), for: nil) }
+    func showPreview(_ text: String) { show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil) }
     func showWorking() { show("Working…", for: nil) }
     func showError(_ msg: String) { show("⚠️ \(msg)", for: 3) }
+    func showNotice(_ msg: String) { show(msg, for: 2) }
+
+    /// "⏎ clean up now" after a raw insert. Return runs `onAccept` if `isValid()` still holds; any other
+    /// key, or Return once invalid, passes through and dismisses the offer.
+    func showCleanupOffer(isValid: @escaping () -> Bool, onAccept: @escaping () -> Void) {
+        show("Model ready  ·  ⏎ clean up now", for: 6)
+        keys = KeyCatcher { [weak self] code, flags in
+            if OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: false, canAccept: true) == .accept, isValid() {
+                DispatchQueue.main.async { onAccept() }
+                return true
+            }
+            DispatchQueue.main.async { self?.hide() }
+            return false
+        }
+    }
 
     /// How long an outcome (and its undo/accept keys) stays up.
     static let outcomeSeconds: TimeInterval = 2

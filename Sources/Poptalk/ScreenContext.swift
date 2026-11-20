@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import PoptalkCore
 import ScreenCaptureKit
+import os
 import Vision
 
 /// What's on screen at hotkey press: app, window title, focused text (AX), nearby AX text, and OCR
@@ -38,8 +39,10 @@ enum ScreenContext {
         let nearby = isPrivate() ? [] : focused.map(nearbyText) ?? []
         for t in nearby { snap.text += (snap.text.isEmpty ? "" : "\n") + t }
         Timing.mark("context nearby", since: start)
-        if NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars),
-           CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
+        let wantsOCR = NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars)
+        // A cold Vision load (~14 s) would stall the request: go without OCR until the prewarm finishes (#39).
+        if wantsOCR, !ocrWarm.withLock({ $0 }) { Timing.mark("ocr skipped (not warm)", since: start) }
+        else if wantsOCR, CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
             pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle, field: focused.flatMap(frame)) {
             snap.ocrText = ocr  // own budget in Prompts.window (#25)
         }
@@ -119,9 +122,12 @@ enum ScreenContext {
     }
 
     /// The first accurate-OCR request in a process loads Vision's models (~14 s measured); pay that at launch.
+    private static let ocrWarm = OSAllocatedUnfairLock(initialState: false)
+
     static func prewarmOCR() {
         Task.detached(priority: .utility) {
             let start = ContinuousClock.now
+            defer { ocrWarm.withLock { $0 = true } }  // also when the prewarm gives up: OCR then loads on use, as before
             let size = CGSize(width: 240, height: 60)
             guard let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8,
                                       bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),

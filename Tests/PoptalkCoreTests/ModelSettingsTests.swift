@@ -104,5 +104,5 @@ private func tempDir(_ files: [String: String]) -> URL {
     #expect(await p.run(Request(transcript: "hello there", selection: nil, context: ScreenSnapshot())).outcome
             == .insert("hello there", label: "Dictated (raw) · model loading"))
     #expect(await p.run(Request(transcript: "make it formal", selection: "hi", context: ScreenSnapshot())).outcome
-            == .error("Model loading…"))
+            == .error("Model still loading — selection unchanged"))
 }

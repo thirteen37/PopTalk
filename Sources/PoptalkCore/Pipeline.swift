@@ -25,11 +25,14 @@ public struct PipelineResult: Equatable, Sendable {
     public var outcome: Outcome
     public var vocabularyOffer: VocabTerm?
     public var remembered: VocabTerm?
+    /// Inserted raw because the language model was still loading: can be cleaned up once it's ready.
+    public var degraded: Bool
 
-    public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil) {
+    public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false) {
         self.outcome = outcome
         self.vocabularyOffer = vocabularyOffer
         self.remembered = remembered
+        self.degraded = degraded
     }
 }
 
@@ -69,7 +72,9 @@ public struct Pipeline: Sendable {
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
             let reply: String?
             do { reply = try await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)) }
-            catch is ModelLoading { return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw) · model loading")) }
+            catch is ModelLoading {
+                return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw) · model loading"), degraded: true)
+            }
             catch { reply = nil }
             if let reply, case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
                Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40,
@@ -89,7 +94,8 @@ public struct Pipeline: Sendable {
         let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
         let raw: String
         do { raw = try await complete(editModel, messages, true, editTimeout) }
-        catch is ModelLoading { return PipelineResult(outcome: .error("Model loading…")) }
+        // Nothing sensible to do raw with a selection: say so and leave it untouched.
+        catch is ModelLoading { return PipelineResult(outcome: .error("Model still loading — selection unchanged")) }
         catch {
             let timedOut = (error as? URLError)?.code == .timedOut
             return PipelineResult(outcome: .error(timedOut ? "Model took too long" : "Couldn't reach the language model"))

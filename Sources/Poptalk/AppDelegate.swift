@@ -79,7 +79,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// MLX models of the current selection and their load state; a press before `.ready` skips the model.
-    private var modelStatus: [String: ModelStatus] = [:] { didSet { status.value.models = modelStatus } }
+    private var modelStatus: [String: ModelStatus] = [:] {
+        didSet {
+            status.value.models = modelStatus
+            let cleanup = Settings.selection.cleanupModel
+            if oldValue[cleanup] != .ready, modelStatus[cleanup] == .ready { offerCleanup() }
+        }
+    }
+
+    /// What a press can do right now; providers other than MLX don't load in-process, so count as ready.
+    private var runMode: RunMode {
+        let sel = Settings.selection
+        return RunMode(speech: status.value.speech, llm: sel.provider == "mlx" ? modelStatus[sel.cleanupModel] ?? .loading : .ready)
+    }
     private var settingsWork: DispatchWorkItem?
 
     /// Loads and prewarms the selected MLX models in the background, unloading any others; on a repeat
@@ -142,6 +154,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !busy else { return }  // one request at a time
         loadTranscriber()  // retries after a failed load
         prepareModels()  // likewise for the MLX models
+        let mode = runMode
+        // No speech model, nothing to record: say why. Release and cancel then no-op (not recording).
+        if case .noSpeech(let msg) = mode { overlay.showNotice(msg); return }
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
@@ -153,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.log.info("press: capture start")
             contextTask = Task { await ScreenContext.capture() }
             selectionTask = Task { await TextIO.selectedText() }
-            overlay.showRecording()
+            overlay.showRecording(note: mode == .raw ? "raw — model loading" : nil)
             startPreview()
         }
         startWork = work
@@ -196,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let started = Date()
         let app = targetPID.flatMap { NSRunningApplication(processIdentifier: $0) }
         Task {
-            defer { busy = false }
+            defer { busy = false; offerCleanup() }  // the model may have become ready while this ran
             let t0 = ContinuousClock.now
             let snapshot = await ctx?.value ?? ScreenSnapshot()
             Timing.mark("release: context awaited", since: t0)
@@ -210,36 +225,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 overlay.showError("Transcription failed"); return
             }
             Timing.mark("release: transcribed", since: t0)
-            // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
-            // Apple Intelligence off) still dictates raw.
-            let complete: Pipeline.Complete
-            do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
-            let models = Settings.selection
-            let calls = ModelCallRecorder()
-            let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
-                                    cleanupModel: models.cleanupModel, editModel: models.editModel)
-            let id = UUID()
-            // Before apply, which moves lastInsert to this request.
-            let corrects = history.isEnabled ? lastInsert?.corrected(by: selection, in: TextIO.focusedElement()) : nil
-            Timing.mark("release: provider ready", since: t0)
-            let result = await pipeline.run(Request(transcript: heard.text, selection: selection, context: snapshot))
-            Timing.mark("release: pipeline done", since: t0)
-            let shown = await apply(result, cursorKnown: snapshot.cursorOffset != nil, id: id)
-            Timing.mark("release: applied", since: t0)
-            guard history.isEnabled else { return }
-            let audio = UserDefaults.standard.bool(forKey: "historyAudio") ? "\(id).m4a" : nil
-            if let audio { history.saveFile(audio) { try AudioRecorder.write(samples, to: $0) } }
-            let call = calls.call
-            var entry = HistoryRequest(
-                id: id, at: started, app: app?.localizedName ?? snapshot.appName, bundleID: app?.bundleIdentifier,
-                rawTranscript: heard.raw, transcript: heard.text, boost: boost.map(\.text), selection: selection,
-                provider: models.provider, model: call?.model, messages: call?.messages, reply: call?.reply,
-                outcome: result.outcome, vocabularyOffer: result.vocabularyOffer?.text, remembered: result.remembered?.text,
-                latency: Date().timeIntervalSince(started), audio: audio)
-            entry.outcome = shown
-            history.append(entry)
-            if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
+            await process(Request(transcript: heard.text, selection: selection, context: snapshot),
+                          raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app, since: t0)
         }
+    }
+
+    /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
+    /// earlier raw insert, whose text is replaced in place rather than inserted again.
+    private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
+                         app: NSRunningApplication?, cleanup: RawInsert? = nil, since t0: ContinuousClock.Instant) async {
+        // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
+        // Apple Intelligence off) still dictates raw.
+        let complete: Pipeline.Complete
+        do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
+        let models = Settings.selection
+        let calls = ModelCallRecorder()
+        let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
+                                cleanupModel: models.cleanupModel, editModel: models.editModel)
+        let id = UUID()
+        // Before apply, which moves lastInsert to this request.
+        let corrects = history.isEnabled && cleanup == nil
+            ? lastInsert?.corrected(by: request.selection, in: TextIO.focusedElement()) : nil
+        Timing.mark("release: provider ready", since: t0)
+        let result = await pipeline.run(request)
+        Timing.mark("release: pipeline done", since: t0)
+        let shown = if let cleanup { await replaceRaw(cleanup, with: result, id: id) } else {
+            await apply(result, cursorKnown: request.context.cursorOffset != nil, id: id,
+                        raw: RawInsert(request: request, rawTranscript: raw, boost: boost))
+        }
+        Timing.mark("release: applied", since: t0)
+        guard history.isEnabled else { return }
+        let audio = samples != nil && UserDefaults.standard.bool(forKey: "historyAudio") ? "\(id).m4a" : nil
+        if let audio, let samples { history.saveFile(audio) { try AudioRecorder.write(samples, to: $0) } }
+        let call = calls.call
+        var entry = HistoryRequest(
+            id: id, at: started, app: app?.localizedName ?? request.context.appName, bundleID: app?.bundleIdentifier,
+            rawTranscript: raw, transcript: request.transcript, boost: boost, selection: request.selection,
+            provider: models.provider, model: call?.model, messages: call?.messages, reply: call?.reply,
+            outcome: result.outcome, vocabularyOffer: result.vocabularyOffer?.text, remembered: result.remembered?.text,
+            latency: Date().timeIntervalSince(started), audio: audio)
+        entry.outcome = shown
+        history.append(entry)
+        if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
+    }
+
+    /// Offers to clean up the last raw insert, if its field is focused and untouched and the model is ready.
+    private func offerCleanup() {
+        guard !busy, !recording, runMode == .full, let raw = lastInsert?.reprocess else { return }
+        let valid = { [weak self] () -> Bool in
+            guard let self, let field = TextIO.focusedElement() else { return false }
+            return lastInsert?.canReprocess(focused: field, value: TextIO.value(of: field)) == true
+        }
+        guard valid() else { return }
+        overlay.showCleanupOffer(isValid: valid) { [weak self] in
+            guard let self, !busy, !recording else { return }
+            busy = true
+            overlay.showWorking()
+            targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            let app = NSWorkspace.shared.frontmostApplication
+            Task {
+                defer { self.busy = false }
+                await self.process(raw.request, raw: raw.rawTranscript, boost: raw.boost, samples: nil,
+                                   started: Date(), app: app, cleanup: raw, since: .now)
+            }
+        }
+    }
+
+    /// Selects the raw text (checked by reading it back) and pastes the cleaned text over it. Every check
+    /// runs before anything changes, so a failure leaves the user's text as it was.
+    private func replaceRaw(_ raw: RawInsert, with result: PipelineResult, id: UUID) async -> String {
+        let failed = "Couldn't clean up"
+        guard !result.degraded, case .insert(let s, _) = result.outcome, let last = lastInsert,
+              let field = TextIO.focusedElement(), last.canReprocess(focused: field, value: TextIO.value(of: field)),
+              TextIO.selectLast(raw.prefix + last.text, in: field)
+        else { overlay.showError(failed); return failed }
+        await TextIO.replaceSelection(raw.prefix + s)
+        lastInsert = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil)
+        let undo = { [weak self] in
+            TextIO.undo()
+            self?.lastInsert = nil
+            self?.history.append(HistoryEvent(.undo, id: id))
+        }
+        overlay.showOutcome("Cleaned up", undo: undo, vocabularyOffer: nil) {}
+        return "Cleaned up"
     }
 
     /// While held, re-transcribes the growing recording (no boosting) for the overlay only.
@@ -274,7 +342,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Applies the outcome and returns the label shown, for history.
-    private func apply(_ result: PipelineResult, cursorKnown: Bool, id: UUID) async -> String {
+    /// `raw`: kept on `lastInsert` for a later cleanup when the result was a raw insert while the model loaded.
+    private func apply(_ result: PipelineResult, cursorKnown: Bool, id: UUID, raw: RawInsert) async -> String {
         let text: String
         switch result.outcome {
         case .nothing: overlay.hide(); return "Nothing"
@@ -290,11 +359,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let label: String
         var pasted = true
+        var space = ""
         let field = TextIO.focusedElement()
         switch result.outcome {
         case .insert(let s, let l):
             // With a known cursor the pipeline already spaced it.
-            let space = cursorKnown ? "" : field.flatMap { lastInsert?.space(before: s, into: $0) } ?? ""
+            space = cursorKnown ? "" : field.flatMap { lastInsert?.space(before: s, into: $0) } ?? ""
             pasted = await TextIO.insert(space + s)
             label = pasted ? l : "No text field found — copied to clipboard"
         case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
@@ -302,7 +372,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
         case .nothing, .error: return ""
         }
-        lastInsert = pasted ? field.map { LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil) } : nil
+        var reprocess: RawInsert?
+        if result.degraded, let field {
+            reprocess = raw
+            reprocess?.prefix = space
+            reprocess?.fieldValue = TextIO.value(of: field)  // after the paste: the text a cleanup must find unchanged
+        }
+        lastInsert = pasted ? field.map {
+            LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess)
+        } : nil
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
         // A newer outcome replaced the old offer unanswered.

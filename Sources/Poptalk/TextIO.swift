@@ -55,6 +55,25 @@ enum TextIO {
         return (focused as! AXUIElement)
     }
 
+    /// The field's whole text, when the app exposes it.
+    static func value(of el: AXUIElement) -> String? {
+        var v: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(el, kAXValueAttribute as CFString, &v) == .success else { return nil }
+        return v as? String
+    }
+
+    /// Selects the last occurrence of `s` in `field`; true only if the selection then reads back as exactly `s`.
+    static func selectLast(_ s: String, in field: AXUIElement) -> Bool {
+        guard let v = value(of: field), let r = v.range(of: s, options: .backwards) else { return false }
+        let ns = NSRange(r, in: v)  // AX ranges count UTF-16 units
+        var cf = CFRange(location: ns.location, length: ns.length)
+        guard let range = AXValueCreate(.cfRange, &cf),
+              AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, range) == .success
+        else { return false }
+        var sel: CFTypeRef?
+        return AXUIElementCopyAttributeValue(field, kAXSelectedTextAttribute as CFString, &sel) == .success
+            && sel as? String == s
+    }
 
     static func insertAfterSelection(_ s: String) async {
         press(.right)
