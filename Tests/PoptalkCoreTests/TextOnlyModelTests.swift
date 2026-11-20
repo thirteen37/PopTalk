@@ -62,11 +62,12 @@ import Testing
     #expect(fm.fileExists(atPath: src.appendingPathComponent("model.safetensors").path))
 }
 
-@Test func textOnlyDirectoryIsOnlyForE2B() {
+@Test func textOnlyDirectoryIsForGemma4Bases() {
     let support = URL(fileURLWithPath: "/AS")
     #expect(TextOnlyModel.directory(for: ModelSettings.e2b, appSupport: support)?.path
             == "/AS/Poptalk/models/gemma-4-e2b-it-4bit-text")
-    #expect(TextOnlyModel.directory(for: ModelSettings.e4b, appSupport: support) == nil)
+    #expect(TextOnlyModel.directory(for: ModelSettings.e4b, appSupport: support)?.path
+            == "/AS/Poptalk/models/gemma-4-e4b-it-4bit-text")  // #72
     #expect(TextOnlyModel.directory(for: "/some/local/dir", appSupport: support) == nil)
     #expect(TextOnlyModel.directory(for: "mlx-community/Qwen3-0.6B-4bit", appSupport: support) == nil)  // #68
     #expect(TextOnlyModel.download(appSupport: support).path == "/AS/Poptalk/models/.download")
