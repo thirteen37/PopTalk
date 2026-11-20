@@ -18,8 +18,20 @@ public actor Transcriber {
     private let ctcModels: CtcModels
     public private(set) var lastRescoreSeconds: Double = 0
 
+    /// FluidAudio's model for a `ModelSettings.speechModels` id; nil for an unknown one.
+    public static func version(_ id: String) -> AsrModelVersion? {
+        switch id {
+        case "v2": .v2
+        case "v3": .v3
+        case "ultra": .ultra
+        case "bark3Clean": .bark3Clean
+        case "phonon2": .phonon2
+        default: nil
+        }
+    }
+
     /// - Parameters:
-    ///   - version: Parakeet TDT `v2` (English, the app's default) or `v3` (multilingual).
+    ///   - version: The Parakeet TDT model; see `version(_:)`. CTC boosting uses its own model whatever this is.
     ///   - progress: Download fraction 0…1, called on any queue, only while files are fetched (not when cached).
     ///     The TDT and CTC models download one after the other, each from 0 to 1.
     public init(version: AsrModelVersion = .v2, progress: (@Sendable (Double) -> Void)? = nil) async throws {

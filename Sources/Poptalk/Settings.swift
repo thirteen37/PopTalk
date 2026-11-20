@@ -14,6 +14,7 @@ enum Settings {
 
     static var baseURL: URL { URL(string: UserDefaults.standard.string(forKey: "baseURL")!) ?? URL(string: ModelSettings.defaults["baseURL"]!)! }
     static var selection: ModelSettings.Selection { ModelSettings.selection(.standard) }
+    static var speechModel: String { ModelSettings.speechModel(UserDefaults.standard.string(forKey: "speechModel")) }
     static var inputDeviceUID: String? { UserDefaults.standard.string(forKey: "inputDeviceUID").flatMap { $0.isEmpty ? nil : $0 } }
 }
 
@@ -56,6 +57,7 @@ struct SettingsView: View {
     /// Retries whatever failed to load (speech model and/or LLM models).
     let retry: () -> Void
 
+    @AppStorage("speechModel") private var speechModel = ModelSettings.defaults["speechModel"]!
     @AppStorage("provider") private var provider = ModelSettings.defaults["provider"]!
     @AppStorage("baseURL") private var baseURL = ModelSettings.defaults["baseURL"]!
     @AppStorage("mlxCleanupModel") private var mlxCleanupModel = ModelSettings.defaults["mlxCleanupModel"]!
@@ -153,6 +155,18 @@ struct SettingsView: View {
 
     private var models: some View {
         Form {
+            Section {
+                // An unknown saved id shows as the default it falls back to.
+                Picker("Model", selection: Binding(get: { ModelSettings.speechModel(speechModel) }, set: { speechModel = $0 })) {
+                    ForEach(ModelSettings.speechModels, id: \.id) { Text($0.name).tag($0.id) }
+                }
+            } header: {
+                Text("Speech model")
+            } footer: {
+                Text((ModelSettings.speechModels.first { $0.id == ModelSettings.speechModel(speechModel) }?.note ?? "")
+                     + " Downloads on first use; a change applies after the current dictation.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             Section("Language model") {
                 Picker("Provider", selection: $provider) {
                     Text("MLX (in-process)").tag("mlx")

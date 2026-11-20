@@ -8,7 +8,7 @@ import PoptalkSpeech
 // PoptalkBench: scores Pipeline (cleanup + edits) against bench/cases.jsonl, from the repo root.
 //   swift run PoptalkBench [--provider lmstudio|apple|apple-pcc|mlx] [--apple-variant core3|coreAdvanced3]
 //     [--base-url URL] [--cleanup-model ID] [--edit-model ID] [--runs 3] [--filter 'e-*'] [--cases FILE] [--out DIR]
-//     [--speech-model v2|v3] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
+//     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
 //   swift run PoptalkBench --compare a.json b.json
@@ -118,12 +118,9 @@ let minSimilarity = Float(opt("--min-similarity") ?? "0.7") ?? 0.7
 var transcriber: Transcriber?
 var samples: [String: [Float]] = [:]
 if !audioCases.isEmpty {
-    let speechModel = opt("--speech-model") ?? "v2"
-    let version: AsrModelVersion
-    switch speechModel {
-    case "v2": version = .v2
-    case "v3": version = .v3
-    default: fail("--speech-model must be v2 or v3")
+    let speechModel = opt("--speech-model") ?? ModelSettings.defaults["speechModel"]!
+    guard let version = Transcriber.version(speechModel) else {
+        fail("--speech-model must be one of " + ModelSettings.speechModels.map(\.id).joined(separator: "|"))
     }
     meta["speechModel"] = speechModel
     meta["boost"] = boostOn ? "on" : "off"
