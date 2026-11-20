@@ -486,7 +486,7 @@ HANDLE_T = ["Ping {h} on the thread.", "Follow {h} for release updates.", "Tag {
             "The account to mention is {h}.", "Send a DM to {h} about the meetup."]
 
 # Spelling while dictating and spelled corrections (#48, #50). Names whose spoken form comes out as
-# letters: (written, sound-alike letters, misheard selections). "Ajay" (the #50 report) is left for bench cases.
+# letters: (written, sound-alike letters, misheard selections). "Ajay" (the #50 report) is a bench case.
 LETTER_NAMES = [("Casey", "K C", ["kc", "k c"]), ("Evie", "E V", ["eevee", "e v"]), ("Ellie", "L E", ["elly", "l e"]),
                 ("Artie", "R T", ["arty", "r t"]), ("Emmy", "M E", ["emmie", "m e"]), ("Katie", "K T", ["kt", "katy"]),
                 ("Jaycee", "J C", ["jc", "j c"]), ("Essie", "S E", ["essy", "s e"]), ("Eddie", "E D", ["eddy", "e d"]),

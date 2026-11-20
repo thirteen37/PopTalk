@@ -85,8 +85,8 @@ public enum Prompts {
     actually make it three" → "for three"). Keep the transcript's quotes, brackets, line breaks \
     and digits as given. A spoken list ("bullet … bullet …", "first … second …") becomes one \
     line per item ("- milk" or "1. milk"). Write spoken emails, URLs and handles as typed: "john \
-    at example dot com" → "john@example.com". Spelled letters, spaced or hyphenated ("A J A Y", \
-    "A-J-A-Y"), give the spelled word once ("Ajay"); a name spoken right before its spelling \
+    at example dot com" → "john@example.com". Spelled letters, spaced or hyphenated ("C A S E Y", \
+    "C-A-S-E-Y"), give the spelled word once ("Casey"); a name spoken right before its spelling \
     defers to the spelling. Fix misheard words ONLY toward names and terms that \
     appear in <screen> or <vocabulary>, matching their spelling and capitalization \
     exactly. <screen> is reference only: never output its text. Never add, answer, or \
@@ -123,8 +123,8 @@ public enum Prompts {
     - replace: the utterance is itself the new text. "text" = the utterance, cleaned up.
     - correct: fix the selection per the instruction and change nothing else. Spelled \
     letters are exact: "capital T-O-D-O-I-S-T" means "Todoist". Letters may be spaced \
-    ("A J A Y" means "Ajay"); a misheard name right before the spelling defers to it: \
-    "R J A J A Y" means "Ajay".
+    ("C A S E Y" means "Casey"); a misheard name right before the spelling defers to it: \
+    "K C C A S E Y" means "Casey".
     - edit: transform the selection per the instruction (tone, format, translate…). Keep \
     its nouns and names: "deck" stays "deck".
     - insertBefore / insertAfter: only when the user asks to add text ("add", "append", \

@@ -59,7 +59,7 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(Prompts.dictationSystem.contains("quotes, brackets, line breaks and digits as given"))
     #expect(Prompts.dictationSystem.contains(#""john at example dot com" → "john@example.com""#))
     #expect(Prompts.dictationSystem.contains("defers to the spelling"))
-    #expect(Prompts.editSystem.contains(#""R J A J A Y" means "Ajay""#))
+    #expect(Prompts.editSystem.contains(#""K C C A S E Y" means "Casey""#))
     #expect(Prompts.editSystem.contains("a phrase that is just new text is replace"))  // #45 rule kept
 }
 
