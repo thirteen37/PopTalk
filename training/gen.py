@@ -428,9 +428,9 @@ def program_edits():
         sel = prose(items)
         if i % 4 == 3:
             add("e-numbered", i, r.choice(L.NUMBERED), sel, edit_ctx(r),
-                ej("edit", "\n".join(f"{k + 1}. {cap(x)}" for k, x in enumerate(items))))
+                ej("edit", "\n".join(f"{k + 1}. {x}" for k, x in enumerate(items))))
         else:
-            add("e-bullets", i, r.choice(L.BULLETS), sel, edit_ctx(r), ej("edit", "\n".join(f"- {cap(x)}" for x in items)))
+            add("e-bullets", i, r.choice(L.BULLETS), sel, edit_ctx(r), ej("edit", "\n".join(f"- {x}" for x in items)))
 
     for i in range(100):
         t, how = r.choice(L.CASE)
@@ -614,6 +614,14 @@ def write(path, items):
     print(f"wrote {len(items)} → {path}", file=sys.stderr)
 
 
+def list_keeps_casing(it):
+    """Bullet/numbered targets keep each item as dictated ("- milk", not "- Milk"), as the bench and users expect."""
+    if it["cat"] not in ("e-bullets", "e-numbered"):
+        return True
+    lines = json.loads(it["target"])["text"].split("\n")
+    return all(re.sub(r"^(- |\d+\. )", "", l) in it["selection"] for l in lines)
+
+
 def main(cmd):
     if cmd == "speak":
         write(OUT / "speak.jsonl", speak_items())
@@ -632,6 +640,8 @@ def main(cmd):
                     items.append({k: v for k, v in it.items() if k != "lang"} | {"target": t})
                     kept += 1
             print(f"teacher: {kept}/{len(replies)} kept", file=sys.stderr)
+        bad = [it["id"] for it in items if not list_keeps_casing(it)]
+        assert not bad, f"list targets must keep the dictated casing: {bad[:5]}"
         checker, clean, seen, rejected = Checker(), [], set(), {}
         for it in items:
             key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True))
