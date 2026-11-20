@@ -125,6 +125,7 @@ enum ScreenContext {
 
     /// The first accurate-OCR request in a process loads Vision's models (~14 s measured); pay that at launch.
     private static let ocrWarm = OSAllocatedUnfairLock(initialState: false)
+    static var isOCRWarm: Bool { ocrWarm.withLock { $0 } }
     private static let ocrPrewarmStarted = OSAllocatedUnfairLock(initialState: false)
 
     /// Runs once per process; later calls are no-ops.

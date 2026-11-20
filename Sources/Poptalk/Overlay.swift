@@ -40,10 +40,34 @@ final class Overlay {
     private var note: String?
     private func noted(_ s: String) -> String { note.map { "\(s)  ·  \($0)" } ?? s }
 
-    func showRecording(note: String? = nil) { self.note = note; show(noted("● Listening…"), for: nil) }
+    /// Inactive subsystems for the strip under recording and outcome text (#57); set by `AppDelegate`.
+    var statusStrip: () -> [StatusBadge] = { [] }
+
+    /// The last live transcript, kept on screen while working after release.
+    private var preview: String?
+
+    func showRecording(note: String? = nil) {
+        self.note = note
+        preview = nil
+        show(noted("● Listening…"), for: nil, strip: true)
+    }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible.
-    func showPreview(_ text: String) { show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil) }
-    func showWorking() { show("Working…", for: nil) }
+    func showPreview(_ text: String) {
+        preview = text
+        show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil, strip: true)
+    }
+    /// `heard`: the final transcript; without it, the last preview (once) stays up above a small "Working…".
+    func showWorking(heard: String? = nil) {
+        defer { preview = nil }
+        guard let text = heard ?? preview, !text.isEmpty else { return show("Working…", for: nil) }
+        let out = NSMutableAttributedString(string: PreviewText.tail(text, limit: 400), attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: Self.centered])
+        out.append(NSAttributedString(string: "\n◌ Working…", attributes: [
+            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: Self.centered]))
+        show(out, for: nil)
+    }
     func showError(_ msg: String) { show("⚠️ \(msg)", for: 3) }
     func showNotice(_ msg: String) { show(msg, for: 2) }
 
@@ -64,11 +88,28 @@ final class Overlay {
     /// How long an outcome (and its undo/accept keys) stays up: the "Undo window" setting, read per show.
     static var outcomeSeconds: TimeInterval { OutcomeKeys.undoWindow(.standard) }
 
-    func showOutcome(_ text: String, undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
-        var parts = [text]
+    /// `heard`/`result`: the transcript and the text applied, shown above the label (#56); `edit` puts the label
+    /// in front of the result as its action.
+    func showOutcome(_ text: String, heard: String? = nil, result: String? = nil, edit: Bool = false,
+                     undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
+        let lines = OutcomeText.lines(heard: heard, result: result, label: text, edit: edit)
+        var parts = lines.label.isEmpty ? [] : [lines.label]
         if undo != nil { parts.append("esc to undo") }
         if let v = vocabularyOffer { parts.append("⏎ add “\(v.text)” to vocabulary") }
-        show(parts.joined(separator: "  ·  "), for: Self.outcomeSeconds)
+        let out = NSMutableAttributedString()
+        func line(_ s: String, size: CGFloat, weight: NSFont.Weight, color: NSColor) {
+            if out.length > 0 { out.append(NSAttributedString(string: "\n")) }
+            out.append(NSAttributedString(string: s, attributes: [
+                .font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color, .paragraphStyle: Self.centered]))
+        }
+        if let h = lines.heard { line(h, size: 11, weight: .regular, color: .secondaryLabelColor) }
+        if let r = lines.result { line(r, size: 13, weight: .medium, color: .labelColor) }
+        if !parts.isEmpty {
+            let footer = lines.result == nil ? (CGFloat(13), NSFont.Weight.medium, NSColor.labelColor) : (11, .regular, .secondaryLabelColor)
+            line(parts.joined(separator: "  ·  "), size: footer.0, weight: footer.1, color: footer.2)
+        }
+        appendStrip(to: out)
+        show(out, for: Self.outcomeSeconds)
         keys = KeyCatcher { [weak self] code, flags in
             switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
             // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
@@ -86,13 +127,43 @@ final class Overlay {
     func hide() {
         hideWork?.cancel()
         keys = nil
+        preview = nil
         panel.orderOut(nil)
     }
 
-    private func show(_ text: String, for seconds: TimeInterval?) {
+    private static let centered = { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }()
+
+    private func show(_ text: String, for seconds: TimeInterval?, strip: Bool = false) {
+        let out = NSMutableAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: Self.centered])
+        if strip { appendStrip(to: out) }
+        show(out, for: seconds)
+    }
+
+    /// A last line of ~10 pt muted SF Symbols, each with an accessibility label. No tooltips: the panel
+    /// ignores the mouse.
+    private func appendStrip(to out: NSMutableAttributedString) {
+        let badges = statusStrip()
+        guard !badges.isEmpty else { return }
+        let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
+            .applying(.init(hierarchicalColor: .tertiaryLabelColor))
+        out.append(NSAttributedString(string: "\n"))
+        for b in badges {
+            guard let img = NSImage(systemSymbolName: b.symbol, accessibilityDescription: b.help)?
+                    .withSymbolConfiguration(config) else { continue }
+            let a = NSTextAttachment()
+            a.image = img
+            out.append(NSAttributedString(attachment: a))
+            out.append(NSAttributedString(string: "  "))
+        }
+        out.addAttribute(.paragraphStyle, value: Self.centered, range: NSRange(location: 0, length: out.length))
+    }
+
+    private func show(_ text: NSAttributedString, for seconds: TimeInterval?) {
         hideWork?.cancel()
         keys = nil
-        label.stringValue = text
+        label.attributedStringValue = text
         let fit = label.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: 600, height: CGFloat.greatestFiniteMagnitude))
         let width = min(max(fit.width + 40, 160), 640)
         let height = max(44, ceil(fit.height) + 24)

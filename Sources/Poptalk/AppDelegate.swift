@@ -27,6 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         updateIcon()
         status.onChange = { [weak self] in self?.updateIcon() }
+        overlay.statusStrip = { [unowned self] in
+            let sel = Settings.selection
+            return StatusStrip.badges(status.value, llm: sel.provider == "mlx" ? modelStatus[sel.cleanupModel] ?? .loading : .ready,
+                                      sources: ContextSources(.standard), ocrWarm: ScreenContext.isOCRWarm, history: history.isEnabled)
+        }
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
@@ -248,6 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 overlay.showError("Transcription failed"); return
             }
             Timing.mark("release: transcribed", since: t0)
+            overlay.showWorking(heard: heard.text)
             await process(Request(transcript: heard.text, selection: selection, context: snapshot),
                           raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app, since: t0, system: system)
         }
@@ -475,7 +481,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.lastInsert = nil
             self?.history.append(HistoryEvent(.undo, id: id))
         } : nil
-        overlay.showOutcome(shown, undo: undo, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        overlay.showOutcome(shown, heard: raw.request.transcript, result: text,
+                            edit: { if case .insert = result.outcome { false } else { true } }(),
+                            undo: undo, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
             self?.resolveOffer(id, .vocabularyAccepted)
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
