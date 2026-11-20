@@ -116,7 +116,7 @@ func replaceEditsStillReachModel(utterance: String) async {
     let calls = Calls()
     let reply = #"{"action":"correct","text":"Todoist","vocabulary":{"text":"Todoist","aliases":["todo list"]},"remember":false}"#
     let r = await pipeline(reply: reply, store: store, calls: calls)
-        .run(req("This is Todoist, capital T-O-D-O-I-S-T", selection: "todo list"))
+        .run(req("This is Todoist", selection: "todo list"))  // a spelled form takes the #50 fast path
     #expect(r.outcome == .replaceSelection("Todoist", label: "Corrected"))
     #expect(r.vocabularyOffer == VocabTerm(text: "Todoist", aliases: ["todo list"]))
     #expect(r.remembered == nil)

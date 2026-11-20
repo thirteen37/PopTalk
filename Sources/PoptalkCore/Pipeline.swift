@@ -102,6 +102,11 @@ public struct Pipeline: Sendable {
             let text = ns.substring(from: m.range.length)
             return PipelineResult(outcome: Self.isBlank(text) ? .nothing : .replaceSelection(text, label: "Replaced"))
         }
+        // #50: a trailing spelling ("… A J A Y") is a correction to that word; before #53, which would paste the letters.
+        if let word = Self.spelledWord(transcript, selection: selection) {
+            let offer = word.caseInsensitiveCompare(selection) == .orderedSame ? nil : VocabTerm(text: word, aliases: [selection.lowercased()])
+            return PipelineResult(outcome: .replaceSelection(word, label: "Corrected"), vocabularyOffer: offer)
+        }
         // #53: "replace this with X" is a whole replacement; the model tends to paste the utterance.
         if let m = Self.replaceWith.firstMatch(in: transcript, range: NSRange(location: 0, length: ns.length)) {
             var text = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
