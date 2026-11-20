@@ -283,23 +283,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showSettings() {
         // Lands on the problem when there is one.
-        openSettings(at: status.value.needsAttention ? (status.value.missing.isEmpty ? .models : .permissions) : status.tab)
+        openSettings(at: status.value.needsAttention ? (status.value.missing.isEmpty ? .models : .permissions) : nil)
     }
 
-    private func openSettings(at tab: SettingsTab) {
-        status.tab = tab
+    /// Opens Settings at `tab`, or at the last-viewed tab when nil.
+    private func openSettings(at tab: SettingsTab?) {
         if settingsWindow == nil {
-            let view = SettingsView(status: status, store: store) { [weak self] in
-                self?.loadTranscriber()  // each only retries what failed
-                self?.prepareModels()
+            // Toolbar-style tabs, as in System Settings-era apps; the window resizes to each tab's content.
+            let tabs = NSTabViewController()
+            tabs.tabStyle = .toolbar
+            for t in SettingsTab.allCases {
+                let view = SettingsView(tab: t, status: status, store: store) { [weak self] in
+                    self?.loadTranscriber()  // each only retries what failed
+                    self?.prepareModels()
+                }
+                let host = NSHostingController(rootView: view)
+                host.sizingOptions = .preferredContentSize  // window tracks the content's fitting size
+                host.title = t.title  // the tab controller makes it the window title
+                let item = NSTabViewItem(viewController: host)
+                item.label = t.title
+                item.image = NSImage(systemSymbolName: t.symbol, accessibilityDescription: t.title)
+                tabs.addTabViewItem(item)
             }
-            let host = NSHostingController(rootView: view)
-            host.sizingOptions = .preferredContentSize  // window tracks the content's fitting size
-            let w = NSWindow(contentViewController: host)
+            let w = NSWindow(contentViewController: tabs)
             w.styleMask.remove(.resizable)
+            w.toolbarStyle = .preference
             w.title = "Poptalk Settings"
             w.isReleasedWhenClosed = false
             settingsWindow = w
+        }
+        if let tab, let tabs = settingsWindow?.contentViewController as? NSTabViewController {
+            tabs.selectedTabViewItemIndex = SettingsTab.allCases.firstIndex(of: tab)!
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)

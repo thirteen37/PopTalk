@@ -13,7 +13,14 @@ public enum Permission: String, CaseIterable, Sendable {
     }
 }
 
-public enum SettingsTab: String, Sendable { case general, models, permissions, vocabulary }
+public enum SettingsTab: String, CaseIterable, Sendable { case general, models, permissions, vocabulary }
+
+/// "Poptalk 0.1 (412 · 9b4cc05)" from an Info.plist dictionary; install.zsh stamps the build and commit keys.
+public func versionLabel(_ info: [String: Any]?) -> String {
+    guard let version = info?["CFBundleShortVersionString"] as? String else { return "Poptalk (development build)" }
+    let build = ["CFBundleVersion", "PoptalkCommit"].compactMap { info?[$0] as? String }
+    return build.isEmpty ? "Poptalk \(version)" : "Poptalk \(version) (\(build.joined(separator: " · ")))"
+}
 
 /// What the menu summary and Settings show: model load states and permissions.
 public struct AppStatus: Equatable, Sendable {

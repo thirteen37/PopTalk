@@ -20,7 +20,6 @@ enum Settings {
 @Observable @MainActor
 final class StatusModel {
     var value = AppStatus() { didSet { if value != oldValue { onChange() } } }
-    var tab = SettingsTab.general
     @ObservationIgnored var onChange: () -> Void = {}
 
     /// macOS sends no notification when a permission is granted: callers poll.
@@ -33,9 +32,23 @@ final class StatusModel {
     }
 }
 
+extension SettingsTab {
+    var title: String { rawValue.capitalized }
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .models: "cpu"
+        case .permissions: "lock.shield"
+        case .vocabulary: "character.book.closed"
+        }
+    }
+}
+
+/// One Settings tab; `AppDelegate` hosts one per toolbar tab.
 struct SettingsView: View {
     static let width: CGFloat = 500
-    @Bindable var status: StatusModel
+    let tab: SettingsTab
+    let status: StatusModel
     let store: VocabularyStore
     /// Retries whatever failed to load (speech model and/or LLM models).
     let retry: () -> Void
@@ -61,13 +74,15 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        TabView(selection: $status.tab) {
-            general.tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
-            models.tabItem { Label("Models", systemImage: "cpu") }.tag(SettingsTab.models)
-            permissions.tabItem { Label("Permissions", systemImage: "lock.shield") }.tag(SettingsTab.permissions)
-            vocabulary.tabItem { Label("Vocabulary", systemImage: "character.book.closed") }.tag(SettingsTab.vocabulary)
+        Group {
+            switch tab {
+            case .general: general
+            case .models: models
+            case .permissions: permissions
+            case .vocabulary: vocabulary
+            }
         }
-        .task {  // runs while the window is open
+        .task {  // runs while this tab is showing
             while !Task.isCancelled {
                 status.refreshPermissions()
                 let t = store.terms  // the overlay can save terms too
@@ -88,10 +103,16 @@ struct SettingsView: View {
                     ForEach(devices, id: \.uniqueID) { Text($0.localizedName).tag($0.uniqueID) }
                 }
             }
-            Toggle("Launch at login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, on in
-                    try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-                }
+            Section {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, on in
+                        try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                    }
+            } footer: {
+                Text(versionLabel(Bundle.main.infoDictionary))
+                    .font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
+                    .frame(maxWidth: .infinity).padding(.top, 8)
+            }
         }
         .formStyle(.grouped)
         .fitted()

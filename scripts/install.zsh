@@ -35,7 +35,11 @@ mkdir -p $app/Contents/Resources
 cp -R .build/release/mlx-swift_Cmlx.bundle $app/Contents/Resources/
 # Icons are pre-rendered and committed (regenerate: assets/icon/render.py build).
 cp assets/icon/AppIcon.icns assets/icon/MenuBar*.png $app/Contents/Resources/
-cat > $app/Contents/Info.plist <<'PLIST'
+# Build number: commit count (monotonic, as macOS expects); commit: short hash, -dirty with uncommitted changes.
+build=$(git rev-list --count HEAD)
+commit=$(git rev-parse --short HEAD)
+[[ -n $(git status --porcelain) ]] && commit+=-dirty
+cat > $app/Contents/Info.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -46,7 +50,8 @@ cat > $app/Contents/Info.plist <<'PLIST'
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleVersion</key><string>$build</string>
+    <key>PoptalkCommit</key><string>$commit</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSMicrophoneUsageDescription</key><string>Poptalk listens while you hold the hotkey to transcribe your speech.</string>

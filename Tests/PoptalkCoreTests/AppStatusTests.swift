@@ -1,6 +1,13 @@
 import Testing
 @testable import PoptalkCore
 
+@Test func versionLabelFromInfoPlist() {
+    #expect(versionLabel(["CFBundleShortVersionString": "0.1", "CFBundleVersion": "412", "PoptalkCommit": "9b4cc05-dirty"])
+        == "Poptalk 0.1 (412 · 9b4cc05-dirty)")
+    #expect(versionLabel(["CFBundleShortVersionString": "0.1"]) == "Poptalk 0.1")
+    #expect(versionLabel(nil) == "Poptalk (development build)")
+}
+
 private func ok() -> AppStatus {
     var s = AppStatus()
     s.speech = .ready
