@@ -88,8 +88,31 @@ private func lines(_ store: HistoryStore) throws -> [Data] {
     let calls = ModelCallRecorder()
     let complete = calls.wrap { _, _, _, _ in "reply" }
     _ = try await complete("m", [ChatMessage(role: "user", content: "hi")], false, 1)
-    #expect(calls.call == ModelCallRecorder.Call(model: "m", messages: [ChatMessage(role: "user", content: "hi")], reply: "reply"))
+    #expect(calls.call == ModelCallRecorder.Call(model: "m", messages: [ChatMessage(role: "user", content: "hi")], reply: "reply", kind: "dictation"))
     let failing = calls.wrap { _, _, _, _ in throw Pipeline.ModelLoading() }
     _ = try? await failing("e", [], true, 1)
-    #expect(calls.call == ModelCallRecorder.Call(model: "e", messages: [], reply: nil))
+    #expect(calls.call == ModelCallRecorder.Call(model: "e", messages: [], reply: nil, kind: "edit"))
+}
+
+@Test func modelCallRecorderTakesPromptStatsFromTheWrappedCallAndKindFromJSON() async throws {
+    let calls = ModelCallRecorder()
+    let complete = calls.wrap { _, _, _, _ in
+        // From a child task, as MLXProvider reports from inside its task group.
+        await Task { ModelCallRecorder.current?.prompt(tokens: 120, shared: 100) }.value
+        return "ok"
+    }
+    _ = try await complete("m", [], false, 1)
+    #expect(calls.call?.kind == "dictation" && calls.call?.promptTokens == 120 && calls.call?.sharedPrefix == 100)
+    _ = try await calls.wrap { _, _, _, _ in "ok" }("m", [], true, 1)
+    #expect(calls.call?.kind == "edit" && calls.call?.promptTokens == nil && calls.call?.sharedPrefix == nil)
+    #expect(ModelCallRecorder.current == nil)  // outside a wrapped call MLXProvider's report is a no-op
+}
+
+@Test func requestPromptStatsAreOptionalAndRoundTrip() throws {
+    var r = sample()
+    (r.kind, r.promptTokens, r.sharedPrefix) = ("dictation", 120, 100)
+    #expect(try HistoryStore.decoder.decode(HistoryRequest.self, from: HistoryStore.encoder.encode(r)) == r)
+    // A line written before these fields existed still decodes.
+    let old = try HistoryStore.decoder.decode(HistoryRequest.self, from: HistoryStore.encoder.encode(sample()))
+    #expect(old.kind == nil && old.promptTokens == nil && old.sharedPrefix == nil)
 }

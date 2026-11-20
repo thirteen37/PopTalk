@@ -143,6 +143,7 @@ public enum MLXProvider {
                 let lm = try await container.prepare(input: input)
                 let tokens = lm.text.tokens.asArray(Int.self)
                 let shared = await models.shared(model, tokens)
+                ModelCallRecorder.current?.prompt(tokens: tokens.count, shared: shared)
                 timing.info("llm \((model as NSString).lastPathComponent, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
                 var out = ""
                 // Leaving the loop on cancellation terminates the stream, which stops generation.
