@@ -54,6 +54,15 @@ private func snap(_ text: String, cursor: Int? = nil) -> ScreenSnapshot {
     #expect(system.contains(#""two PM, sorry, four PM" → "four PM""#))
 }
 
+@Test func promptsCoverV3Rules() {
+    // #60: keep pre-pass marks and digits, spoken lists, emails, spelled letters (#50).
+    #expect(Prompts.dictationSystem.contains("quotes, brackets, line breaks and digits as given"))
+    #expect(Prompts.dictationSystem.contains(#""john at example dot com" → "john@example.com""#))
+    #expect(Prompts.dictationSystem.contains("defers to the spelling"))
+    #expect(Prompts.editSystem.contains(#""R J A J A Y" means "Ajay""#))
+    #expect(Prompts.editSystem.contains("a phrase that is just new text is replace"))  // #45 rule kept
+}
+
 @Test func dictationPromptContainsTranscriptAndContext() {
     let messages = Prompts.dictation(transcript: "on to-do list", context: snap("Todoist"), vocabulary: [])
     #expect(messages.last!.content.contains("on to-do list"))

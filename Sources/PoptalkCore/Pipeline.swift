@@ -75,7 +75,7 @@ public struct Pipeline: Sendable {
         guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
 
         guard let selection = r.selection, !selection.isEmpty else {
-            let transcript = Self.spokenNumbers(Self.spokenFormatting(transcript))
+            let transcript = Self.dictationPrepass(transcript)
             let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             let space = Self.leadingSpace(r.context)
             // Base covers cold starts; 20 ms per word covers long dictations.
@@ -175,6 +175,10 @@ extension Pipeline {
 
     private static let hesitation = try! NSRegularExpression(
         pattern: #"(?<![\w-])(?:u+m+|u+h+|e+r+m*|h+m+)(?![\w-])[,.!?]?"#, options: .caseInsensitive)
+
+    /// What the cleanup model sees of a dictation after `stripHesitations`: spoken formatting (#48), then
+    /// numbers (#59). PoptalkDatagen render uses it too, so training transcripts match production.
+    public static func dictationPrepass(_ s: String) -> String { spokenNumbers(spokenFormatting(s)) }
 
     /// The utterance explicitly asks to add text rather than replace the selection.
     /// English-only, like the speech model (Parakeet v2 transcribes English only): revisit the

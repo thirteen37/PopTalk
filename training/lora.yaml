@@ -3,7 +3,7 @@
 model: mlx-community/gemma-4-e2b-it-4bit
 train: true
 data: training/out/data
-adapter_path: training/out/adapters-v2   # v1 kept in training/out/adapters
+adapter_path: training/out/adapters-v3   # v2 ships as adapters/gemma-4-e2b-poptalk-v2 (#60)
 fine_tune_type: lora
 mask_prompt: true          # loss on the assistant turn only
 num_layers: 16             # last 16 of 35 layers: halves backward cost vs all layers

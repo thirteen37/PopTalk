@@ -363,7 +363,7 @@ FILLER = [
     "The kitchen fridge will be emptied on Friday afternoon.",
     "Support hours are changing for the winter.",
     "The analytics export now includes time zones.",
-    "We are still waiting on the final quote from the printer.",
+    "We are still waiting on the final numbers from the venue.",  # was "…final quote from the printer", now a bench case (d-fmt)
     "The internal wiki search is much faster since the upgrade.",
     "Next quarter we want fewer meetings and longer focus blocks.",
     "The visitor badges are in the top drawer at reception.",
@@ -408,3 +408,127 @@ CONTEXT_FIX = {"person": ["fix the name", "fix her name", "fix his name", "spell
                            "spell it like on screen", "use the right product name"],
                "project": ["fix the project name", "correct the codename", "spell the project name right"]}
 REMEMBER = [", and remember this", ", remember that", ", please remember it", ", save that spelling"]
+
+# ---------- v3 (#60): new families only; the lists above stay as they were so old streams don't shift ----------
+
+# Long screens where multi-sentence dictations got condensed (#47): chat threads, terminals, email.
+CHAT_LINES = [
+    "can someone look at the failing nightly job?", "pushed a small fix, should be green in ten minutes",
+    "is the staging database still read only?", "thanks, that worked for me", "I'll be out tomorrow afternoon",
+    "the vendor call moved to Thursday", "who has the spare dongle for the projector?", "lgtm, merging after lunch",
+    "heads up, the office wifi is flaky today", "anyone else getting logged out every hour?",
+    "the design review notes are in the doc", "can we skip standup today?", "I'm rerunning the export now",
+    "that sounds like a cache issue to me", "ok, I'll open a ticket", "the build agent ran out of disk again",
+]
+TERMINAL_LINES = [
+    "$ git status", "On branch main", "Your branch is up to date with 'origin/main'.", "nothing to commit, working tree clean",
+    "$ make test", "ok   ./internal/store   0.412s", "FAIL ./internal/api   1.093s", "--- FAIL: TestRetryBackoff (0.21s)",
+    "$ docker compose up -d", "Container cache-1  Started", "Container worker-1  Restarting", "$ tail -f logs/worker.log",
+    "WARN connection reset by peer, retrying", "ERROR job 4821 exceeded its deadline", "$ npm run build",
+    "Compiled with 3 warnings.", "$ df -h /", "/dev/disk3s1   460Gi   441Gi    19Gi    96%    /",
+]
+MAIL_LINES = [
+    "Hi all,", "Thanks for joining the planning session yesterday.", "Attached are the slides and the rough timeline.",
+    "Please send any corrections by the end of the week.", "Best,", "The venue can host up to forty people.",
+    "Nobody has signed up for the catering order yet.", "Let me know if anything in the timeline looks off.",
+    "On Monday, the facilities team wrote:", "> The east entrance will be closed for repairs.", "Kind regards,",
+]
+MULTI_STATEMENTS = [
+    "The deploy finished but the health check is still red.", "I reran the migration on a copy of the database.",
+    "The flaky test only fails when the cache is cold.", "I bumped the timeout to thirty seconds for now.",
+    "The logs show the worker restarting every few minutes.", "Half of the requests are hitting the old endpoint.",
+    "I rolled back the config change from this morning.", "The disk on the build machine is almost full.",
+    "I opened a ticket with the vendor about the outage.", "The new branch builds cleanly on my machine.",
+    "Nothing changed in the lockfile since Friday.", "The script works locally but not in the container.",
+    "Thanks for the detailed notes from yesterday.", "I moved the planning doc into the shared folder.",
+    "The venue confirmed the booking for the second week.", "Most of the team voted for the earlier slot.",
+    "The caterer needs the final headcount soon.", "I'm going to be about fifteen minutes late.",
+    "The demo went fine apart from the login screen.", "We lost about an hour to the network issue.",
+]
+MULTI_REQUESTS = [
+    "Can you rerun the pipeline when you get a minute?", "Could you send me the error message you saw?",
+    "Can someone with admin access restart the runner?", "Would you mind checking the worker logs?",
+    "Can you tell me which version you're on?", "Could you paste the full stack trace here?",
+    "Do you know who owns the billing service?", "Should I open a separate issue for this?",
+    "Is anyone else seeing the same timeout?", "Can we pair on this after the standup?",
+    "Could you approve the pull request when it's green?", "Who should I ask about the expired certificate?",
+    "Could you confirm the headcount by Thursday?", "Let me know if the new time works for you.",
+    "Can you share the slides with the wider group?", "What do you think we should do about the delay?",
+]
+
+# Spans the pre-pass (Pipeline.spokenFormatting) turns into marks (#48), and templates that hold them.
+QUOTED = ["out of office", "ship it", "works on my machine", "low priority", "needs review", "coming soon",
+          "do not merge", "sounds good", "temporarily unavailable", "on hold", "ready for QA", "won't fix"]
+QUOTE_T = ["The ticket title says “{q}” but the bug is somewhere else.", "She replied with just “{q}” and logged off.",
+           "The button label should read “{q}” instead.", "Set the status to “{q}” until we hear back.",
+           "The banner on the homepage still says “{q}” for some reason.", "His whole review was “{q}” and a thumbs up."]
+PAREN = ["still pending", "not final", "approved last week", "roughly", "subject to change", "first draft",
+         "including taxes", "see the appendix", "if the weather holds", "two at most"]
+PAREN_T = ["The launch date ({p}) depends on the security review.", "Our budget ({p}) covers two more contractors.",
+           "The offsite ({p}) is at the lake house.", "The new pricing ({p}) goes live next month.",
+           "The headcount ({p}) is twelve people.", "Bring a laptop and a charger ({p}) to the session."]
+GREETINGS = ["Hi {P}.", "Hello everyone.", "Morning {P}.", "Hey team.", "Dear {P},"]
+SIGNOFFS = ["Thanks,", "Cheers,", "Best,", "See you soon,"]
+
+# Spoken lists while dictating (#48).
+LIST_LEADS = ["shopping list", "packing list", "weekend jobs", "agenda for tomorrow", "before the launch",
+              "errands", "steps for the release", "for the trip", "chores", "for the party"]
+ORDINALS = ["first", "second", "third", "fourth", "fifth"]
+
+# Emails, URLs and handles (#48).
+TLDS = ["com", "io", "org", "dev", "app", "co"]
+URL_PATHS = ["pricing", "docs", "setup", "careers", "status", "signup", "blog", "changelog", "support", "events"]
+EMAIL_T = ["Send the contract to {e}.", "My work email is {e}.", "You can reach the vendor at {e}.",
+           "Please cc {e} on the thread.", "The invoice came from {e}.", "Forward the receipts to {e}."]
+URL_T = ["The docs are at {u}.", "Sign up at {u} before Friday.", "I put the notes on {u}.",
+         "Check {u} for the new pricing.", "The status page is {u}.", "Bookmark {u} for later."]
+HANDLE_T = ["Ping {h} on the thread.", "Follow {h} for release updates.", "Tag {h} in the post.",
+            "The account to mention is {h}.", "Send a DM to {h} about the meetup."]
+
+# Spelling while dictating and spelled corrections (#48, #50). Names whose spoken form comes out as
+# letters: (written, sound-alike letters, misheard selections). "Ajay" (the #50 report) is left for bench cases.
+LETTER_NAMES = [("Casey", "K C", ["kc", "k c"]), ("Evie", "E V", ["eevee", "e v"]), ("Ellie", "L E", ["elly", "l e"]),
+                ("Artie", "R T", ["arty", "r t"]), ("Emmy", "M E", ["emmie", "m e"]), ("Katie", "K T", ["kt", "katy"]),
+                ("Jaycee", "J C", ["jc", "j c"]), ("Essie", "S E", ["essy", "s e"]), ("Eddie", "E D", ["eddy", "e d"]),
+                ("Ivy", "I V", ["i v", "ivey"]), ("Effie", "F E", ["effy", "f e"]), ("Deejay", "D J", ["dj", "d j"]),
+                ("Elsie", "L C", ["elsy", "l c"]), ("Bea", "B", ["b", "bee"]), ("Kay", "K", ["k", "kaye"])]
+SPELL_DICT_T = ["Please send the file to {x}.", "I'm meeting {x} for coffee on {D}.", "Add {x} to the guest list.",
+                "The new contractor is called {x}.", "Can you book a room for {x} and me?", "Say hi to {x} from me.",
+                "The keynote is by {x} this year."]
+SPELL_EDIT_T = ["{x}", "it's {x}", "no, {x}", "that's {x}", "should be {x}", "the name is {x}", "wrong, it's {x}"]
+
+# Context name fixes whose right form joins words (#45 regression: "pg vector" → "pgvector" came out "vector").
+JOIN_PREFIX = ["pg", "kv", "js", "tf", "np", "ts", "ml", "db", "gh", "rx", "mx", "zk"]
+JOIN_SUFFIX = ["bouncer", "store", "lint", "bench", "search", "graph", "queue", "proxy", "watch", "cron", "sync",
+               "embed", "admin", "dump", "shard"]
+JOIN_FIX = ["it's one word, like on screen", "spell it the way the screen does", "wrong name, check the screen",
+            "fix this tool name", "that's the library on screen", "use the name from the screen", "should match the screen",
+            "the package name is wrong", "write it as one word"]
+
+# Bare phrases over a selection: replace, not insert (#44), and misheard "Replaced this with X" (#53).
+SHORT_TERMS = ["grace period", "retry budget", "cooldown window", "rate limit", "warm-up phase", "sync interval",
+               "fallback model", "draft mode", "quiet hours", "review queue", "launch window", "error budget",
+               "batch size", "cache lifetime", "idle timeout", "release train", "feature flag", "soft deadline",
+               "hard cap", "trial period", "focus mode", "follow-up date", "approval step", "beta group",
+               "Afternoon tea", "Sunday brunch", "Kickoff call", "Field notes", "Parking lot", "Open floor"]
+REPLACE_VERBS = ["Replaced", "Replace", "Replacing", "Swap", "Swapped", "Replaced", "Replaced"]
+REPLACE_OBJ = ["this", "that", "it", "the selection", ""]
+
+# Spoken numbers the ITN pass (Pipeline.spokenNumbers, #59) turns into digits. Targets are written in words
+# here; PoptalkDatagen render runs the same pass on dictation targets, so both sides carry the same digits.
+COMPOUND = ["twenty five", "thirty two", "forty eight", "sixty one", "ninety nine", "seventy four", "eighteen",
+            "fifty six", "eighty three", "one hundred and twenty", "two hundred", "fifteen hundred", "three thousand",
+            "two hundred and forty", "thirty", "forty", "sixty", "eleven", "thirteen", "nineteen"]
+SMALL = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+ORD_COMPOUND = ["twenty first", "twenty third", "twenty fifth", "twenty eighth", "thirty first", "twenty fourth"]
+CLOCK = ["three thirty", "four fifteen", "eleven oh five", "nine", "ten forty five", "two", "seven twenty", "six"]
+NUM_T = ["{CN} people signed up for the workshop.", "The fix is in issue {U}.", "Let's ship version {U} on {D}.",
+         "Step {U} is the slow one.", "Page {U} has the chart you asked about.", "Sign-ups are up {CN} percent this week.",
+         "The license costs {CN} dollars a seat.", "The call moved to {CL} {AP}.", "The deadline is the {ORD} of {M}.",
+         "We need {CN} more chairs for the hall.", "The build takes {CN} minutes now.", "The rating went up to {U} point {U2}.",
+         "The lease ends in {M} two thousand twenty seven.", "Two of us can cover it, maybe three.",
+         "One or two reviewers is enough for this.", "We waited {CN} minutes for the shuttle.",
+         "Room {U} is free after lunch.", "Option {U} is the cheapest one.", "Our team grew to {CN} people this year.",
+         "The order is {CN} dollars with shipping.", "About {CN} percent of the tickets are duplicates.",
+         "Can you move the review to {CL} {AP} on {D}?", "I read {SM} chapters on the train.",
+         "The package weighs {U} point {U2} kilos."]

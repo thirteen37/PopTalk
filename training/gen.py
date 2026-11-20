@@ -12,10 +12,12 @@
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
 import difflib
+import html
 import json
 import random
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -260,7 +262,7 @@ def text_dictation():
         trap = (w.capitalize() + r.choice(["ly", "ify", "Stack", "Labs", " Works"]), [], "product")
         out.append({"id": f"tx-echo-{i}", "cat": "d-no-echo", "transcript": lower_transcript(clean),
                     "context": context(r, [trap], long=r.random() < 0.2), "target": clean})
-    for i in range(400):  # several sentences, usually ending in a question or request: keep every one (#47)
+    for i in range(200):  # several sentences, usually ending in a question or request: keep every one (#47)
         parts = r.sample(L.PLAIN, r.randint(1, 2)) + [r.choice(L.ASKS)]
         if r.random() < 0.25:
             r.shuffle(parts)
@@ -472,6 +474,192 @@ def teach_items():
     return out
 
 
+# ---------- v3 families (#60) ----------
+# Dictation transcripts below are what the user says. PoptalkDatagen render runs Pipeline.dictationPrepass on them
+# (spoken quotes/brackets/line breaks → marks, numbers → digits) and Pipeline.spokenNumbers on dictation targets;
+# `split` then drops any row whose target doesn't carry the same marks and digits as the transcript the model sees.
+
+def utf16(s):
+    return len(s.encode("utf-16-le")) // 2
+
+
+def long_screen(r):
+    """A long chat, terminal or email screen with the cursor in the reply field (#47)."""
+    kind = r.choice(["slack", "messages", "terminal", "mail"])
+    pick = lambda pool, lo, hi: [r.choice(pool) for _ in range(r.randint(lo, hi))]
+    if kind in ("slack", "messages"):
+        p = person(r)[0]
+        who = (lambda: person(r)[0]) if kind == "slack" else (lambda: r.choice([p, "Me"]))
+        thread = "\n".join(f"{who()}: {l}" for l in pick(L.CHAT_LINES, 15, 40))
+        return {"appName": "Slack" if kind == "slack" else "Messages", "windowTitle": r.choice(L.CHANNELS) if kind == "slack" else p,
+                "text": "", "cursorOffset": 0, "ocrText": thread}
+    if kind == "terminal":
+        text = "\n".join(pick(L.TERMINAL_LINES, 25, 70)) + "\n$ "
+        return {"appName": "Terminal", "windowTitle": "zsh — 120×40", "text": text, "cursorOffset": utf16(text)}
+    return {"appName": "Mail", "windowTitle": f"Re: {r.choice(L.TITLES)}", "cursorOffset": 0,
+            "text": "\n\n" + "\n".join(pick(L.MAIL_LINES + L.FILLER, 20, 50))}
+
+
+def letters(name, r):
+    """A name spelled out as Parakeet writes it: spaced, hyphenated or comma-separated capitals."""
+    return r.choice([" ", " ", "-", ", "]).join(name.upper())
+
+
+def spoken_address(s):
+    return re.sub(r"\s+", " ", s.replace("@", " at ").replace(".", " dot ").replace("/", " slash ")
+                  .replace("_", " underscore ").replace("-", " dash ")).strip()
+
+
+def v3_dictation():
+    out = []
+    add = lambda cat, i, t, ctx, target: out.append({"id": f"{cat}-{i}", "cat": cat, "transcript": t, "context": ctx, "target": target})
+
+    r = R("v3-multi")  # long chat/terminal/email screens: keep every sentence (#47)
+    for i in range(150):
+        parts = r.sample(L.MULTI_STATEMENTS, r.randint(1, 3)) + [r.choice(L.MULTI_REQUESTS + L.ASKS)]
+        if r.random() < 0.2:
+            r.shuffle(parts)
+        spoken = " ".join(add_fillers(r, p, 1) if r.random() < 0.3 else p for p in parts)
+        add("d-multi-screen", i, lower_transcript(spoken) if r.random() < 0.7 else spoken, long_screen(r), " ".join(parts))
+
+    r = R("v3-marks")  # quotes, brackets and line breaks from the pre-pass stay (#48)
+    for i in range(150):
+        if i % 2 == 0:
+            if r.random() < 0.5:
+                q = r.choice(L.QUOTED)
+                target = r.choice(L.QUOTE_T).format(q=q)
+                spoken = target.replace(f"“{q}”", r.choice(["quote {q} unquote", "quote, {q}, end quote", "quote {q} end quote"]).format(q=q))
+            else:
+                p = r.choice(L.PAREN)
+                target = r.choice(L.PAREN_T).format(p=p)
+                spoken = target.replace(f"({p})", r.choice(["open paren {p} close paren", "open parenthesis {p} close parenthesis"]).format(p=p))
+            x = r.random()
+            t = target[0].lower() + target[1:-1] if x < 0.3 else lower_transcript(spoken) if x < 0.65 else spoken
+        else:
+            body = r.sample(L.MULTI_STATEMENTS + L.PLAIN, 2)
+            shape = r.randrange(3)
+            if shape == 0:
+                segs, breaks = [fill(r, r.choice(L.GREETINGS))[0], " ".join(body)], ["line"]
+            elif shape == 1:
+                segs, breaks = body, ["paragraph"]
+            else:
+                segs, breaks = [body[0], r.choice(L.SIGNOFFS), person(r)[0]], ["paragraph", "line"]
+            target, spoken = segs[0], segs[0]
+            for seg, b in zip(segs[1:], breaks):
+                target += ("\n" if b == "line" else "\n\n") + seg
+                spoken += f" {r.choice(['new', 'New'])} {b}{r.choice(['.', ','])} {seg}"
+            x = r.random()
+            # Typed line breaks survive the pre-pass, paragraph breaks don't (stripHesitations collapses "\n\n"): say those.
+            t = target if x < 0.3 and "\n\n" not in target else spoken.lower() if x < 0.55 else spoken
+        add("d-keep-marks", i, t, unrelated_context(r), target)
+
+    r = R("v3-list")  # "bullet … bullet …" / "first … second …" while dictating (#48)
+    for i in range(120):
+        lst = r.choice(L.LISTS)
+        items = lst[: r.randint(3, len(lst))] if len(lst) > 3 else lst[:]
+        lead = r.choice(L.LIST_LEADS) if r.random() < 0.6 else None
+        cues = L.ORDINALS[: len(items)] if i % 3 == 2 else [r.choice(["bullet", "bullet point"])] * len(items)
+        lines = [f"{k + 1}. {x}" if i % 3 == 2 else f"- {x}" for k, x in enumerate(items)]
+        if r.random() < 0.5:
+            t = " ".join(f"{c} {x}" for c, x in zip(cues, items))
+            t = f"{lead} {t}" if lead else t
+        else:
+            t = " ".join(f"{cap(c)} {x}." for c, x in zip(cues, items))
+            t = f"{cap(lead)}: {t}" if lead else t
+        add("d-list", i, t, unrelated_context(r), "\n".join(([cap(lead) + ":"] if lead else []) + lines))
+
+    r = R("v3-email")  # emails, URLs and handles (#48)
+    firsts = [p.lower() for p, _ in L.PEOPLE if re.fullmatch(r"[A-Za-z]+", p)]
+    lasts = [s.lower() for s, _ in L.SURNAMES if re.fullmatch(r"[A-Za-z]+", s)]
+    for i in range(120):
+        dom = f"{(r.choice(L.PREFIX) + r.choice(L.SUFFIX)).lower()}.{r.choice(L.TLDS)}"
+        f, l = r.choice(firsts), r.choice(lasts)
+        k = i % 3
+        if k == 0:
+            addr = r.choice([f, f"{f}.{l}", f"{f[0]}{l}", f"{f}_{l}", "hello", "billing"]) + "@" + dom
+            tmpl, said = r.choice(L.EMAIL_T), spoken_address(addr)
+        elif k == 1:
+            addr = r.choice([dom, f"{dom}/{r.choice(L.URL_PATHS)}", f"docs.{dom}", f"{dom}/{r.choice(L.URL_PATHS)}/{r.choice(L.URL_PATHS)}"])
+            tmpl, said = r.choice(L.URL_T), spoken_address(addr)
+        else:
+            addr = "@" + r.choice([f, f"{f}_{l}", dom.split(".")[0]])
+            tmpl, said = r.choice(L.HANDLE_T), "at sign " + spoken_address(addr[1:])
+        target, spoken = tmpl.format(e=addr, u=addr, h=addr), tmpl.format(e=said, u=said, h=said)
+        add("d-email-url", i, lower_transcript(spoken) if r.random() < 0.7 else spoken, unrelated_context(r), target)
+
+    r = R("v3-spell")  # spelling while dictating, often after a misheard name: the spelling wins (#48, #50)
+    names = [(p, a) for p, a in L.PEOPLE if re.fullmatch(r"[A-Za-z]+", p)] + [(n, [s]) for n, s, _ in L.LETTER_NAMES]
+    for i in range(80):
+        n, heard = r.choice(names)
+        x = f"{r.choice(heard) if r.random() < 0.6 else n}{r.choice([', ', ' '])}{letters(n, r)}"
+        tmpl, d = r.choice(L.SPELL_DICT_T), r.choice(L.DAYS)
+        spoken = tmpl.format(x=x, D=d)
+        add("d-spelled", i, spoken if r.random() < 0.6 else spoken[0].lower() + spoken[1:-1], unrelated_context(r), tmpl.format(x=n, D=d))
+
+    r = R("v3-num")  # spoken numbers: the ITN pass turns them into digits and the target keeps them (#59)
+    for i in range(160):
+        vals = {"CN": r.choice(L.COMPOUND), "U": r.choice(L.SMALL), "U2": r.choice(L.SMALL), "SM": r.choice(L.SMALL),
+                "ORD": r.choice(L.ORD_COMPOUND), "CL": r.choice(L.CLOCK), "AP": r.choice(["pm", "am", "PM"]),
+                "D": r.choice(L.DAYS), "M": r.choice(L.MONTHS)}
+        clean = re.sub(r"\{(\w+)\}", lambda m: vals[m.group(1)], r.choice(L.NUM_T))
+        x = r.random()
+        t = lower_transcript(clean) if x < 0.6 else ("Um, " + clean[0].lower() + clean[1:]) if x < 0.75 else clean
+        add("d-num", i, t, unrelated_context(r), clean)
+    return out
+
+
+def v3_edits():
+    out = []
+    add = lambda cat, i, t, sel, ctx, target: out.append(
+        {"id": f"{cat}-{i}", "cat": cat, "transcript": t, "selection": sel, "context": ctx, "target": target})
+
+    r = R("v3-spell-edit")  # spaced/hyphenated spelling after a misheard name → correct + vocabulary (#50)
+    people = [(p, a, a) for p, a in L.PEOPLE if re.fullmatch(r"[A-Za-z]+", p)]
+    products = [(e[0], [e[1][0]], e[1]) for e in (invented(r) for _ in range(200))
+                if e[2] == "product" and re.fullmatch(r"[A-Z][a-z]+", e[0])]
+    pools = [[(n, [s], sels) for n, s, sels in L.LETTER_NAMES], people, products]
+    for i in range(120):
+        n, heard, sels = r.choice(pools[i % 3])
+        sel = r.choice(sels)
+        if sel.lower() == n.lower():
+            continue
+        x = f"{r.choice(heard)}{r.choice([', ', ' '])}{letters(n, r)}"
+        t = r.choice(L.SPELL_EDIT_T).format(x=x)
+        rem = r.random() < 0.1
+        if rem:
+            t += r.choice(L.REMEMBER)
+        add("e-spelled-misheard", i, cap(t) if r.random() < 0.4 else t, sel, edit_ctx(r),
+            ej("correct", n, {"text": n, "aliases": [sel.lower()]}, rem))
+
+    r = R("v3-join")  # the screen's form joins the selection's words: "pg bouncer" → "pgbouncer" (#45)
+    joined = [(p + s, [f"{p} {s}", f"{' '.join(p)} {s}"]) for p in L.JOIN_PREFIX for s in L.JOIN_SUFFIX if p + s != "pgvector"]
+    joined += [(t, [a for a in ta if " " in a]) for t, ta in L.TECH if " " not in t and t != "pgvector" and any(" " in a for a in ta)]
+    for i in range(120):
+        n, aliases = r.choice(joined)
+        sel = r.choice(aliases)
+        add("e-correct-joined", i, r.choice(L.JOIN_FIX), sel, context(r, [(n, aliases, "product")], long=r.random() < 0.45),
+            ej("correct", n, {"text": n, "aliases": [sel.lower()]}))
+
+    r = R("v3-bare")  # a bare phrase over a selection replaces it (#44)
+    for i in range(100):
+        new, sel = r.sample(L.SHORT_TERMS, 2)
+        if r.random() < 0.3:
+            sel = r.choice(L.TITLES)
+        said = cap(new) + "." if r.random() < 0.5 else new
+        add("e-replace-bare", i, ("um " + said) if r.random() < 0.15 else said, sel, edit_ctx(r), ej("replace", said.rstrip(".")))
+
+    r = R("v3-tense")  # "Replaced this with X" (Parakeet's past tense) is still a replace with X (#53)
+    for i in range(80):
+        new = r.choice([r.choice(L.SHORT_TERMS), r.choice(L.TITLES), person(r)[0], tech(r)[0]])
+        sel = r.choice(L.SHORT_TERMS + L.TITLES)
+        if new.lower() == sel.lower():
+            continue
+        verb, obj = r.choice(L.REPLACE_VERBS), r.choice(L.REPLACE_OBJ)
+        t = " ".join(w for w in [verb, obj, "with", new] if w) + ("." if r.random() < 0.6 else "")
+        add("e-replace-tense", i, t, sel, edit_ctx(r), ej("replace", new))
+    return out
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -601,7 +789,7 @@ def heldout(train_keys):
         cases.append({"id": f"h-e-replace-{i}", "kind": "edit", "transcript": new if i < 3 else lower_transcript(new),
                       "selection": HO_PLAIN[i % 4] if i >= 3 else r.choice(L.TITLES), "expectExact": new, "expectVocabOffer": None})
     cases = list({(c["transcript"], c.get("selection")): c for c in cases}.values())
-    checker = Checker()
+    checker = Checker(heldout=None)  # the held-out set itself is being built
     as_item = lambda c: {"transcript": c["transcript"], "selection": c.get("selection"), "target": c.get("expectExact"),
                          "context": {"text": c.get("context"), "ocrText": c.get("ocr")}}
     keep = [c for c in cases if not checker.reason(as_item(c)) and (c["transcript"], c.get("selection")) not in train_keys]
@@ -629,6 +817,22 @@ def list_keeps_casing(it):
     return all(re.sub(r"^(- |\d+\. )", "", l) in it["selection"] for l in lines)
 
 
+def prepass_mismatch(row, cat):
+    """Why a rendered dictation row's target doesn't carry the digits and marks the pre-pass left in its
+    transcript, or None (#48, #59). Spoken lists add line breaks and numbered lines, so those are allowed."""
+    m = re.search(r"<transcript>(.*)</transcript>", row["messages"][1]["content"], re.S)
+    if not m or row["messages"][-1]["role"] != "assistant":
+        return None
+    said, target = html.unescape(m.group(1)), row["messages"][-1]["content"]
+    nums = lambda s: Counter(re.findall(r"(?<![\w.])\d+(?:[.:,]\d+)*(?!\w)", re.sub(r"(?m)^\d+\. ", "", s)))
+    if extra := nums(target) - nums(said):
+        return f"target digits {sorted(extra)} not in transcript {said!r}"
+    for mark in "“”()" + ("" if cat == "d-list" else "\n"):
+        if target.count(mark) != said.count(mark):
+            return f"{mark!r} count differs: {said!r} → {target!r}"
+    return None
+
+
 def main(cmd):
     if cmd == "speak":
         write(OUT / "speak.jsonl", speak_items())
@@ -638,8 +842,11 @@ def main(cmd):
         items = []
         if (OUT / "heard.jsonl").exists():
             items += audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
-        items += text_dictation() + program_edits()
-        if (OUT / "teach_out.jsonl").exists():
+        items += text_dictation() + program_edits() + v3_dictation() + v3_edits()
+        if not (OUT / "teach_out.jsonl").exists():  # SKIP_TEACH=1 make_data.zsh: build without teacher items
+            n = len(jl(OUT / "teach.jsonl")) if (OUT / "teach.jsonl").exists() else 0
+            print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
+        else:
             replies = {o["id"]: o["output"] for o in jl(OUT / "teach_out.jsonl")}
             kept = 0
             for it in jl(OUT / "teach.jsonl"):
@@ -667,7 +874,15 @@ def main(cmd):
         (Path("training") / "manifest.json").write_text(json.dumps(
             {"items": len(clean), "byCategory": dict(sorted(counts.items())), "contaminationRejected": rejected}, indent=2) + "\n")
     elif cmd == "split":
-        rows = jl(OUT / "rendered.jsonl")
+        cats = {i["id"]: i["cat"] for i in jl(OUT / "items.jsonl")}
+        rows, dropped = [], {}
+        for row in jl(OUT / "rendered.jsonl"):
+            if (why := prepass_mismatch(row, cats[row["id"]])):
+                dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
+                print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
+            else:
+                rows.append(row)
+        print(f"split: {len(rows)} rows, dropped for pre-pass mismatch: {dropped}", file=sys.stderr)
         R("split").shuffle(rows)
         n = max(100, len(rows) // 25)
         write(OUT / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
