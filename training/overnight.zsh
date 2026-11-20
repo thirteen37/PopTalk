@@ -25,13 +25,20 @@ zsh training/bench.zsh training/out/adapters-v3                 # E2B v3
 zsh training/bench.zsh training/out/adapters-qwen3-1.7b         # Qwen3-1.7B v3
 zsh training/bench.zsh training/out/adapters-qwen3-0.6b         # Qwen3-0.6B v3
 
-# S1-mini (#67): cleanup only, E2B v3 for edits. Skipped until the model dir exists.
-s1=~/Library/Application\ Support/Poptalk/models/s1-mini-4bit
-if [[ -f $s1/config.json ]]; then
-  zsh training/bench.zsh $s1 training/out/adapters-v3
+# S1-mini (#67): dictation only (Prompts.isS1Mini picks its prompt), each set right after the E2B v3 equivalent,
+# then one hybrid run (S1-mini cleanup + E2B v3 edits) for footprint. Skipped until the weights exist.
+S1="$HOME/Library/Application Support/Poptalk/models/s1-mini-4bit"
+V3=training/out/adapters-v3
+b=(.build/release/PoptalkBench --provider mlx)
+if [[ -f $S1/config.json ]]; then
+  $b --runs 3 --cleanup-model $V3 --filter 'd-*'
+  $b --runs 3 --cleanup-model "$S1" --filter 'd-*'
+  $b --runs 3 --cleanup-model $V3 --cases training/heldout.jsonl --filter 'h-d-*'
+  $b --runs 3 --cleanup-model "$S1" --cases training/heldout.jsonl --filter 'h-d-*'
+  zsh training/bench.zsh "$S1" $V3                              # hybrid: all sets, footprint with both loaded
 else
-  print "skip S1-mini: no $s1"
+  print "skip S1-mini: no $S1"
 fi
 
-# TODO(#62): E2B v3 variant for #62, e.g. with PLE read from GPU memory instead of mmap:
-#   POPTALK_PLE_MMAP=0 zsh training/bench.zsh training/out/adapters-v3
+# TODO(#62): batched-embeddings E2B v3 variant, still being built. Add its bench line here once it lands, e.g.
+#   zsh training/bench.zsh training/out/adapters-v3   (with the #62 build/flag), right after the E2B v3 run above.
