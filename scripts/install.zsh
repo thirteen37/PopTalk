@@ -33,8 +33,9 @@ cp .build/release/Poptalk $app/Contents/MacOS/
 # Except MLX's Metal shaders: mlx-swift searches every loaded bundle's resources, so Contents/Resources works.
 mkdir -p $app/Contents/Resources
 cp -R .build/release/mlx-swift_Cmlx.bundle $app/Contents/Resources/
-# Icons are pre-rendered and committed (regenerate: assets/icon/render.py build).
-cp assets/icon/AppIcon.icns assets/icon/MenuBar*.png $app/Contents/Resources/
+# Icons are pre-rendered and committed (regenerate: assets/icon/render.py). Assets.car holds the Liquid Glass
+# icon (CFBundleIconName, macOS 26+); AppIcon.icns is the CFBundleIconFile fallback.
+cp assets/icon/AppIcon.icns assets/icon/Assets.car assets/icon/MenuBar*.png $app/Contents/Resources/
 # LoRA adapters, fused into their base model at load (#36); relative model ids resolve here.
 cp -R adapters $app/Contents/Resources/
 # Build number: commit count (monotonic, as macOS expects); commit: short hash, -dirty with uncommitted changes.
@@ -51,6 +52,7 @@ cat > $app/Contents/Info.plist <<PLIST
     <key>CFBundleDisplayName</key><string>PopTalk</string>
     <key>CFBundleExecutable</key><string>Poptalk</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>CFBundleVersion</key><string>$build</string>
@@ -72,4 +74,4 @@ pkill -x Poptalk || true
 rm -rf -- /Applications/Poptalk.app /Applications/PopTalk.app
 cp -R $app /Applications/
 open /Applications/PopTalk.app
-print "Installed /Applications/PopTalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ speech-bubble icon shows status)."
+print "Installed /Applications/PopTalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ PopTalk icon shows status)."
