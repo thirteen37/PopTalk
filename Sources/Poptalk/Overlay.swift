@@ -42,11 +42,14 @@ final class Overlay {
     func showWorking() { show("Working…", for: nil) }
     func showError(_ msg: String) { show("⚠️ \(msg)", for: 3) }
 
+    /// How long an outcome (and its undo/accept keys) stays up.
+    static let outcomeSeconds: TimeInterval = 2
+
     func showOutcome(_ text: String, undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
         var parts = [text]
         if undo != nil { parts.append("esc to undo") }
         if let v = vocabularyOffer { parts.append("⏎ add “\(v.text)” to vocabulary") }
-        show(parts.joined(separator: "  ·  "), for: 2)
+        show(parts.joined(separator: "  ·  "), for: Self.outcomeSeconds)
         keys = KeyCatcher { [weak self] code, flags in
             switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
             // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.

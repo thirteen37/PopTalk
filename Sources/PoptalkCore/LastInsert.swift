@@ -8,11 +8,14 @@ public struct LastInsert<Target: Equatable> {
     public let target: Target
     public let text: String
     public let at: Date
+    /// The history request that inserted it, when history is on.
+    public let requestID: UUID?
 
-    public init(target: Target, text: String, at: Date = Date()) {
+    public init(target: Target, text: String, at: Date = Date(), requestID: UUID? = nil) {
         self.target = target
         self.text = text
         self.at = at
+        self.requestID = requestID
     }
 
     /// The space to put before `s` being dictated into `target`.

@@ -193,6 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         busy = true
         overlay.showWorking()
         let store = store
+        let started = Date()
+        let app = targetPID.flatMap { NSRunningApplication(processIdentifier: $0) }
         Task {
             defer { busy = false }
             let t0 = ContinuousClock.now
@@ -202,11 +204,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.mark("release: selection awaited", since: t0)
             await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
             Timing.mark("release: preview drained", since: t0)
-            let transcript: String
-            do {
-                transcript = try await transcriber.transcribe(
-                    samples, boost: Pipeline.boostTerms(saved: store.terms, context: snapshot))
-            } catch {
+            let boost = Pipeline.boostTerms(saved: store.terms, context: snapshot)
+            let heard: Transcription
+            do { heard = try await transcriber.transcribe(samples, boost: boost) } catch {
                 overlay.showError("Transcription failed"); return
             }
             Timing.mark("release: transcribed", since: t0)
@@ -215,13 +215,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let complete: Pipeline.Complete
             do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
             let models = Settings.selection
-            let pipeline = Pipeline(complete: complete, vocabulary: store,
+            let calls = ModelCallRecorder()
+            let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
                                     cleanupModel: models.cleanupModel, editModel: models.editModel)
+            let id = UUID()
+            // Before apply, which moves lastInsert to this request.
+            let corrects = history.isEnabled ? lastInsert?.corrected(by: selection, in: TextIO.focusedElement()) : nil
             Timing.mark("release: provider ready", since: t0)
-            let result = await pipeline.run(Request(transcript: transcript, selection: selection, context: snapshot))
+            let result = await pipeline.run(Request(transcript: heard.text, selection: selection, context: snapshot))
             Timing.mark("release: pipeline done", since: t0)
-            await apply(result, cursorKnown: snapshot.cursorOffset != nil)
+            let shown = await apply(result, cursorKnown: snapshot.cursorOffset != nil, id: id)
             Timing.mark("release: applied", since: t0)
+            guard history.isEnabled else { return }
+            let audio = UserDefaults.standard.bool(forKey: "historyAudio") ? "\(id).m4a" : nil
+            if let audio { history.saveFile(audio) { try AudioRecorder.write(samples, to: $0) } }
+            let call = calls.call
+            var entry = HistoryRequest(
+                id: id, at: started, app: app?.localizedName ?? snapshot.appName, bundleID: app?.bundleIdentifier,
+                rawTranscript: heard.raw, transcript: heard.text, boost: boost.map(\.text), selection: selection,
+                provider: models.provider, model: call?.model, messages: call?.messages, reply: call?.reply,
+                outcome: result.outcome, vocabularyOffer: result.vocabularyOffer?.text, remembered: result.remembered?.text,
+                latency: Date().timeIntervalSince(started), audio: audio)
+            entry.outcome = shown
+            history.append(entry)
+            if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
         }
     }
 
@@ -235,7 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 try? await Task.sleep(for: .milliseconds(500))
                 let samples = recorder.snapshot()
                 guard !Task.isCancelled, AudioGate.hasSpeech(samples),
-                      let text = try? await transcriber.transcribe(samples, boost: []),
+                      let text = try? await transcriber.transcribe(samples, boost: []).text,
                       !Task.isCancelled, !text.isEmpty else { continue }
                 overlay.showPreview(text)
             }
@@ -245,11 +262,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Where Poptalk last pasted; spaces the next dictation when the cursor position is unknown.
     private var lastInsert: LastInsert<AXUIElement>?
 
-    private func apply(_ result: PipelineResult, cursorKnown: Bool) async {
+    /// Opt-in usage history (#38); writes nothing unless enabled in Settings.
+    let history = HistoryStore { UserDefaults.standard.bool(forKey: "historyEnabled") }
+    /// The request whose vocabulary offer is showing; resolved as accepted or declined.
+    private var pendingOffer: UUID?
+
+    private func resolveOffer(_ id: UUID, _ kind: HistoryEvent.Kind) {
+        guard pendingOffer == id else { return }
+        pendingOffer = nil
+        history.append(HistoryEvent(kind, id: id))
+    }
+
+    /// Applies the outcome and returns the label shown, for history.
+    private func apply(_ result: PipelineResult, cursorKnown: Bool, id: UUID) async -> String {
         let text: String
         switch result.outcome {
-        case .nothing: overlay.hide(); return
-        case .error(let msg): overlay.showError(msg); return
+        case .nothing: overlay.hide(); return "Nothing"
+        case .error(let msg): overlay.showError(msg); return msg
         case .insert(let s, _), .replaceSelection(let s, _), .insertBefore(let s), .insertAfter(let s): text = s
         }
         // Focus moved while we worked: don't paste into the wrong app; leave the result on the clipboard.
@@ -257,7 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text.trimmingCharacters(in: .whitespaces), forType: .string)
             overlay.showError("App changed — result copied to clipboard")
-            return
+            return "App changed — result copied to clipboard"
         }
         let label: String
         var pasted = true
@@ -271,16 +300,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .replaceSelection(let s, let l): await TextIO.replaceSelection(s); label = l
         case .insertBefore(let s): await TextIO.insertBeforeSelection(s); label = "Inserted"
         case .insertAfter(let s): await TextIO.insertAfterSelection(s); label = "Inserted"
-        case .nothing, .error: return
+        case .nothing, .error: return ""
         }
-        lastInsert = pasted ? field.map { LastInsert(target: $0, text: text) } : nil
+        lastInsert = pasted ? field.map { LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil) } : nil
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
+        // A newer outcome replaced the old offer unanswered.
+        if let old = pendingOffer { resolveOffer(old, .vocabularyDeclined) }
+        if result.vocabularyOffer != nil {
+            pendingOffer = id
+            DispatchQueue.main.asyncAfter(deadline: .now() + Overlay.outcomeSeconds + 0.1) { [weak self] in
+                self?.resolveOffer(id, .vocabularyDeclined)
+            }
+        }
         // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
-        overlay.showOutcome(shown, undo: pasted ? { [weak self] in TextIO.undo(); self?.lastInsert = nil } : nil, vocabularyOffer: result.vocabularyOffer) { [weak self] in
+        let undo: (() -> Void)? = pasted ? { [weak self] in
+            TextIO.undo()
+            self?.lastInsert = nil
+            self?.history.append(HistoryEvent(.undo, id: id))
+        } : nil
+        overlay.showOutcome(shown, undo: undo, vocabularyOffer: result.vocabularyOffer) { [weak self] in
             guard let term = result.vocabularyOffer else { return }
+            self?.resolveOffer(id, .vocabularyAccepted)
             do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
         }
+        return shown
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -304,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let tabs = NSTabViewController()
             tabs.tabStyle = .toolbar
             for t in SettingsTab.allCases {
-                let view = SettingsView(tab: t, status: status, store: store) { [weak self] in
+                let view = SettingsView(tab: t, status: status, store: store, history: history) { [weak self] in
                     self?.loadTranscriber()  // each only retries what failed
                     self?.prepareModels()
                 }

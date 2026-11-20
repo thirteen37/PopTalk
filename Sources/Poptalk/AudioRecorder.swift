@@ -58,3 +58,18 @@ final class AudioRecorder: @unchecked Sendable {
         return status == noErr && id != 0 ? id : nil
     }
 }
+
+extension AudioRecorder {
+    /// Saves 16 kHz mono samples as Apple Lossless (.m4a), for replaying against future ASR versions.
+    static func write(_ samples: [Float], to url: URL) throws {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return }
+        buffer.frameLength = buffer.frameCapacity
+        samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+        let file = try AVAudioFile(forWriting: url, settings: [
+            AVFormatIDKey: kAudioFormatAppleLossless, AVSampleRateKey: 16_000, AVNumberOfChannelsKey: 1,
+            AVEncoderBitDepthHintKey: 16,
+        ], commonFormat: .pcmFormatFloat32, interleaved: false)
+        try file.write(from: buffer)
+    }
+}
