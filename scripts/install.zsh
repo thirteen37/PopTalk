@@ -64,6 +64,8 @@ PLIST
 codesign --force --sign "$identity" --options runtime --entitlements scripts/Poptalk.entitlements $app
 print "Signed with: $identity"
 
+# Never quit it mid-dictation; the last check is right before the quit, leaving only a sub-ms window.
+zsh scripts/wait-idle.zsh || exit 1
 pkill -x Poptalk || true
 rm -rf -- /Applications/Poptalk.app
 cp -R $app /Applications/

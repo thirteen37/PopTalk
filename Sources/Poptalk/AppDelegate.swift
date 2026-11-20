@@ -19,7 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var speechDownload: Double? { didSet { syncSpeech() } }
     private var hotkey: Hotkey!
 
+    func applicationWillTerminate(_ note: Notification) { BusyMarker.set(false) }
+
     func applicationDidFinishLaunching(_ note: Notification) {
+        BusyMarker.set(false)  // a crash mid-dictation leaves one behind
         Settings.register()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         updateIcon()
@@ -155,9 +158,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var selectionTask: Task<String?, Never>?
     private var startWork: DispatchWorkItem?
     private var previewTask: Task<Void, Never>?
-    private var recording = false
-    private var busy = false
+    private var recording = false { didSet { syncBusyMarker() } }
+    private var busy = false { didSet { syncBusyMarker() } }
     private var targetPID: pid_t?
+
+    /// Sets the marker at once; clears it a run-loop turn later, so release's recording → busy handoff
+    /// (two synchronous assignments) never leaves it briefly absent.
+    private func syncBusyMarker() {
+        if recording || busy { BusyMarker.set(true); return }
+        DispatchQueue.main.async { [weak self] in
+            if let self, !recording, !busy { BusyMarker.set(false) }
+        }
+    }
 
     private func pressed() {
         guard !busy else { return }  // one request at a time
