@@ -7,8 +7,11 @@ extension Pipeline {
     ///   "two thousand twenty six" → 2026, "three point five" → 3.5; 10,000 and up get commas.
     /// - Zero to nine stay words in prose ("two people"), except after a cue (issue 5, Q3, v2, #9) or a unit.
     /// - Units: "twenty five percent" → 25%, "five dollars" → $5. Times need am/pm: "three thirty pm" → 3:30 PM.
-    /// - Ordinals only when compound: "twenty first" → 21st; "first", "tenth" alone stay. "second" is never one
-    ///   ("a fifty second delay").
+    /// - Ordinals only when compound: "twenty first" → 21st; "first", "tenth" alone stay. "second" counts only right
+    ///   after a tens word ("twenty second floor" → 22nd floor), and not after "a"/"an" or before a duration noun
+    ///   (`durations`): "a fifty second delay", "the thirty second timeout" stay durations.
+    /// - Cents join whole dollars: "five dollars and fifty cents" → $5.50. Bare cents are a plain word ("50 cents").
+    /// - "minus"/"negative" before a number → "-5" (ASCII), except after a number or "plus or" ("ten minus two").
     /// - A run that isn't one number stays as said: "one two three", "twelve fifty", "nineteen ninety nine".
     ///   A run can't start with hundred/thousand: "a hundred times".
     public static func spokenNumbers(_ s: String) -> String {
@@ -30,6 +33,13 @@ extension Pipeline {
         func extend(_ i: Int) -> Int {
             var j = i + 1
             while adjacent(j - 1, j), number[words[j - 1].text]?.ordinal != true {
+                if words[j].text == "second" {
+                    // "twenty second" → 22nd, but "a fifty second delay" / "the thirty second timeout" are durations.
+                    let durationUnit = (i > 0 && adjacent(i - 1, i) && ["a", "an"].contains(words[i - 1].text))
+                        || (adjacent(j, j + 1) && durations.contains(words[j + 1].text))
+                    if number[words[j - 1].text]?.kind == .tens, !durationUnit { j += 1 }
+                    break
+                }
                 if isNumber(j) { j += 1 }
                 else if words[j].text == "and", [.hundred, .scale].contains(number[words[j - 1].text]?.kind), adjacent(j, j + 1),
                         isNumber(j + 1) { j += 1 }
@@ -47,7 +57,7 @@ extension Pipeline {
             }
             let (value, ordinal) = parsed
             var text = value >= 10_000 ? value.formatted(.number.locale(Locale(identifier: "en_US"))) : "\(value)"
-            var forced = false
+            var forced = false, signed = false
             if !ordinal, words.indices.contains(j + 1), words[j].text == "point", adjacent(j - 1, j),
                case let digits = (j + 1..<words.count).prefix(while: { k in adjacent(k - 1, k) && fraction[words[k].text] != nil }),
                !digits.isEmpty {
@@ -60,6 +70,24 @@ extension Pipeline {
                 text = words[j].text == "percent" ? text + "%" : "$" + text
                 end = words[j].range.upperBound
                 forced = true
+                // "five dollars and fifty cents" → $5.50 (1–99 cents, whole dollars only).
+                var k = j + 1
+                if adjacent(j, k), words[k].text == "and" { k += 1 }
+                if text.hasPrefix("$"), !text.contains("."), adjacent(k - 1, k), isNumber(k), case let e = extend(k),
+                   adjacent(e - 1, e), ["cent", "cents"].contains(words[e].text),
+                   let c = parse(words[k..<e].map(\.text)), !c.ordinal, (1...99).contains(c.value) {
+                    text += c.value < 10 ? ".0\(c.value)" : ".\(c.value)"
+                    end = words[e].range.upperBound
+                    j = e + 1
+                }
+            }
+            // "minus five" / "negative five" → -5; not in an expression ("ten minus two") or "plus or minus".
+            if !ordinal, i > 0, adjacent(i - 1, i), ["minus", "negative"].contains(words[i - 1].text),
+               !(i > 1 && adjacent(i - 2, i - 1) && (number[words[i - 2].text] != nil || ["plus", "or"].contains(words[i - 2].text))),
+               s[..<words[i - 1].range.lowerBound].last(where: { !$0.isWhitespace })?.isNumber != true {
+                text = "-" + text
+                forced = true
+                signed = true
             }
             var start = words[i].range.lowerBound
             let cue = i > 0 && adjacent(i - 1, i) ? words[i - 1].text : nil
@@ -73,6 +101,7 @@ extension Pipeline {
             }
             if hash { start = s[..<start].lastIndex(of: "#").map { s.index(after: $0) } ?? start }
             else if cue == "q" || cue == "v" { start = words[i - 1].range.upperBound }
+            if signed { start = words[i - 1].range.lowerBound }
             out += s[done..<start] + text
             done = end
             i = j
@@ -105,6 +134,11 @@ extension Pipeline {
         "zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
         "eight": "8", "nine": "9"]
 
+    /// Nouns that make a preceding "N second" a duration, not an ordinal.
+    private static let durations: Set<String> = [
+        "delay", "timeout", "wait", "pause", "break", "interval", "gap", "lag", "window", "countdown", "cooldown",
+        "limit", "mark", "clip", "video", "ad", "spot", "segment", "rule", "sleep", "nap", "buffer", "grace", "warning"]
+
     private static let cues: Set<String> = ["issue", "number", "version", "v", "page", "step", "room", "item", "pr", "option", "q"]
 
     nonisolated(unsafe) private static let time: Regex<(Substring, Substring, Substring?, Substring)> = {
@@ -120,7 +154,7 @@ extension Pipeline {
         var total = 0, current = 0, last: NumberKind?, lastScale = Int.max, ordinal = false
         for w in ws {
             if w == "and" { continue }  // extend() only lets "and" through after hundred/thousand.
-            guard let (v, kind, ord) = number[w].map({ ($0.value, $0.kind, $0.ordinal) }), !ordinal else { return nil }
+            guard let (v, kind, ord) = (w == "second" ? (2, .unit, true) : number[w]).map({ ($0.value, $0.kind, $0.ordinal) }), !ordinal else { return nil }
             ordinal = ord
             switch (last, kind) {
             case (nil, .unit), (nil, .teen), (nil, .tens): current = v

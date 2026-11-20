@@ -90,3 +90,44 @@ private func dictate(_ transcript: String, reply: String) async -> Outcome {
     #expect(await dictate(said, reply: "75,022 items over 31 days, 99% done.") == .insert("75,022 items over 31 days, 99% done.", label: "Dictated"))
     #expect(await dictate(said, reply: "") == .insert(digits, label: "Dictated (raw)"))
 }
+
+// #66: NeMo's wins, ported.
+@Test(arguments: [
+    // Cents join a dollar amount; bare cents stay a unit word ("50 cents", not ¢ or $0.50).
+    ("five dollars and fifty cents", "$5.50"),
+    ("twelve dollars and five cents", "$12.05"),
+    ("it was twenty dollars ninety nine cents", "it was $20.99"),
+    ("one dollar and one cent", "$1.01"),
+    ("fifty cents", "50 cents"),
+    // "second" after a tens word is an ordinal, unless it's the unit of a duration.
+    ("she finished twenty second", "she finished 22nd"),
+    ("the twenty second floor", "the 22nd floor"),
+    ("one hundred twenty second", "122nd"),
+    ("the thirty second timeout", "the 30 second timeout"),
+    ("wait for the forty second mark", "wait for the 40 second mark"),
+    ("a twenty second wait", "a 20 second wait"),
+    ("give it a twenty second head start", "give it a 20 second head start"),
+    ("twenty two second delay", "22 second delay"),
+    // Negatives: a sign word before a number, ASCII hyphen-minus.
+    ("negative five degrees", "-5 degrees"),
+    ("minus five", "-5"),
+    ("it dropped to minus twelve point five", "it dropped to -12.5"),
+    ("ten minus two", "10 minus two"),
+    ("plus or minus fifty", "plus or minus 50"),
+    ("20 minus fifteen", "20 minus 15"),
+])
+func nemoWins(_ said: String, _ written: String) {
+    #expect(n(said) == written)
+}
+
+@Test(arguments: [
+    "five cents",
+    "five minus two",
+    "negative feedback",
+    "the second floor",
+    "two second delay",
+    "minus the fifth one",
+])
+func nemoWinsThatStayWords(_ said: String) {
+    #expect(n(said) == said)
+}
