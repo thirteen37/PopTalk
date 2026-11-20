@@ -91,9 +91,7 @@ public struct BenchCase: Decodable, Sendable {
         var f: [String] = []
         if action == "error" { f.append("error: \(text)") }
         if action == "raw" { f.append("raw fallback") }
-        // replace / correct / edit all replace the selection identically; only the overlay label differs.
-        let family: (String) -> String = { ["replace", "correct", "edit"].contains($0) ? "replaceSelection" : $0 }
-        if let a = expectAction, family(a) != family(action), action != "error" { f.append("action \(action), expected \(a)") }
+        if let a = expectAction, Self.family(a) != Self.family(action), action != "error" { f.append("action \(action), expected \(a)") }
         if let e = expectExact, e != text { f.append("not exactly \"\(e)\"") }
         if let any = expectAnyOf, !any.contains(text) { f.append("not any of \(any)") }
         f += mustContain.filter { !text.contains($0) }.map { "missing \"\($0)\"" }
@@ -110,8 +108,14 @@ public struct BenchCase: Decodable, Sendable {
         if let ratio = maxLengthRatio, Double(text.count) > ratio * Double(base) {
             f.append("length \(text.count) > \(ratio) × \(base)")
         }
-        return BenchRun(output: text, action: action, vocabOffer: offer, seconds: seconds, failures: f)
+        var run = BenchRun(output: text, action: action, vocabOffer: offer, seconds: seconds, failures: f)
+        run.modelAction = r.modelAction
+        if let e = expectAction, let m = r.modelAction { run.modelActionOK = Self.family(e) == Self.family(m) }
+        return run
     }
+
+    /// replace / correct / edit all replace the selection identically; only the overlay label differs.
+    static func family(_ action: String) -> String { ["replace", "correct", "edit"].contains(action) ? "replaceSelection" : action }
 }
 
 public struct BenchRun: Codable, Sendable {
@@ -122,7 +126,13 @@ public struct BenchRun: Codable, Sendable {
     public var failures: [String]
     /// Only for audio cases; `seconds` is then the LLM stage alone.
     public var speech: SpeechRun? = nil
+    /// The edit model's own action before code guards (#54); nil without an edit model reply.
+    public var modelAction: String? = nil
+    /// `modelAction` is in `expectAction`'s family; nil when either is missing.
+    public var modelActionOK: Bool? = nil
     public var passed: Bool { failures.isEmpty }
+    /// A guard (insert ask, blank text) changed the model's action family.
+    public var overridden: Bool { modelAction.map { BenchCase.family($0) != BenchCase.family(action) } ?? false }
 
     public init(output: String, action: String, vocabOffer: String?, seconds: Double, failures: [String]) {
         self.output = output
@@ -148,6 +158,8 @@ public struct BenchSummary: Sendable {
     public var kind: BenchCase.Kind
     public var runs: Int, passed: Int, rawFallbacks: Int, errors: Int
     public var median: Double, p90: Double, max: Double
+    /// Runs with a scorable model action, how many matched, and how many a guard overrode (#54).
+    public var modelActionRuns = 0, modelActionPassed = 0, overrides = 0
 }
 
 /// A results file: `bench/results/<date>-<provider>-<model>[-<filter>].json` (see `fileName`).
@@ -168,11 +180,15 @@ public struct BenchReport: Codable, Sendable {
             let runs = cases.filter { $0.kind == kind }.flatMap(\.runs).filter { $0.speech == nil }
             guard !runs.isEmpty else { return nil }
             let t = runs.map(\.seconds).sorted()
-            return BenchSummary(
+            var s = BenchSummary(
                 kind: kind, runs: runs.count, passed: runs.filter(\.passed).count,
                 rawFallbacks: runs.filter { $0.action == "raw" }.count, errors: runs.filter { $0.action == "error" }.count,
                 median: median(t),
                 p90: t[Int((0.9 * Double(t.count)).rounded(.up)) - 1], max: t.last!)
+            s.modelActionRuns = runs.filter { $0.modelActionOK != nil }.count
+            s.modelActionPassed = runs.filter { $0.modelActionOK == true }.count
+            s.overrides = runs.filter(\.overridden).count
+            return s
         }
     }
 
@@ -180,8 +196,11 @@ public struct BenchReport: Codable, Sendable {
         let rows = summaries().map {
             String(format: "%@ %3d/%-3d %5.0f%%  %6.2fs %6.2fs %6.2fs  %4d %4d", $0.kind.rawValue.padding(toLength: 9, withPad: " ", startingAt: 0),
                    $0.passed, $0.runs, 100 * Double($0.passed) / Double($0.runs), $0.median, $0.p90, $0.max, $0.rawFallbacks, $0.errors)
+                // Model action (#54): the edit model's own pick vs expectAction, and guard overrides.
+                + ($0.kind == .dictation ? "" : String(format: "  %3d/%-3d %5.0f%%  %4d", $0.modelActionPassed, $0.modelActionRuns,
+                                                       100 * Double($0.modelActionPassed) / Double(Swift.max($0.modelActionRuns, 1)), $0.overrides))
         }
-        let lm = rows.isEmpty ? nil : (["kind       pass        %   median    p90    max   raw  err"] + rows).joined(separator: "\n")
+        let lm = rows.isEmpty ? nil : (["kind       pass        %   median    p90    max   raw  err  model        %   ovr"] + rows).joined(separator: "\n")
         return [lm, speechTable()].compactMap { $0 }.joined(separator: "\n\n")
     }
 
@@ -194,13 +213,14 @@ public struct BenchReport: Codable, Sendable {
                 + (c?.selection.map { " | selection \"\($0)\"" } ?? "")]
             var seen: [String: (Int, BenchRun)] = [:], order: [String] = []
             for run in r.runs {
-                let key = run.action + "\u{0}" + run.output
+                let key = run.action + "\u{0}" + run.output + "\u{0}" + (run.modelAction ?? "")
                 if seen[key] == nil { order.append(key) }
                 seen[key, default: (0, run)].0 += 1
             }
             for key in order {
                 let (n, run) = seen[key]!
-                lines.append("    \(n)× \(run.action): \"\(run.output)\"" + (run.vocabOffer.map { " offer \"\($0)\"" } ?? ""))
+                lines.append("    \(n)× \(run.action)" + (run.overridden ? " (model \(run.modelAction!))" : "") + ": \"\(run.output)\""
+                    + (run.vocabOffer.map { " offer \"\($0)\"" } ?? ""))
                 if !run.passed { lines.append("       " + run.failures.joined(separator: "; ")) }
             }
             return lines.joined(separator: "\n")
@@ -223,6 +243,11 @@ public struct BenchReport: Codable, Sendable {
             lines.append("\(rb < ra ? "regressed" : "improved ") \(ca.id): \(ca.runs.filter(\.passed).count)/\(ca.runs.count) → \(cb.runs.filter(\.passed).count)/\(cb.runs.count)")
         }
         lines += b.cases.filter { !aIDs.contains($0.id) }.map { "only in b: \($0.id)" }
+        if let sa = a.summaries().first(where: { $0.kind == .edit }), let sb = b.summaries().first(where: { $0.kind == .edit }) {
+            let (ma, mb) = ("\(sa.modelActionPassed)/\(sa.modelActionRuns)", "\(sb.modelActionPassed)/\(sb.modelActionRuns)")
+            if ma != mb { lines.append("edit model action \(ma) → \(mb)") }
+            if sa.overrides != sb.overrides { lines.append("edit guard overrides \(sa.overrides) → \(sb.overrides)") }
+        }
         return lines + compareSpeech(a, b)
     }
 }
