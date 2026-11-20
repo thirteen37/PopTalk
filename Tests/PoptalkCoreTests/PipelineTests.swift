@@ -83,6 +83,28 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(r.outcome == .nothing)
 }
 
+// #53: "replace this with X" replaces the selection with X, without the model.
+@Test(arguments: [
+    ("Replaced this with Clippy.", "flippy", "Clippy"),
+    ("replace it with Q4 roadmap", "Q3 plan", "Q4 roadmap"),
+    ("Um, swap that for the blue one", "red one", "the blue one"),
+    ("Replace with Final draft.", "Draft one.", "Final draft."),
+])
+func replaceThisWithBypassesLLM(utterance: String, selection: String, expected: String) async {
+    let calls = Calls()
+    let r = await pipeline(reply: "x", calls: calls).run(req(utterance, selection: selection))
+    #expect(r.outcome == .replaceSelection(expected, label: "Replaced"))
+    #expect(calls.models.isEmpty)
+}
+
+@Test(arguments: ["replace the commas with semicolons", "change the tone to formal", "change this to Wednesday",
+                  "change this to French", "replace this with something shorter"])
+func replaceEditsStillReachModel(utterance: String) async {
+    let calls = Calls()
+    _ = await pipeline(reply: #"{"action":"edit","text":"y"}"#, calls: calls).run(req(utterance, selection: "a, b, c"))
+    #expect(calls.models == ["big"])
+}
+
 @Test func emptyReplaceDoesNothing() async {
     let reply = #"{"action":"replace","text":"  ","vocabulary":null,"remember":false}"#
     let r = await pipeline(reply: reply).run(req("replace with", selection: "Heading"))

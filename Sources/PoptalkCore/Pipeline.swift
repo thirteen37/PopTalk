@@ -59,6 +59,12 @@ public struct Pipeline: Sendable {
     }
 
     private static let literally = try! NSRegularExpression(pattern: #"^\s*literally\s*[:,]?\s*"#, options: .caseInsensitive)
+    // Object must be the selection itself (or absent): "replace the commas with …" is an edit.
+    // "change this to French / bullet points" is usually a transform, so change/changed stay with the model.
+    // The lookahead keeps "replace this with something shorter / a more formal one" with the model too.
+    private static let replaceWith = try! NSRegularExpression(
+        pattern: #"^\s*(?:replace|replaced|replacing|swap|swapped)(?:\s+(?:this|that|it|the\s+selection))?\s+(?:with|to|for)\s+(?!(?:be|more|less|something|a\s+(?:more|less))\b)([\s\S]+)$"#,
+        options: .caseInsensitive)
 
     public func run(_ r: Request) async -> PipelineResult {
         let transcript = Self.stripHesitations(r.transcript)
@@ -90,6 +96,12 @@ public struct Pipeline: Sendable {
         if let m = Self.literally.firstMatch(in: transcript, range: NSRange(location: 0, length: ns.length)) {
             let text = ns.substring(from: m.range.length)
             return PipelineResult(outcome: Self.isBlank(text) ? .nothing : .replaceSelection(text, label: "Replaced"))
+        }
+        // #53: "replace this with X" is a whole replacement; the model tends to paste the utterance.
+        if let m = Self.replaceWith.firstMatch(in: transcript, range: NSRange(location: 0, length: ns.length)) {
+            var text = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
+            if text.hasSuffix("."), !selection.hasSuffix(".") { text.removeLast() }
+            if !Self.isBlank(text) { return PipelineResult(outcome: .replaceSelection(text, label: "Replaced")) }
         }
 
         let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
