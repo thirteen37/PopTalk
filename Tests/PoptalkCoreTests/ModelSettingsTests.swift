@@ -80,7 +80,7 @@ private func tempDir(_ files: [String: String]) -> URL {
 
 @Test func modelNames() {
     #expect(ModelSettings.knownMLXModels.map(\.id) == [ModelSettings.fineTune, ModelSettings.e2b, ModelSettings.e4b])
-    #expect(ModelSettings.displayName(ModelSettings.fineTune) == "Gemma 4 E2B · Poptalk fine-tune")
+    #expect(ModelSettings.displayName(ModelSettings.fineTune) == "Gemma 4 E2B · PopTalk fine-tune")
     #expect(ModelSettings.displayName(ModelSettings.e2b) == "Gemma 4 E2B")
     #expect(ModelSettings.displayName(ModelSettings.e4b) == "Gemma 4 E4B")
     // Others: the folder or Hugging Face repo name.

@@ -73,7 +73,7 @@ private func client(status: Int = 200, lines: [String] = sse(#""hi""#), capture:
     #expect(throws: (any Error).self) { try LLMClient.parseEditResult("Todoist") }
 }
 
-// Reasoning models think for 15 s+ by default; Poptalk needs fast, direct answers.
+// Reasoning models think for 15 s+ by default; PopTalk needs fast, direct answers.
 @Test func disablesThinking() async throws {
     let cap = Capture()
     _ = try await client(capture: cap).complete(model: "g", messages: [], json: false, timeout: 3)

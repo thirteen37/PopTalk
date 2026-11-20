@@ -28,7 +28,7 @@ public struct RawInsert: Sendable {
     /// For history: the unboosted transcript and the boost terms of the original request.
     public var rawTranscript: String
     public var boost: [String]
-    /// Spacing Poptalk added before the paste, and the field's text right after it (nil: unreadable).
+    /// Spacing PopTalk added before the paste, and the field's text right after it (nil: unreadable).
     public var prefix: String
     public var fieldValue: String?
 
@@ -39,7 +39,7 @@ public struct RawInsert: Sendable {
 }
 
 extension LastInsert {
-    /// A raw insert may be cleaned up only while its field is focused and its text is exactly as Poptalk left it.
+    /// A raw insert may be cleaned up only while its field is focused and its text is exactly as PopTalk left it.
     public func canReprocess(focused: Target?, value: String?) -> Bool {
         guard let fieldValue = reprocess?.fieldValue, focused == target else { return false }
         return value == fieldValue

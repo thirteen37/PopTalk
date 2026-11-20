@@ -8,7 +8,7 @@ public struct SystemSample: Codable, Equatable, Sendable {
     /// nominal, fair, serious or critical.
     public var thermal: String
     public var lowPower: Bool
-    /// Poptalk's CPU time (user + system) in ms: process total from `now()`, the request's own after `ended()`.
+    /// PopTalk's CPU time (user + system) in ms: process total from `now()`, the request's own after `ended()`.
     public var cpuMs: Double
 
     public init(load: Double, cpus: Int, thermal: String, lowPower: Bool, cpuMs: Double) {

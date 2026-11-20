@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ?? NSImage(systemSymbolName: attention ? "exclamationmark.triangle" : "waveform", accessibilityDescription: nil)
         image?.isTemplate = true
         image?.size = NSSize(width: 18, height: 18)
-        image?.accessibilityDescription = attention ? "Poptalk needs attention" : "Poptalk"
+        image?.accessibilityDescription = attention ? "PopTalk needs attention" : "PopTalk"
         statusItem.button?.image = image
     }
 
@@ -407,7 +407,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Where Poptalk last pasted; spaces the next dictation when the cursor position is unknown.
+    /// Where PopTalk last pasted; spaces the next dictation when the cursor position is unknown.
     private var lastInsert: LastInsert<AXUIElement>?
 
     /// Opt-in usage history (#38); writes nothing unless enabled in Settings.
@@ -498,7 +498,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: status.value.summary, action: nil, keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "Quit Poptalk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit PopTalk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
 
     @objc private func showSettings() {
@@ -528,7 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let w = NSWindow(contentViewController: tabs)
             w.styleMask.remove(.resizable)
             w.toolbarStyle = .preference
-            w.title = "Poptalk Settings"
+            w.title = "PopTalk Settings"
             w.isReleasedWhenClosed = false
             settingsWindow = w
         }

@@ -1,4 +1,4 @@
-/// A macOS privacy permission Poptalk uses, with its System Settings pane.
+/// A macOS privacy permission PopTalk uses, with its System Settings pane.
 public enum Permission: String, CaseIterable, Sendable {
     case microphone = "Microphone", accessibility = "Accessibility"
     case inputMonitoring = "Input Monitoring", screenRecording = "Screen Recording"
@@ -15,11 +15,11 @@ public enum Permission: String, CaseIterable, Sendable {
 
 public enum SettingsTab: String, CaseIterable, Sendable { case general, context, models, permissions, vocabulary }
 
-/// "Poptalk 0.1 (412 · 9b4cc05)" from an Info.plist dictionary; install.zsh stamps the build and commit keys.
+/// "PopTalk 0.1 (412 · 9b4cc05)" from an Info.plist dictionary; install.zsh stamps the build and commit keys.
 public func versionLabel(_ info: [String: Any]?) -> String {
-    guard let version = info?["CFBundleShortVersionString"] as? String else { return "Poptalk (development build)" }
+    guard let version = info?["CFBundleShortVersionString"] as? String else { return "PopTalk (development build)" }
     let build = ["CFBundleVersion", "PoptalkCommit"].compactMap { info?[$0] as? String }
-    return build.isEmpty ? "Poptalk \(version)" : "Poptalk \(version) (\(build.joined(separator: " · ")))"
+    return build.isEmpty ? "PopTalk \(version)" : "PopTalk \(version) (\(build.joined(separator: " · ")))"
 }
 
 /// What the menu summary and Settings show: model load states and permissions.

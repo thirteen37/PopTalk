@@ -1,6 +1,6 @@
 import Foundation
 
-/// A spoken command on Poptalk's last dictation, said with nothing selected (#49).
+/// A spoken command on PopTalk's last dictation, said with nothing selected (#49).
 public enum InsertCommand: Equatable, Sendable {
     case scratch, deleteLastWord, deleteLastSentence
     /// "no, I meant X" / "change A to B": an edit run on the last insert as if it were selected.
@@ -60,7 +60,7 @@ public enum InsertCommand: Equatable, Sendable {
 
 extension LastInsert {
     /// A voice command may act on this insert only within `window` seconds, while its field is focused
-    /// and the field's text is exactly as Poptalk left it (so the edit can be verified).
+    /// and the field's text is exactly as PopTalk left it (so the edit can be verified).
     public func canAmend(focused: Target?, value: String?, now: Date = Date(), window: TimeInterval = 60) -> Bool {
         guard let fieldValue, focused == target, now.timeIntervalSince(at) < window else { return false }
         return value == fieldValue

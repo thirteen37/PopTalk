@@ -84,7 +84,7 @@ public enum MLXProvider {
             try await t.value
         }
         /// Strips the full model from the shared HF cache when it's already there (read only: other tools may use
-        /// it), else downloads it into Poptalk's own cache and deletes that after a verified strip.
+        /// it), else downloads it into PopTalk's own cache and deletes that after a verified strip.
         private nonisolated func build(_ id: String, _ dir: URL, _ download: (@Sendable (Progress) -> Void)?) async throws {
             guard let repo = Repo.ID(rawValue: id) else { throw LLMError(description: "mlx: bad model id \(id)") }
             let patterns = ["*.safetensors", "*.json", "*.jinja"]

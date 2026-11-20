@@ -10,7 +10,7 @@ public enum ModelSettings {
 
     /// The MLX models offered by name in Settings; any other id is "Custom".
     public static let knownMLXModels: [(id: String, name: String)] = [
-        (fineTune, "Gemma 4 E2B · Poptalk fine-tune"),
+        (fineTune, "Gemma 4 E2B · PopTalk fine-tune"),
         (e2b, "Gemma 4 E2B"),
         (e4b, "Gemma 4 E4B"),
     ]

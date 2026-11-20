@@ -142,7 +142,7 @@ struct SettingsView: View {
             } header: {
                 Text("Context sources")
             } footer: {
-                Text("What Poptalk reads on each press to understand what you're writing. Selected text is always used (edits need it), saved vocabulary always boosts recognition, and password fields are never read. Screen text needs Screen Recording.")
+                Text("What PopTalk reads on each press to understand what you're writing. Selected text is always used (edits need it), saved vocabulary always boosts recognition, and password fields are never read. Screen text needs Screen Recording.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             HistorySection(history: history)

@@ -5,7 +5,7 @@ import Testing
 import PoptalkCore
 @testable import PoptalkMLX
 
-/// E2B's weights where downloaded: the shared Hugging Face cache and Poptalk's text-only copy (#51).
+/// E2B's weights where downloaded: the shared Hugging Face cache and PopTalk's text-only copy (#51).
 private let cached: [URL] = {
     let fm = FileManager.default
     let snapshots = fm.homeDirectoryForCurrentUser

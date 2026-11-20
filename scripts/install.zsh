@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Build Poptalk, bundle it, sign it with your Apple Developer certificate, install to /Applications.
+# Build PopTalk, bundle it, sign it with your Apple Developer certificate, install to /Applications.
 set -euo pipefail
 cd "${0:A:h}/.."
 
@@ -23,7 +23,7 @@ MSG
 fi
 
 swift build -c release
-app=build/Poptalk.app
+app=build/PopTalk.app
 rm -rf -- $app
 mkdir -p $app/Contents/MacOS
 cp .build/release/Poptalk $app/Contents/MacOS/
@@ -47,7 +47,8 @@ cat > $app/Contents/Info.plist <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key><string>io.lyx.poptalk</string>
-    <key>CFBundleName</key><string>Poptalk</string>
+    <key>CFBundleName</key><string>PopTalk</string>
+    <key>CFBundleDisplayName</key><string>PopTalk</string>
     <key>CFBundleExecutable</key><string>Poptalk</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
@@ -56,7 +57,7 @@ cat > $app/Contents/Info.plist <<PLIST
     <key>PoptalkCommit</key><string>$commit</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
-    <key>NSMicrophoneUsageDescription</key><string>Poptalk listens while you hold the hotkey to transcribe your speech.</string>
+    <key>NSMicrophoneUsageDescription</key><string>PopTalk listens while you hold the hotkey to transcribe your speech.</string>
 </dict>
 </plist>
 PLIST
@@ -67,7 +68,8 @@ print "Signed with: $identity"
 # Never quit it mid-dictation; the last check is right before the quit, leaving only a sub-ms window.
 zsh scripts/wait-idle.zsh || exit 1
 pkill -x Poptalk || true
-rm -rf -- /Applications/Poptalk.app
+# The bundle was Poptalk.app before #65.
+rm -rf -- /Applications/Poptalk.app /Applications/PopTalk.app
 cp -R $app /Applications/
-open /Applications/Poptalk.app
-print "Installed /Applications/Poptalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ speech-bubble icon shows status)."
+open /Applications/PopTalk.app
+print "Installed /Applications/PopTalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ speech-bubble icon shows status)."

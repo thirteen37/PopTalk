@@ -1,11 +1,11 @@
-# Poptalk
+# PopTalk
 
 macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). Targets: PoptalkCore (pure logic, tested), PoptalkSpeech (FluidAudio/Parakeet), PoptalkMLX (in-process MLX LLMs), Poptalk (app), PoptalkBench, PoptalkDatagen.
 
 ## Commands
 - Run `swift build` / `swift test` / `git` / `gh` with the sandbox disabled: SwiftPM's manifest compile calls sandbox-exec and fails inside it.
 - `swift test > .build/t.log 2>&1; rg -q 'Test run with .* passed' .build/t.log` - gate commits on this; a piped `rg 'Test run with'` also matches "failed".
-- `scripts/install.zsh` - release build, sign, install to /Applications, relaunch. Waits (up to 120 s, then aborts) while Poptalk records or processes: `scripts/wait-idle.zsh` polls the busy marker `~/Library/Caches/io.lyx.poptalk/busy` (`BusyMarker`). Commit first: a dirty tree stamps `PoptalkCommit` with `-dirty`. If `open` fails with -600, run `open /Applications/Poptalk.app` again.
+- `scripts/install.zsh` - release build, sign, install to /Applications, relaunch. Waits (up to 120 s, then aborts) while PopTalk records or processes: `scripts/wait-idle.zsh` polls the busy marker `~/Library/Caches/io.lyx.poptalk/busy` (`BusyMarker`). Commit first: a dirty tree stamps `PoptalkCommit` with `-dirty`. If `open` fails with -600, run `open /Applications/PopTalk.app` again.
 - `zsh training/bench.zsh <model id|dir>` - d/e/s bench + held-out set; compare back-to-back runs only (`PoptalkBench --compare a.json b.json`).
 - `/usr/bin/log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'` - stage timings (category `timing`, counts only, no text). In zsh, `log` is a builtin, so use the full path.
 

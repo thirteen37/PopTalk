@@ -1,7 +1,7 @@
 import Foundation
 
 /// A text-only copy of E2B (#51): the upstream repo also ships vision and audio towers (~0.9 GB) that
-/// Poptalk never loads. The copy keeps the `language_model.*` tensors, config, tokenizer and chat template.
+/// PopTalk never loads. The copy keeps the `language_model.*` tensors, config, tokenizer and chat template.
 public enum TextOnlyModel {
     public static func isText(_ tensor: String) -> Bool { tensor.hasPrefix("language_model.") }
 
@@ -11,7 +11,7 @@ public enum TextOnlyModel {
     public static func directory(for id: String, appSupport: URL) -> URL? {
         id == ModelSettings.e2b ? models(appSupport).appendingPathComponent("gemma-4-e2b-it-4bit-text") : nil
     }
-    /// Poptalk's own Hugging Face cache for full downloads, deleted once stripped.
+    /// PopTalk's own Hugging Face cache for full downloads, deleted once stripped.
     public static func download(appSupport: URL) -> URL { models(appSupport).appendingPathComponent(".download") }
     static func models(_ appSupport: URL) -> URL { appSupport.appendingPathComponent("Poptalk/models") }
 

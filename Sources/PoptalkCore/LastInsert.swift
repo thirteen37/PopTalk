@@ -1,6 +1,6 @@
 import Foundation
 
-/// Poptalk's last paste, so a dictation into the same field soon after can be spaced even when the
+/// PopTalk's last paste, so a dictation into the same field soon after can be spaced even when the
 /// cursor position is unknown (Electron apps, browsers, OCR-only context). Assumes the cursor is still after it.
 /// ponytail: a click elsewhere or a typed Enter within `window` can give a stray space; read the real
 /// preceding character (kAXStringForRangeParameterizedAttribute) where an app supports it.
