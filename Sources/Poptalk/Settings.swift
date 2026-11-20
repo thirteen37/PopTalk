@@ -8,6 +8,7 @@ import SwiftUI
 enum Settings {
     static func register() {
         UserDefaults.standard.register(defaults: ModelSettings.defaults)
+        UserDefaults.standard.register(defaults: [OutcomeKeys.undoWindowKey: OutcomeKeys.undoWindowDefault])
         ModelSettings.migrate(.standard)
     }
 
@@ -62,6 +63,7 @@ struct SettingsView: View {
     @AppStorage("lmstudioCleanupModel") private var lmstudioCleanupModel = ModelSettings.defaults["lmstudioCleanupModel"]!
     @AppStorage("lmstudioEditModel") private var lmstudioEditModel = ModelSettings.defaults["lmstudioEditModel"]!
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
+    @AppStorage(OutcomeKeys.undoWindowKey) private var undoWindow = OutcomeKeys.undoWindowDefault
     @AppStorage(ContextSources.Key.focusedText) private var ctxFocusedText = true
     @AppStorage(ContextSources.Key.nearbyText) private var ctxNearbyText = true
     @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
@@ -112,6 +114,8 @@ struct SettingsView: View {
                 }
             }
             Section {
+                Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
+                    .help("How long the result stays up, with Esc to undo and Return to add a suggested word.")
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()

@@ -50,7 +50,7 @@ final class Overlay {
     /// "⏎ clean up now" after a raw insert. Return runs `onAccept` if `isValid()` still holds; any other
     /// key, or Return once invalid, passes through and dismisses the offer.
     func showCleanupOffer(isValid: @escaping () -> Bool, onAccept: @escaping () -> Void) {
-        show("Model ready  ·  ⏎ clean up now", for: 6)
+        show("Model ready  ·  ⏎ clean up now", for: max(Self.outcomeSeconds, 6))
         keys = KeyCatcher { [weak self] code, flags in
             if OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: false, canAccept: true) == .accept, isValid() {
                 DispatchQueue.main.async { onAccept() }
@@ -61,8 +61,8 @@ final class Overlay {
         }
     }
 
-    /// How long an outcome (and its undo/accept keys) stays up.
-    static let outcomeSeconds: TimeInterval = 2
+    /// How long an outcome (and its undo/accept keys) stays up: the "Undo window" setting, read per show.
+    static var outcomeSeconds: TimeInterval { OutcomeKeys.undoWindow(.standard) }
 
     func showOutcome(_ text: String, undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
         var parts = [text]
