@@ -6,7 +6,7 @@ import PoptalkCore
 /// (FluidVoice-style "reliable paste"), always restoring the user's clipboard.
 @MainActor
 enum TextIO {
-    enum Key: CGKeyCode { case c = 8, v = 9, z = 6, left = 123, right = 124 }
+    enum Key: CGKeyCode { case c = 8, v = 9, z = 6, delete = 51, left = 123, right = 124 }
 
     static func selectedText() async -> String? {
         let start = ContinuousClock.now
