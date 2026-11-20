@@ -118,6 +118,28 @@ enum ScreenContext {
         return v as? T
     }
 
+    /// The first accurate-OCR request in a process loads Vision's models (~14 s measured); pay that at launch.
+    static func prewarmOCR() {
+        Task.detached(priority: .utility) {
+            let start = ContinuousClock.now
+            let size = CGSize(width: 240, height: 60)
+            guard let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return }
+            ctx.setFillColor(gray: 1, alpha: 1)
+            ctx.fill(CGRect(origin: .zero, size: size))
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            NSAttributedString(string: "Poptalk", attributes: [.font: NSFont.systemFont(ofSize: 32)]).draw(at: CGPoint(x: 10, y: 10))
+            NSGraphicsContext.current = nil
+            guard let image = ctx.makeImage() else { return }
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = false
+            try? VNImageRequestHandler(cgImage: image).perform([request])
+            Timing.mark("ocr prewarm", since: start)
+        }
+    }
+
     /// `SCShareableContent` window order isn't front-to-back, so match the AX focused window.
     /// OCRs a band around the focused field (`field`, global points), or the whole window without one.
     private static func ocrFocusedWindow(pid: pid_t, frame: CGRect?, title: String, field: CGRect?) async -> String? {
