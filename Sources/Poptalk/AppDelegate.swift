@@ -311,6 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             latency: Date().timeIntervalSince(started), audio: audio)
         entry.outcome = shown
         entry.system = system
+        (entry.kind, entry.promptTokens, entry.sharedPrefix) = (call?.kind, call?.promptTokens, call?.sharedPrefix)
         history.append(entry)
         if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
     }

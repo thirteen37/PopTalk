@@ -31,6 +31,11 @@ public struct HistoryRequest: Codable, Equatable, Sendable {
     public var audio: String?
     /// Machine conditions at release and the request's CPU time (#58); absent in older lines.
     public var system: SystemSample?
+    /// From `ModelCallRecorder.Call` (#42): dictation or edit, prompt tokens, and the lead tokens shared with the
+    /// previous prompt to the same model in this process (warm-ups included); absent in older lines and non-MLX calls.
+    public var kind: String?
+    public var promptTokens: Int?
+    public var sharedPrefix: Int?
 
     public init(id: UUID, at: Date, app: String, bundleID: String? = nil, rawTranscript: String, transcript: String,
                 boost: [String] = [], selection: String? = nil, provider: String, model: String? = nil,
@@ -167,7 +172,16 @@ public final class ModelCallRecorder: @unchecked Sendable {
         public var model: String
         public var messages: [ChatMessage]
         public var reply: String?
+        /// "edit" for a JSON call (Pipeline asks for JSON only on edits), else "dictation".
+        public var kind: String?
+        /// Prompt tokens, and how many lead tokens match the previous prompt to the same model (#42); set by
+        /// providers that report them (MLX).
+        public var promptTokens: Int?
+        public var sharedPrefix: Int?
     }
+
+    /// The recorder of the call in progress, for the provider to report prompt stats to; nil outside `wrap`.
+    @TaskLocal public static var current: ModelCallRecorder?
 
     private let lock = NSLock()
     private var _call: Call?
@@ -175,10 +189,14 @@ public final class ModelCallRecorder: @unchecked Sendable {
 
     public init() {}
 
+    public func prompt(tokens: Int, shared: Int) {
+        lock.withLock { _call?.promptTokens = tokens; _call?.sharedPrefix = shared }
+    }
+
     public func wrap(_ complete: @escaping Pipeline.Complete) -> Pipeline.Complete {
         { [self] model, messages, json, timeout in
-            lock.withLock { _call = Call(model: model, messages: messages) }
-            let reply = try await complete(model, messages, json, timeout)
+            lock.withLock { _call = Call(model: model, messages: messages, kind: json ? "edit" : "dictation") }
+            let reply = try await Self.$current.withValue(self) { try await complete(model, messages, json, timeout) }
             lock.withLock { _call?.reply = reply }
             return reply
         }
