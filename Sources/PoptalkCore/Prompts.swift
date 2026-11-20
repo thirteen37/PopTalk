@@ -93,6 +93,20 @@ public enum Prompts {
          ChatMessage(role: "user", content: "\(contextBlock(context, vocabulary))\n<transcript>\(esc(transcript))</transcript>")]
     }
 
+    /// S1-mini by Superwhisper (#67): its model card's exact system prompt and control line, then the transcript
+    /// only. It was never trained with screen text or vocabulary, so those are left out.
+    static let s1MiniSystem = "You are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text."
+    static let s1MiniControl = "[Styling: semi-formal] [Structure: prose] [Context: general]"
+
+    public static func isS1Mini(_ model: String) -> Bool { model.lowercased().contains("s1-mini") }
+
+    /// The dictation prompt for `model`: S1-mini's own format, else `dictation(transcript:context:vocabulary:)`.
+    public static func dictation(model: String, transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm]) -> [ChatMessage] {
+        guard isS1Mini(model) else { return dictation(transcript: transcript, context: context, vocabulary: vocabulary) }
+        return [ChatMessage(role: "system", content: s1MiniSystem),
+                ChatMessage(role: "user", content: "\(s1MiniControl)\n\(transcript)")]
+    }
+
     static let editSystem = """
     The user selected text and spoke. Decide what they want and reply with JSON only:
     {"action": one of "replace","correct","edit","insertBefore","insertAfter",
