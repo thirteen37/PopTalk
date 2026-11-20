@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var transcriber: Transcriber? { didSet { syncSpeech() } }
     /// The `ModelSettings.speechModels` id `transcriber` was loaded with.
     private var transcriberModel: String?
+    /// A selection that failed to load while another model was in use: not retried on every press, only once it is
+    /// selected again after another.
+    private var failedSwitch: String?
     private var loadingTranscriber = false { didSet { syncSpeech() } }
     private var transcriberError: String? { didSet { syncSpeech() } }
     /// Speech model download fraction while files are fetched; nil when cached or not started.
@@ -80,20 +83,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Loads (or, after a failure, retries loading) the selected speech model; the last error is kept for the overlay
-    /// and Settings. When another model is selected (#73), releases the loaded one first, never mid-request.
+    /// and Settings. Switching to another selection (#73) starts only between requests and loads alongside the current
+    /// model, which keeps serving (requests hold their own reference) and is replaced once the new one is ready; a
+    /// failed switch keeps it.
     private func loadTranscriber() {
         let id = Settings.speechModel
-        if transcriber != nil, transcriberModel != id, !recording, !busy { transcriber = nil }
-        guard transcriber == nil, !loadingTranscriber else { return }
+        if failedSwitch != id { failedSwitch = nil }
+        let from = transcriber == nil ? nil : transcriberModel
+        let switching = from != nil && from != id
+        guard !loadingTranscriber, transcriber == nil || (switching && failedSwitch == nil && !recording && !busy) else { return }
         loadingTranscriber = true
         speechDownload = nil
         Task {
+            let name = { (id: String?) in ModelSettings.speechModels.first { $0.id == id }?.name ?? id ?? "" }
+            let idle = { !self.recording && !self.busy }  // don't cover a request's overlay
             do {
-                transcriber = try await Transcriber(version: Transcriber.version(id) ?? .v2) { f in
+                let t = try await Transcriber(version: Transcriber.version(id) ?? .v2) { f in
                     Task { @MainActor [weak self] in self?.speechDownload = f }
                 }
-                transcriberModel = id
-                transcriberError = nil
+                (transcriber, transcriberModel, transcriberError) = (t, id, nil)
+                if switching, idle() { overlay.showNotice("Speech model: \(name(id))") }
+            } catch where switching {
+                failedSwitch = id
+                if idle() {
+                    overlay.showError("Couldn't load \(name(id)), still using \(name(from)): \(error.localizedDescription)"
+                                      + " Select it again to retry.")
+                }
             } catch {
                 transcriberError = error.localizedDescription
             }
