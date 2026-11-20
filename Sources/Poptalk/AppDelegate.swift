@@ -265,13 +265,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
                                 cleanupModel: models.cleanupModel, editModel: models.editModel)
         let id = UUID()
+        // #49: with nothing selected, "scratch that" / "no, I meant X" act on the last dictation.
+        let amend: (last: LastInsert<AXUIElement>, command: InsertCommand)? = {
+            guard cleanup == nil, request.selection == nil, let last = lastInsert,
+                  let command = InsertCommand(request.transcript, last: last.text),
+                  let field = TextIO.focusedElement(), last.canAmend(focused: field, value: TextIO.value(of: field))
+            else { return nil }
+            return (last, command)
+        }()
         // Before apply, which moves lastInsert to this request.
         let corrects = history.isEnabled && cleanup == nil
-            ? lastInsert?.corrected(by: request.selection, in: TextIO.focusedElement()) : nil
+            ? amend?.last.requestID ?? lastInsert?.corrected(by: request.selection, in: TextIO.focusedElement()) : nil
         Timing.mark("release: provider ready", since: t0)
-        let result = await pipeline.run(request)
+        var request = request
+        let result: PipelineResult
+        if let amend, amend.command != .change { result = PipelineResult(outcome: .nothing) } else {
+            if let amend { request.selection = amend.last.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            result = await pipeline.run(request)
+        }
         Timing.mark("release: pipeline done", since: t0)
-        let shown = if let cleanup { await replaceRaw(cleanup, with: result, id: id) } else {
+        let shown = if let amend { await amendLast(amend.last, amend.command, with: result, id: id) }
+            else if let cleanup { await replaceRaw(cleanup, with: result, id: id) } else {
             await apply(result, cursorKnown: request.context.cursorOffset != nil, id: id,
                         raw: RawInsert(request: request, rawTranscript: raw, boost: boost))
         }
@@ -322,7 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               TextIO.selectLast(raw.prefix + last.text, in: field)
         else { overlay.showError(failed); return failed }
         await TextIO.replaceSelection(raw.prefix + s)
-        lastInsert = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil)
+        lastInsert = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
+                                prefix: raw.prefix, fieldValue: TextIO.value(of: field))
         let undo = { [weak self] in
             TextIO.undo()
             self?.lastInsert = nil
@@ -330,6 +345,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         overlay.showOutcome("Cleaned up", undo: undo, vocabularyOffer: nil) {}
         return "Cleaned up"
+    }
+
+    /// Applies a voice command to the last insert (#49): selects its text (checked by reading it back), then
+    /// deletes it or pastes the new text over it. Every check runs before anything changes.
+    private func amendLast(_ last: LastInsert<AXUIElement>, _ command: InsertCommand, with result: PipelineResult,
+                           id: UUID) async -> String {
+        let body = last.prefix + last.text  // exactly what was pasted
+        let new: String, label: String
+        if let rest = command.remainder(of: body) {
+            new = rest
+            label = switch command { case .deleteLastWord: "Deleted last word"; case .deleteLastSentence: "Deleted last sentence"; default: "Scratched" }
+        } else if case .replaceSelection(let s, _) = result.outcome {
+            new = String(body.prefix(while: \.isWhitespace)) + s
+            label = InsertCommand.changed(from: last.text, to: s).map { "Changed → \(PreviewText.tail($0, limit: 40))" } ?? "Changed"
+        } else {
+            let msg = if case .error(let m) = result.outcome { m } else { "Couldn't change that" }
+            overlay.showError(msg); return msg
+        }
+        let failed = "Couldn't edit the last dictation"
+        guard let field = TextIO.focusedElement(), last.canAmend(focused: field, value: TextIO.value(of: field)),
+              TextIO.selectLast(body, in: field)
+        else { overlay.showError(failed); return failed }
+        if new.isEmpty { TextIO.press(.delete) } else { await TextIO.replaceSelection(new) }
+        lastInsert = new.isEmpty ? nil
+            : LastInsert(target: field, text: new, requestID: history.isEnabled ? id : nil, fieldValue: TextIO.value(of: field))
+        let undo = { [weak self] in
+            TextIO.undo()
+            self?.lastInsert = last  // the field is back as it was, so commands on it work again
+            self?.history.append(HistoryEvent(.undo, id: id))
+        }
+        overlay.showOutcome(label, undo: undo, vocabularyOffer: nil) {}
+        return label
     }
 
     /// While held, re-transcribes the growing recording (no boosting) for the overlay only.
@@ -400,8 +447,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             reprocess?.prefix = space
             reprocess?.fieldValue = TextIO.value(of: field)  // after the paste: the text a cleanup must find unchanged
         }
+        // Only a dictation takes voice commands (#49): scratching a replacement would lose what it replaced.
+        let amendable: String? = if case .insert = result.outcome, let field {
+            reprocess?.fieldValue ?? TextIO.value(of: field)
+        } else { nil }
         lastInsert = pasted ? field.map {
-            LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess)
+            LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
+                       prefix: space, fieldValue: amendable)
         } : nil
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
