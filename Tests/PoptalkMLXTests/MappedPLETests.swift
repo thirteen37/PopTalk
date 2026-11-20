@@ -31,3 +31,18 @@ func mappedPLEMatchesQuantizedEmbedding(url: URL) throws {
     #expect(a.dtype == b.dtype)
     #expect(MLX.arrayEqual(a, b).item(Bool.self))
 }
+
+/// A prefill chunk, as `LLMModel.prepare` passes it: a lazy slice of the prompt, hundreds of ids with repeats.
+@Test(.enabled(if: !cached.isEmpty, "E2B not downloaded"), arguments: cached)
+func mappedPLEMatchesOnABatchedLazyChunk(url: URL) throws {
+    let all = try loadArrays(url: url)
+    let p = MappedPLE.path
+    let original = QuantizedEmbedding(weight: all[p + ".weight"]!, scales: all[p + ".scales"]!,
+                                      biases: all[p + ".biases"]!, groupSize: 64, bits: 4)
+    let mapped = try #require(try MappedPLE(file: url, groupSize: 64, bits: 4))
+    let prompt = MLXRandom.randInt(0 ..< 262_144, [1, 700], key: MLXRandom.key(62)).asType(.int32)
+    let chunk = (prompt + 0)[0..., 100 ..< 612]  // unevaluated, like a chunk slice
+    let a = original(chunk), b = mapped(chunk)
+    #expect(b.shape == [1, 512, 35 * 256])
+    #expect(MLX.arrayEqual(a, b).item(Bool.self))
+}
