@@ -106,7 +106,9 @@ public enum Prompts {
     letters are exact: "capital T-O-D-O-I-S-T" means "Todoist".
     - edit: transform the selection per the instruction (tone, format, translate…). Keep \
     its nouns and names: "deck" stays "deck".
-    - insertBefore / insertAfter: "text" is ONLY the new text to add, not the selection.
+    - insertBefore / insertAfter: only when the user asks to add text ("add", "append", \
+    "before/after this", "at the start/end"); a phrase that is just new text is replace. \
+    "text" is ONLY the new text to add, not the selection.
 
     Set "vocabulary" only for a correct of a single term or name, with the selection \
     lowercased as the alias. Set "remember" true only if the user said "remember this" \
