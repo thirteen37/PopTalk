@@ -78,6 +78,16 @@ private func tempDir(_ files: [String: String]) -> URL {
     #expect(ModelSettings.selection(suite(["provider": "lmstudio"])).mlxModels.isEmpty)
 }
 
+@Test func modelNames() {
+    #expect(ModelSettings.knownMLXModels.map(\.id) == [ModelSettings.fineTune, ModelSettings.e2b, ModelSettings.e4b])
+    #expect(ModelSettings.displayName(ModelSettings.fineTune) == "Gemma 4 E2B · Poptalk fine-tune")
+    #expect(ModelSettings.displayName(ModelSettings.e2b) == "Gemma 4 E2B")
+    #expect(ModelSettings.displayName(ModelSettings.e4b) == "Gemma 4 E4B")
+    // Others: the folder or Hugging Face repo name.
+    #expect(ModelSettings.displayName("/Users/me/models/gemma-4-e2b-poptalk-v2/") == "gemma-4-e2b-poptalk-v2")
+    #expect(ModelSettings.displayName("mlx-community/Qwen3.5-2B-MLX-4bit") == "Qwen3.5-2B-MLX-4bit")
+}
+
 @Test func modelStatusTitles() {
     #expect(ModelStatus.loading.title == "loading…")
     #expect(ModelStatus(downloaded: 0.423).title == "downloading 42%")

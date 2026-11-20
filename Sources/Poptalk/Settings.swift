@@ -134,10 +134,8 @@ struct SettingsView: View {
                 case "apple":
                     LabeledContent("Model", value: appleModel)
                 default:
-                    TextField("Dictation cleanup model", text: $mlxCleanupModel)
-                    TextField("Edit model", text: $mlxEditModel)
-                    Text("A Hugging Face id (downloaded on first use) or a local model folder.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    MLXModelPicker(label: "Dictation cleanup model", id: $mlxCleanupModel)
+                    MLXModelPicker(label: "Edit model", id: $mlxEditModel)
                 }
             }
             Section("Status") {
@@ -145,7 +143,7 @@ struct SettingsView: View {
                 let sel = Settings.selection
                 ForEach(sel.mlxModels, id: \.self) { id in
                     let role = sel.cleanupModel == sel.editModel ? "Model" : id == sel.cleanupModel ? "Cleanup model" : "Edit model"
-                    statusRow("\(role) \((id as NSString).lastPathComponent)", status.value.models[id] ?? .loading)
+                    statusRow("\(role) \(ModelSettings.displayName(id))", status.value.models[id] ?? .loading).help(id)
                 }
             }
         }
@@ -227,6 +225,58 @@ struct SettingsView: View {
             vocabMessage = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
         }
         terms = store.terms
+    }
+}
+
+/// A known MLX model by name, or Custom…: a Hugging Face id or a local folder, shown by its short name.
+private struct MLXModelPicker: View {
+    let label: String
+    @Binding var id: String
+    @State private var asking = false
+    @State private var draft = ""
+
+    private var isKnown: Bool { ModelSettings.knownMLXModels.contains { $0.id == id } }
+    private var localURL: URL? {
+        let path = (id as NSString).expandingTildeInPath
+        return path.hasPrefix("/") && FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+    }
+
+    var body: some View {
+        Picker(label, selection: Binding(get: { isKnown ? id : "custom" }, set: { v in
+            if v == "custom" { draft = isKnown ? "" : id; asking = true } else { id = v }
+        })) {
+            ForEach(ModelSettings.knownMLXModels, id: \.id) { Text($0.name).tag($0.id) }
+            Text("Custom…").tag("custom")
+        }
+        .help(id)
+        .alert("Custom model", isPresented: $asking) {
+            TextField("org/model or /path/to/folder", text: $draft)
+            Button("Use") { if !draft.isEmpty { id = draft } }
+            Button("Choose Folder…", action: choose)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("A Hugging Face id (downloaded on first use) or a local MLX model or adapter folder.")
+        }
+        if !isKnown {
+            LabeledContent {
+                HStack {
+                    Button("Choose…", action: choose)
+                    Button("Reveal in Finder") { localURL.map { NSWorkspace.shared.activateFileViewerSelecting([$0]) } }
+                        .disabled(localURL == nil)
+                    Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(id, forType: .string) }
+                }
+            } label: {
+                Text(ModelSettings.displayName(id)).lineLimit(1).truncationMode(.middle).help(id)
+            }
+        }
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.directoryURL = localURL
+        if panel.runModal() == .OK, let url = panel.url { id = url.path }
     }
 }
 
