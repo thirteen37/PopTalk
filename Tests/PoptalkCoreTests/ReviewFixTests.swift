@@ -58,6 +58,8 @@ private func dictate(_ reply: String, transcript: String = "send me the report",
 @Test func cleanupStripsThinkBlocksAndTags() async {
     #expect(await dictate("<think>user wants…</think>\n<transcript>Send me the report.</transcript>")
         == .insert("Send me the report.", label: "Dictated"))
+    // Qwen3 with thinking off (#68): an empty block if the model re-emits it.
+    #expect(await dictate("<think>\n\n</think>\n\nSend me the report.") == .insert("Send me the report.", label: "Dictated"))
 }
 
 @Test func cleanupChatterFallsBackToRaw() async {

@@ -9,14 +9,14 @@ mask_prompt: true          # loss on the assistant turn only
 num_layers: 16             # last 16 of 35 layers: halves backward cost vs all layers
 batch_size: 1
 grad_accumulation_steps: 4   # effective batch 4; batch 4 pushed a shared 24 GB Mac into swap (262k-vocab logits)
-iters: 1200                # micro-batches = 300 optimizer steps (~1,200 examples); v1 ran 150 steps on a shared Mac (~7 s/example)
+iters: 2740                # micro-batches = 685 optimizer steps, ~40% of v3's 6,853 train rows (v2: 1,200); ~7 s/example on a shared Mac
 learning_rate: 1.0e-4
 lr_schedule:
   name: cosine_decay
   warmup: 10
-  arguments: [1.0e-4, 300, 1.0e-6]
+  arguments: [1.0e-4, 685, 1.0e-6]   # decay over the optimizer steps
 steps_per_report: 100
-steps_per_eval: 600
+steps_per_eval: 1370
 val_batches: 60
 save_every: 300
 max_seq_length: 3072

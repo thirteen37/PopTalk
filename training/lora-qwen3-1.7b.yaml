@@ -1,0 +1,32 @@
+# mlx_lm.lora config for a Qwen3-1.7B fine-tune on the v3 data (#68); same data and schedule as lora.yaml. From the repo root:
+#   uv run --project training mlx_lm.lora --config training/lora-qwen3-1.7b.yaml
+# training/out/data is chat messages, so mlx_lm applies Qwen3's own template. Its final assistant turn renders as
+# "<think>\n\n</think>\n\n" + reply: the same prefix MLXProvider's enable_thinking=false prompt ends with, so the
+# reply sees the inference context exactly; mask_prompt cuts at "assistant\n", so the empty think block is in the loss.
+model: mlx-community/Qwen3-1.7B-4bit
+train: true
+data: training/out/data
+adapter_path: training/out/adapters-qwen3-1.7b
+fine_tune_type: lora
+mask_prompt: true          # loss on the assistant turn only
+num_layers: 16             # last 16 of 28 layers
+batch_size: 1
+grad_accumulation_steps: 4   # effective batch 4, as E2B, for a like-for-like comparison
+iters: 2740                # micro-batches = 685 optimizer steps, ~40% of v3's 6,853 train rows (v2: 1,200)
+learning_rate: 1.0e-4
+lr_schedule:
+  name: cosine_decay
+  warmup: 10
+  arguments: [1.0e-4, 685, 1.0e-6]   # decay over the optimizer steps
+steps_per_report: 100
+steps_per_eval: 1370
+val_batches: 60
+save_every: 300
+max_seq_length: 3072
+grad_checkpoint: true
+seed: 21
+lora_parameters:
+  keys: [self_attn.q_proj, self_attn.k_proj, self_attn.v_proj, self_attn.o_proj, mlp.gate_proj, mlp.up_proj, mlp.down_proj]
+  rank: 16
+  scale: 2.0
+  dropout: 0.0

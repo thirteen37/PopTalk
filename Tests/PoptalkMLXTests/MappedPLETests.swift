@@ -31,3 +31,9 @@ func mappedPLEMatchesQuantizedEmbedding(url: URL) throws {
     #expect(a.dtype == b.dtype)
     #expect(MLX.arrayEqual(a, b).item(Bool.self))
 }
+
+// Non-Gemma bases (Qwen3, #68) have no PLE: install changes nothing.
+@Test func mappedPLEIsANoOpWithoutPLE() throws {
+    let model = Linear(4, 4)
+    #expect(try MappedPLE.install(in: model, directory: FileManager.default.temporaryDirectory) == false)
+}
