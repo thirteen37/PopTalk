@@ -2,20 +2,21 @@ import Foundation
 import MLX
 import MLXNN
 import Testing
+import PoptalkCore
 @testable import PoptalkMLX
 
-/// E2B's weights in the shared Hugging Face cache, if downloaded.
-private let cached: URL? = {
-    let snapshots = FileManager.default.homeDirectoryForCurrentUser
+/// E2B's weights where downloaded: the shared Hugging Face cache and Poptalk's text-only copy (#51).
+private let cached: [URL] = {
+    let fm = FileManager.default
+    let snapshots = fm.homeDirectoryForCurrentUser
         .appendingPathComponent(".cache/huggingface/hub/models--mlx-community--gemma-4-e2b-it-4bit/snapshots")
-    return (try? FileManager.default.contentsOfDirectory(at: snapshots, includingPropertiesForKeys: nil))?
-        .map { $0.appendingPathComponent("model.safetensors") }
-        .first { FileManager.default.fileExists(atPath: $0.path) }
+    let full = (try? fm.contentsOfDirectory(at: snapshots, includingPropertiesForKeys: nil)) ?? []
+    let text = TextOnlyModel.directory(for: ModelSettings.e2b, appSupport: MLXProvider.appSupport)!
+    return (full + [text]).map { $0.appendingPathComponent("model.safetensors") }.filter { fm.fileExists(atPath: $0.path) }
 }()
 
-@Test(.enabled(if: cached != nil, "E2B not in the Hugging Face cache"))
-func mappedPLEMatchesQuantizedEmbedding() throws {
-    let url = cached!
+@Test(.enabled(if: !cached.isEmpty, "E2B not downloaded"), arguments: cached)
+func mappedPLEMatchesQuantizedEmbedding(url: URL) throws {
     // Lazy: reads only the header; just the three PLE tensors are materialized.
     let all = try loadArrays(url: url)
     let p = MappedPLE.path
