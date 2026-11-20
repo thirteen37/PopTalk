@@ -7,7 +7,9 @@ import PoptalkSpeech
 //   transcribe [--cache DIR]  {id, speak, voice?, rate?, context?} → {id, raw, boosted}
 //       `say` → Parakeet TDT v2 → CTC boosting from the context's terms, as in the app; one model load.
 //   render                    {id, kind, transcript, selection?, context?, vocabulary?, target?} → {id, messages}
-//       The exact production chat (Prompts.dictation / Prompts.edit after Pipeline.stripHesitations).
+//       The exact production chat (Prompts.dictation / Prompts.edit after Pipeline.stripHesitations; dictation
+//       also after Pipeline.dictationPrepass). Dictation targets get Pipeline.spokenNumbers too, so they keep
+//       the digits the model sees (#59).
 //   teach --model ID          {id, messages} → {id, output}   (in-process MLX, greedy, like the app)
 // `context` is {appName?, windowTitle?, text?, cursorOffset?, ocrText?}, mirroring ScreenSnapshot.
 Transcriber.quietLogs()
@@ -55,12 +57,13 @@ case "render":
     for it in items {
         let ctx = it.context?.snapshot ?? ScreenSnapshot()
         let said = Pipeline.stripHesitations(it.transcript ?? "")
-        var m = if let sel = it.selection, !sel.isEmpty {
-            Prompts.edit(instruction: said, selection: sel, context: ctx, vocabulary: it.vocabulary ?? [])
+        let isEdit = !(it.selection ?? "").isEmpty
+        var m = if isEdit {
+            Prompts.edit(instruction: said, selection: it.selection!, context: ctx, vocabulary: it.vocabulary ?? [])
         } else {
-            Prompts.dictation(transcript: said, context: ctx, vocabulary: it.vocabulary ?? [])
+            Prompts.dictation(transcript: Pipeline.dictationPrepass(said), context: ctx, vocabulary: it.vocabulary ?? [])
         }
-        if let t = it.target { m.append(ChatMessage(role: "assistant", content: t)) }
+        if let t = it.target { m.append(ChatMessage(role: "assistant", content: isEdit ? t : Pipeline.spokenNumbers(t))) }
         emit(Out(id: it.id, messages: m))
     }
 

@@ -1,0 +1,2377 @@
+{
+  "cases" : [
+    {
+      "id" : "h-d-names-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Ffion\"",
+            "missing \"Ruairí\"",
+            "contains \"ruairi\""
+          ],
+          "output" : "Fion send the MagSafe runbook to Ruairi before the incident review.",
+          "seconds" : 0.4289360046386719
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Ffion\"",
+            "missing \"Ruairí\"",
+            "contains \"ruairi\""
+          ],
+          "output" : "Fion send the MagSafe runbook to Ruairi before the incident review.",
+          "seconds" : 0.4309220314025879
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Ffion\"",
+            "missing \"Ruairí\"",
+            "contains \"ruairi\""
+          ],
+          "output" : "Fion send the MagSafe runbook to Ruairi before the incident review.",
+          "seconds" : 0.4284859895706177
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'm meeting Joaquín Fitzgerald from Tern Health next Wednesday to talk about pricing.",
+          "seconds" : 0.4372960329055786
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'm meeting Joaquín Fitzgerald from Tern Health next Wednesday to talk about pricing.",
+          "seconds" : 0.43385303020477295
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'm meeting Joaquín Fitzgerald from Tern Health next Wednesday to talk about pricing.",
+          "seconds" : 0.4334299564361572
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The HarborDeck invoice still lists pandas as a line item.",
+          "seconds" : 0.3337719440460205
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The HarborDeck invoice still lists pandas as a line item.",
+          "seconds" : 0.33474504947662354
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The HarborDeck invoice still lists pandas as a line item.",
+          "seconds" : 0.33157992362976074
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Gwendolyn\"",
+            "contains \"gwendolin\""
+          ],
+          "output" : "please add gwendolin as a reviewer on the pandas change",
+          "seconds" : 4.43712306022644
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Gwendolyn\"",
+            "contains \"gwendolin\""
+          ],
+          "output" : "please add gwendolin as a reviewer on the pandas change",
+          "seconds" : 4.356935977935791
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Gwendolyn\"",
+            "contains \"gwendolin\""
+          ],
+          "output" : "please add gwendolin as a reviewer on the pandas change",
+          "seconds" : 4.360430002212524
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Paavo thinks we should drop Firebase and keep VS Code",
+          "seconds" : 0.42596304416656494
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Paavo thinks we should drop Firebase and keep VS Code",
+          "seconds" : 0.41683506965637207
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Paavo thinks we should drop Firebase and keep VS Code",
+          "seconds" : 0.4158649444580078
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Our Kestrel Migration demo uses Fargate for the backend.",
+          "seconds" : 0.42378997802734375
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Our Kestrel Migration demo uses Fargate for the backend.",
+          "seconds" : 0.4223390817642212
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Our Kestrel Migration demo uses Fargate for the backend.",
+          "seconds" : 0.421733021736145
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Yarrowly Freight\"",
+            "missing \"SharePoint\""
+          ],
+          "output" : "can you check whether yarrowly freight renewed their share point seats",
+          "seconds" : 4.406996011734009
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Yarrowly Freight\"",
+            "missing \"SharePoint\""
+          ],
+          "output" : "can you check whether yarrowly freight renewed their share point seats",
+          "seconds" : 4.473770022392273
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Yarrowly Freight\"",
+            "missing \"SharePoint\""
+          ],
+          "output" : "can you check whether yarrowly freight renewed their share point seats",
+          "seconds" : 4.335528016090393
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thank Deepika for the Kafka workshop notes.",
+          "seconds" : 0.30727899074554443
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thank Deepika for the Kafka workshop notes.",
+          "seconds" : 0.2989610433578491
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thank Deepika for the Kafka workshop notes.",
+          "seconds" : 0.29784095287323
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-8",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Rhys\"",
+            "contains \"reese\"",
+            "contains \"rees\""
+          ],
+          "output" : "The Project Rowan retro moved to Sunday because Reese is traveling.",
+          "seconds" : 0.4011249542236328
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Rhys\"",
+            "contains \"reese\"",
+            "contains \"rees\""
+          ],
+          "output" : "The Project Rowan retro moved to Sunday because Reese is traveling.",
+          "seconds" : 0.4021470546722412
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Rhys\"",
+            "contains \"reese\"",
+            "contains \"rees\""
+          ],
+          "output" : "The Project Rowan retro moved to Sunday because Reese is traveling.",
+          "seconds" : 0.4013270139694214
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-9",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Søren\"",
+            "missing \"Nimbus Energy\"",
+            "missing \"dbt\"",
+            "contains \"soren\""
+          ],
+          "output" : "soren wrote the nimbus energy onboarding checklist in d b t",
+          "seconds" : 4.445694923400879
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Søren\"",
+            "missing \"Nimbus Energy\"",
+            "missing \"dbt\"",
+            "contains \"soren\""
+          ],
+          "output" : "soren wrote the nimbus energy onboarding checklist in d b t",
+          "seconds" : 4.33811891078949
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Søren\"",
+            "missing \"Nimbus Energy\"",
+            "missing \"dbt\"",
+            "contains \"soren\""
+          ],
+          "output" : "soren wrote the nimbus energy onboarding checklist in d b t",
+          "seconds" : 4.297996997833252
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-10",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Could Kwame send the Auth0 runbook to Rhys before the incident review?",
+          "seconds" : 0.49101507663726807
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Could Kwame send the Auth0 runbook to Rhys before the incident review?",
+          "seconds" : 0.48750901222229004
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Could Kwame send the Auth0 runbook to Rhys before the incident review?",
+          "seconds" : 0.48753106594085693
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-11",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Mahina\"",
+            "missing \"Toivonen\"",
+            "missing \"PrismNova\"",
+            "contains \"maheena\"",
+            "contains \"toy vonen\""
+          ],
+          "output" : "i'm meeting maheena toy vonen from prismnova next sunday to talk about pricing",
+          "seconds" : 0.8325639963150024
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Mahina\"",
+            "missing \"Toivonen\"",
+            "missing \"PrismNova\"",
+            "contains \"maheena\"",
+            "contains \"toy vonen\""
+          ],
+          "output" : "i'm meeting maheena toy vonen from prismnova next sunday to talk about pricing",
+          "seconds" : 0.8344099521636963
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Mahina\"",
+            "missing \"Toivonen\"",
+            "missing \"PrismNova\"",
+            "contains \"maheena\"",
+            "contains \"toy vonen\""
+          ],
+          "output" : "i'm meeting maheena toy vonen from prismnova next sunday to talk about pricing",
+          "seconds" : 0.8356039524078369
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-12",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Birch\""
+          ],
+          "output" : "The project birch invoice still lists Dagster as a line item.",
+          "seconds" : 0.3392770290374756
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Birch\""
+          ],
+          "output" : "The project birch invoice still lists Dagster as a line item.",
+          "seconds" : 0.336264967918396
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Birch\""
+          ],
+          "output" : "The project birch invoice still lists Dagster as a line item.",
+          "seconds" : 0.3365210294723511
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-13",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Niamh\"",
+            "contains \"neve\""
+          ],
+          "output" : "Please add Neve as a reviewer on the HubSpot change.",
+          "seconds" : 0.4333219528198242
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Niamh\"",
+            "contains \"neve\""
+          ],
+          "output" : "Please add Neve as a reviewer on the HubSpot change.",
+          "seconds" : 0.4336090087890625
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Niamh\"",
+            "contains \"neve\""
+          ],
+          "output" : "Please add Neve as a reviewer on the HubSpot change.",
+          "seconds" : 0.4332159757614136
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-14",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Agnieszka thinks we should drop dbt and keep RabbitMQ",
+          "seconds" : 0.46770501136779785
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Agnieszka thinks we should drop dbt and keep RabbitMQ",
+          "seconds" : 0.46630799770355225
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Agnieszka thinks we should drop dbt and keep RabbitMQ",
+          "seconds" : 0.4701939821243286
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-15",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Our Initiative Copper demo uses pandas for the backend.",
+          "seconds" : 0.32218992710113525
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Our Initiative Copper demo uses pandas for the backend.",
+          "seconds" : 0.32074904441833496
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Our Initiative Copper demo uses pandas for the backend.",
+          "seconds" : 0.3195708990097046
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for eight tomorrow.",
+          "seconds" : 0.326166033744812
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for eight tomorrow.",
+          "seconds" : 0.3269979953765869
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for eight tomorrow.",
+          "seconds" : 0.32892906665802
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius instead.",
+          "seconds" : 0.3514019250869751
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius instead.",
+          "seconds" : 0.3539259433746338
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius instead.",
+          "seconds" : 0.3516160249710083
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.32895898818969727
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.32639801502227783
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.32808399200439453
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need 12, actually, five extra chairs.",
+          "seconds" : 0.381506085395813
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need 12, actually, five extra chairs.",
+          "seconds" : 0.379256010055542
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need 12, actually, five extra chairs.",
+          "seconds" : 0.3792850971221924
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.3309270143508911
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.3307539224624634
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.32903409004211426
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Caoimhe\""
+          ],
+          "output" : "Send the draft to Caoimhe, not Mateus.",
+          "seconds" : 0.36944401264190674
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Caoimhe\""
+          ],
+          "output" : "Send the draft to Caoimhe, not Mateus.",
+          "seconds" : 0.3681260347366333
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Caoimhe\""
+          ],
+          "output" : "Send the draft to Caoimhe, not Mateus.",
+          "seconds" : 0.36812305450439453
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Thursday\""
+          ],
+          "output" : "The party is on Thursday, make that Sunday evening.",
+          "seconds" : 0.3711029291152954
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Thursday\""
+          ],
+          "output" : "The party is on Thursday, make that Sunday evening.",
+          "seconds" : 0.3706479072570801
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Thursday\""
+          ],
+          "output" : "The party is on Thursday, make that Sunday evening.",
+          "seconds" : 0.36982297897338867
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"three\""
+          ],
+          "output" : "We need three, actually, twenty extra chairs.",
+          "seconds" : 0.35995304584503174
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"three\""
+          ],
+          "output" : "We need three, actually, twenty extra chairs.",
+          "seconds" : 0.36003804206848145
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"three\""
+          ],
+          "output" : "We need three, actually, twenty extra chairs.",
+          "seconds" : 0.3599109649658203
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually think the old version was faster.",
+          "seconds" : 0.3512580394744873
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually think the old version was faster.",
+          "seconds" : 0.35012590885162354
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually think the old version was faster.",
+          "seconds" : 0.35012006759643555
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, the review is still on for today.",
+          "seconds" : 0.38480591773986816
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, the review is still on for today.",
+          "seconds" : 0.38478899002075195
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, the review is still on for today.",
+          "seconds" : 0.38412797451019287
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry, I didn't catch your name at the start.",
+          "seconds" : 0.3899250030517578
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry, I didn't catch your name at the start.",
+          "seconds" : 0.38960492610931396
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry, I didn't catch your name at the start.",
+          "seconds" : 0.38795602321624756
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"It sounds like the speakers are broken\""
+          ],
+          "output" : "it sounds like the speakers are broken",
+          "seconds" : 0.6146399974822998
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"It sounds like the speakers are broken\""
+          ],
+          "output" : "it sounds like the speakers are broken",
+          "seconds" : 0.6147880554199219
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"It sounds like the speakers are broken\""
+          ],
+          "output" : "it sounds like the speakers are broken",
+          "seconds" : 0.6236319541931152
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you remind everyone about the deadline?",
+          "seconds" : 0.2740020751953125
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you remind everyone about the deadline?",
+          "seconds" : 0.2740440368652344
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you remind everyone about the deadline?",
+          "seconds" : 0.2732970714569092
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What should we name the new project?",
+          "seconds" : 0.3398529291152954
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What should we name the new project?",
+          "seconds" : 0.34038400650024414
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What should we name the new project?",
+          "seconds" : 0.3424088954925537
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Write a summary of today's standup\""
+          ],
+          "output" : "write a summary of today's standup",
+          "seconds" : 0.35134005546569824
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Write a summary of today's standup\""
+          ],
+          "output" : "write a summary of today's standup",
+          "seconds" : 0.35110199451446533
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Write a summary of today's standup\""
+          ],
+          "output" : "write a summary of today's standup",
+          "seconds" : 0.3521829843521118
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "How long does the battery last on these headphones?",
+          "seconds" : 0.38858306407928467
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "How long does the battery last on these headphones?",
+          "seconds" : 0.38834190368652344
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "How long does the battery last on these headphones?",
+          "seconds" : 0.38849198818206787
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The bakery on the corner closes early on Sundays.",
+          "seconds" : 0.3891620635986328
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The bakery on the corner closes early on Sundays.",
+          "seconds" : 0.38985300064086914
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The bakery on the corner closes early on Sundays.",
+          "seconds" : 0.38798606395721436
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "My cousin is visiting for a few days next month.",
+          "seconds" : 0.43016302585601807
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "My cousin is visiting for a few days next month.",
+          "seconds" : 0.4256829023361206
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "My cousin is visiting for a few days next month.",
+          "seconds" : 0.42454099655151367
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The elevator in our building is out of order again.",
+          "seconds" : 0.3986920118331909
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The elevator in our building is out of order again.",
+          "seconds" : 0.3982299566268921
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The elevator in our building is out of order again.",
+          "seconds" : 0.3984839916229248
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We planted tomatoes and herbs on the balcony.",
+          "seconds" : 0.37568604946136475
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We planted tomatoes and herbs on the balcony.",
+          "seconds" : 0.37666594982147217
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We planted tomatoes and herbs on the balcony.",
+          "seconds" : 0.37888503074645996
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-0",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Viktorija",
+          "seconds" : 0.0010930299758911133,
+          "vocabOffer" : "Viktorija"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Viktorija",
+          "seconds" : 0.0005199909210205078,
+          "vocabOffer" : "Viktorija"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Viktorija",
+          "seconds" : 0.0003179311752319336,
+          "vocabOffer" : "Viktorija"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-1",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Deepika",
+          "seconds" : 0.00010907649993896484,
+          "vocabOffer" : "Deepika"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Deepika",
+          "seconds" : 0.0002809762954711914,
+          "vocabOffer" : "Deepika"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Deepika",
+          "seconds" : 0.0003679990768432617,
+          "vocabOffer" : "Deepika"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-2",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Bartholomew",
+          "seconds" : 0.0002919435501098633,
+          "vocabOffer" : "Bartholomew"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Bartholomew",
+          "seconds" : 0.0002830028533935547,
+          "vocabOffer" : "Bartholomew"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Bartholomew",
+          "seconds" : 0.0002919435501098633,
+          "vocabOffer" : "Bartholomew"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-3",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 6.699562072753906e-05,
+          "vocabOffer" : "Chidi"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 0.00019097328186035156,
+          "vocabOffer" : "Chidi"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 0.00018894672393798828,
+          "vocabOffer" : "Chidi"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-4",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Teodora",
+          "seconds" : 9.000301361083984e-05,
+          "vocabOffer" : "Teodora"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Teodora",
+          "seconds" : 0.00020599365234375,
+          "vocabOffer" : "Teodora"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Teodora",
+          "seconds" : 0.0002859830856323242,
+          "vocabOffer" : "Teodora"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-5",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Aino",
+          "seconds" : 5.4955482482910156e-05,
+          "vocabOffer" : "Aino"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Aino",
+          "seconds" : 5.3048133850097656e-05,
+          "vocabOffer" : "Aino"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Aino",
+          "seconds" : 0.0001760721206665039,
+          "vocabOffer" : "Aino"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-6",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 0.00019097328186035156,
+          "vocabOffer" : "Chidi"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 0.00011301040649414062,
+          "vocabOffer" : "Chidi"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 7.700920104980469e-05,
+          "vocabOffer" : "Chidi"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-spelled-7",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 7.49826431274414e-05,
+          "vocabOffer" : "Chidi"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 0.00019502639770507812,
+          "vocabOffer" : "Chidi"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Chidi",
+          "seconds" : 0.00020396709442138672,
+          "vocabOffer" : "Chidi"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-0",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Bronagh Chakraborty",
+          "seconds" : 0.6780009269714355,
+          "vocabOffer" : "Bronagh Chakraborty"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Bronagh Chakraborty",
+          "seconds" : 0.6730899810791016,
+          "vocabOffer" : "Bronagh Chakraborty"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Bronagh Chakraborty",
+          "seconds" : 0.6747289896011353,
+          "vocabOffer" : "Bronagh Chakraborty"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-1",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Nimbusly Capital",
+          "seconds" : 0.4861929416656494
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Nimbusly Capital",
+          "seconds" : 0.4853839874267578
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Nimbusly Capital",
+          "seconds" : 0.4846770763397217
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-2",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+            "not exactly \"pgvector\""
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "fix the product name please",
+          "seconds" : 0.5706830024719238
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+            "not exactly \"pgvector\""
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "fix the product name please",
+          "seconds" : 0.5699199438095093
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+            "not exactly \"pgvector\""
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "fix the product name please",
+          "seconds" : 0.5693719387054443
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-3",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Prism Systems",
+          "seconds" : 0.6186779737472534
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Prism Systems",
+          "seconds" : 0.6185479164123535
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Prism Systems",
+          "seconds" : 0.6175260543823242
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-4",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Tendai Abernathy",
+          "seconds" : 0.7204169034957886,
+          "vocabOffer" : "Tendai Abernathy"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Tendai Abernathy",
+          "seconds" : 0.7231580018997192,
+          "vocabOffer" : "Tendai Abernathy"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Tendai Abernathy",
+          "seconds" : 0.7484289407730103,
+          "vocabOffer" : "Tendai Abernathy"
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-5",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+            "not exactly \"Kelp Insurance\""
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "kelp insurance",
+          "seconds" : 0.3765289783477783
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+            "not exactly \"Kelp Insurance\""
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "kelp insurance",
+          "seconds" : 0.3689420223236084
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+            "not exactly \"Kelp Insurance\""
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "kelp insurance",
+          "seconds" : 0.36047494411468506
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-6",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+            "not exactly \"NVMe\""
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "NVM",
+          "seconds" : 0.517928957939148
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+            "not exactly \"NVMe\""
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "NVM",
+          "seconds" : 0.5153840780258179
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+            "not exactly \"NVMe\""
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "NVM",
+          "seconds" : 0.5141240358352661
+        }
+      ]
+    },
+    {
+      "id" : "h-e-context-7",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Lark Rewrite",
+          "seconds" : 0.4764360189437866
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Lark Rewrite",
+          "seconds" : 0.48083293437957764
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Lark Rewrite",
+          "seconds" : 0.47752201557159424
+        }
+      ]
+    },
+    {
+      "id" : "h-e-shorter-0",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+            "length 110 > 0.6 × 182"
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The shuttle to the venue leaves at eight, so please plan accordingly. Let me know if that causes any problems.",
+          "seconds" : 0.5736820697784424
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+            "length 110 > 0.6 × 182"
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The shuttle to the venue leaves at eight, so please plan accordingly. Let me know if that causes any problems.",
+          "seconds" : 0.5794810056686401
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+            "length 110 > 0.6 × 182"
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The shuttle to the venue leaves at eight, so please plan accordingly. Let me know if that causes any problems.",
+          "seconds" : 0.5730000734329224
+        }
+      ]
+    },
+    {
+      "id" : "h-e-shorter-1",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The cafeteria is closed for renovation this week. Thank you for your patience and flexibility.",
+          "seconds" : 0.5112830400466919
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The cafeteria is closed for renovation this week. Thank you for your patience and flexibility.",
+          "seconds" : 0.5081028938293457
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The cafeteria is closed for renovation this week. Thank you for your patience and flexibility.",
+          "seconds" : 0.5079220533370972
+        }
+      ]
+    },
+    {
+      "id" : "h-e-shorter-3",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The shuttle leaves at eight. Thank you for your understanding.",
+          "seconds" : 0.45697200298309326
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The shuttle leaves at eight. Thank you for your understanding.",
+          "seconds" : 0.45449697971343994
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The shuttle leaves at eight. Thank you for your understanding.",
+          "seconds" : 0.45655298233032227
+        }
+      ]
+    },
+    {
+      "id" : "h-e-shorter-4",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The cafeteria is closed for renovation this week.",
+          "seconds" : 0.42911696434020996
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The cafeteria is closed for renovation this week.",
+          "seconds" : 0.42662203311920166
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The cafeteria is closed for renovation this week.",
+          "seconds" : 0.42415308952331543
+        }
+      ]
+    },
+    {
+      "id" : "h-e-bullets-3",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Buy stamps\n- Mail the package\n- Return the library books",
+          "seconds" : 0.49309802055358887
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Buy stamps\n- Mail the package\n- Return the library books",
+          "seconds" : 0.4914799928665161
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Buy stamps\n- Mail the package\n- Return the library books",
+          "seconds" : 0.48935794830322266
+        }
+      ]
+    },
+    {
+      "id" : "h-e-bullets-4",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Carrots\n- Yogurt\n- Bananas\n- Honey",
+          "seconds" : 0.4930839538574219
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Carrots\n- Yogurt\n- Bananas\n- Honey",
+          "seconds" : 0.48730194568634033
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Carrots\n- Yogurt\n- Bananas\n- Honey",
+          "seconds" : 0.4884359836578369
+        }
+      ]
+    },
+    {
+      "id" : "h-e-bullets-5",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Back up the laptop\n- Update the router\n- Reset the guest password.",
+          "seconds" : 0.5252450704574585
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Back up the laptop\n- Update the router\n- Reset the guest password.",
+          "seconds" : 0.5204370021820068
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- Back up the laptop\n- Update the router\n- Reset the guest password.",
+          "seconds" : 0.5214799642562866
+        }
+      ]
+    },
+    {
+      "id" : "h-e-insert-0",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"Thanks for your patience\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "thanks for your patience",
+          "seconds" : 0.37223196029663086
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"Thanks for your patience\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "thanks for your patience",
+          "seconds" : 0.3718310594558716
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"Thanks for your patience\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "thanks for your patience",
+          "seconds" : 0.3740140199661255
+        }
+      ]
+    },
+    {
+      "id" : "h-e-insert-1",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertBefore",
+          "failures" : [
+            "missing \"The slides are in the shared folder\""
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "the slides are in the shared folder",
+          "seconds" : 0.39614999294281006
+        },
+        {
+          "action" : "insertBefore",
+          "failures" : [
+            "missing \"The slides are in the shared folder\""
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "the slides are in the shared folder",
+          "seconds" : 0.3936039209365845
+        },
+        {
+          "action" : "insertBefore",
+          "failures" : [
+            "missing \"The slides are in the shared folder\""
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "the slides are in the shared folder",
+          "seconds" : 0.4030870199203491
+        }
+      ]
+    },
+    {
+      "id" : "h-e-insert-2",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"See everyone next week\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "see everyone next week",
+          "seconds" : 0.37865304946899414
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"See everyone next week\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "see everyone next week",
+          "seconds" : 0.3758150339126587
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"See everyone next week\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "see everyone next week",
+          "seconds" : 0.373183012008667
+        }
+      ]
+    },
+    {
+      "id" : "h-e-insert-3",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertBefore",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "Thanks for your patience",
+          "seconds" : 0.3679020404815674
+        },
+        {
+          "action" : "insertBefore",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "Thanks for your patience",
+          "seconds" : 0.3687859773635864
+        },
+        {
+          "action" : "insertBefore",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "Thanks for your patience",
+          "seconds" : 0.3669450283050537
+        }
+      ]
+    },
+    {
+      "id" : "h-e-insert-4",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"The slides are in the shared folder\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "the slides are in the shared folder",
+          "seconds" : 0.4102360010147095
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"The slides are in the shared folder\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "the slides are in the shared folder",
+          "seconds" : 0.4136819839477539
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+            "missing \"The slides are in the shared folder\""
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "the slides are in the shared folder",
+          "seconds" : 0.4095510244369507
+        }
+      ]
+    },
+    {
+      "id" : "h-e-insert-5",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertBefore",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "See everyone next week",
+          "seconds" : 0.36501896381378174
+        },
+        {
+          "action" : "insertBefore",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "See everyone next week",
+          "seconds" : 0.3681529760360718
+        },
+        {
+          "action" : "insertBefore",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertBefore",
+          "modelActionOK" : true,
+          "output" : "See everyone next week",
+          "seconds" : 0.3694659471511841
+        }
+      ]
+    },
+    {
+      "id" : "h-e-replace-0",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Quarterly Planning Notes",
+          "seconds" : 0.3710179328918457
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Quarterly Planning Notes",
+          "seconds" : 0.3647719621658325
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Quarterly Planning Notes",
+          "seconds" : 0.363084077835083
+        }
+      ]
+    },
+    {
+      "id" : "h-e-replace-1",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Lunch and Learn Ideas",
+          "seconds" : 0.3656810522079468
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Lunch and Learn Ideas",
+          "seconds" : 0.3633929491043091
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Lunch and Learn Ideas",
+          "seconds" : 0.3690530061721802
+        }
+      ]
+    },
+    {
+      "id" : "h-e-replace-2",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Vendor Shortlist",
+          "seconds" : 0.35686194896698
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Vendor Shortlist",
+          "seconds" : 0.35506701469421387
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Vendor Shortlist",
+          "seconds" : 0.35233592987060547
+        }
+      ]
+    },
+    {
+      "id" : "h-e-replace-3",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "output" : "We should revisit this after the holidays.",
+          "seconds" : 0.40530598163604736
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "output" : "We should revisit this after the holidays.",
+          "seconds" : 0.40505099296569824
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "output" : "We should revisit this after the holidays.",
+          "seconds" : 0.4042630195617676
+        }
+      ]
+    },
+    {
+      "id" : "h-e-replace-4",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "The kitchen will be cleaned on Thursday.",
+          "seconds" : 0.4039560556411743
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "The kitchen will be cleaned on Thursday.",
+          "seconds" : 0.4051690101623535
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "The kitchen will be cleaned on Thursday.",
+          "seconds" : 0.40670692920684814
+        }
+      ]
+    },
+    {
+      "id" : "h-e-replace-5",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+            "not exactly \"Parking is free after six.\""
+          ],
+          "modelAction" : "replace",
+          "output" : "parking is free after six",
+          "seconds" : 0.37766897678375244
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+            "not exactly \"Parking is free after six.\""
+          ],
+          "modelAction" : "replace",
+          "output" : "parking is free after six",
+          "seconds" : 0.3742411136627197
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+            "not exactly \"Parking is free after six.\""
+          ],
+          "modelAction" : "replace",
+          "output" : "parking is free after six",
+          "seconds" : 0.37564706802368164
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-20-222445",
+  "provider" : {
+    "cleanupModel" : "adapters/gemma-4-e2b-poptalk-v2",
+    "editModel" : "adapters/gemma-4-e2b-poptalk-v2",
+    "footprintMB" : "1535",
+    "footprintMBAfterRun" : "1519",
+    "hwModel" : "Mac16,7",
+    "loadSeconds" : "1.50",
+    "macOS" : "Version 27.0.1 (Build 26A434)",
+    "provider" : "mlx",
+    "runs" : "3"
+  }
+}

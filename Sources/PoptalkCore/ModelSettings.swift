@@ -5,12 +5,14 @@ import Foundation
 public enum ModelSettings {
     public static let e2b = "mlx-community/gemma-4-e2b-it-4bit"
     /// The E2B fine-tune (#21) as a LoRA adapter, fused into `e2b` at load (#36). Relative: see `adapter(_:roots:)`.
-    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v2"
+    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v3"
+    public static let fineTuneV2 = "adapters/gemma-4-e2b-poptalk-v2"
     public static let e4b = "mlx-community/gemma-4-e4b-it-4bit"
 
     /// The MLX models offered by name in Settings; any other id is "Custom".
     public static let knownMLXModels: [(id: String, name: String)] = [
         (fineTune, "Gemma 4 E2B · PopTalk fine-tune"),
+        (fineTuneV2, "Gemma 4 E2B · PopTalk fine-tune v2"),
         (e2b, "Gemma 4 E2B"),
         (e4b, "Gemma 4 E4B"),
     ]

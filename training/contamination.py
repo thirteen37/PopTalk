@@ -2,8 +2,9 @@
 # /// script
 # requires-python = ">=3.12"
 # ///
-"""Keeps bench/cases.jsonl held out (#21): rejects training items that share names, sentences or
-near-paraphrases with any bench case. `./contamination.py` runs the self-test;
+"""Keeps bench/cases.jsonl and training/heldout.jsonl held out (#21, #60): rejects training items that share
+names, sentences or near-paraphrases with any bench case, or with what a held-out case says or expects
+(held-out screens and selections reuse the shared lexicon, see bench_texts). `./contamination.py` runs the self-test;
 `./contamination.py items.jsonl` checks a file and exits 1 on any hit."""
 import json
 import re
@@ -11,13 +12,14 @@ import sys
 from pathlib import Path
 
 BENCH = Path(__file__).resolve().parent.parent / "bench" / "cases.jsonl"
+HELDOUT = Path(__file__).resolve().parent / "heldout.jsonl"
 
 # Names and terms that only exist because the bench uses them. Word-boundary, case-insensitive.
 BLOCK = ["Priya", "Raman", "Marcus", "FluidAudio", "Fluid Audio", "Todoist", "Kubernetes", "TestFlight", "Test Flight",
          "Meal Prep", "Quillmate", "Quill mate", "Quilmark", "Brightwater", "Bright water", "Analytica", "Kateryna",
          "Katerina", "Shevchuk", "Oyelaran", "Tomasz", "Wrzesniewski", "Vreshnevski", "Wrisley", "Dana", "Whitfield",
          "gpt-4o", "GPT 4o", "OKR", "OKRs", "Poptalk", "App Store Connect", "iOS 27", "Q3", "Q three", "Jira", "Helsinki",
-         "oat milk", "Ana", "田中", "plumber", "electricity bill"]
+         "oat milk", "Ana", "田中", "plumber", "electricity bill", "Ajay", "Arjee"]
 BLOCK_RE = re.compile("|".join(rf"(?<!\w){re.escape(b)}(?!\w)" for b in BLOCK), re.IGNORECASE)
 
 
@@ -29,8 +31,10 @@ def ngrams(ws: list[str], n: int) -> set[tuple]:
     return {tuple(ws[i:i + n]) for i in range(len(ws) - n + 1)}
 
 
-def bench_texts(path: Path = BENCH):
-    """(long texts for n-gram overlap, short spoken/selected texts per case)."""
+def bench_texts(path: Path = BENCH, heldout: bool = False):
+    """(long texts for n-gram overlap, short spoken/selected texts per case). Held-out selections and screens
+    are built from the shared lexicon (padding, filler, titles) on purpose, so for held-out cases only what is
+    said or expected is matched as text; selections still count toward near-paraphrases."""
     longs, shorts = set(), []
     for line in path.read_text().splitlines():
         if not line.strip():
@@ -38,16 +42,20 @@ def bench_texts(path: Path = BENCH):
         c = json.loads(line)
         said = [c.get(k) for k in ("transcript", "speak", "selection", "expectExact") if c.get(k)]
         shorts.append(" ".join(said))
-        longs.update(said)
-        for k in ("context", "ocr"):
+        longs.update(c[k] for k in ("transcript", "speak", "expectExact") if c.get(k)) if heldout else longs.update(said)
+        for k in () if heldout else ("context", "ocr"):
             if c.get(k):
                 longs.update(s for s in re.split(r"(?<=[.!?\n])\s*", c[k]) if s.strip())
     return longs, shorts
 
 
 class Checker:
-    def __init__(self, path: Path = BENCH, n: int = 5):
+    def __init__(self, path: Path = BENCH, n: int = 5, heldout: Path | None = HELDOUT):
         longs, shorts = bench_texts(path)
+        if heldout and heldout.exists():
+            hl, hs = bench_texts(heldout, heldout=True)
+            longs |= hl
+            shorts += hs
         self.n = n
         self.grams = set().union(*(ngrams(words(t), n) for t in longs))
         self.short_norm = {" ".join(words(t)) for t in longs if len(words(t)) < n}
@@ -77,7 +85,8 @@ class Checker:
 def self_test():
     c = Checker()
     cases = [json.loads(l) for l in BENCH.read_text().splitlines() if l.strip()]
-    for case in cases:  # every bench case must be caught by its own text
+    cases += [json.loads(l) for l in HELDOUT.read_text().splitlines() if l.strip()]
+    for case in cases:  # every bench and held-out case must be caught by its own text
         item = {"transcript": case.get("transcript") or case.get("speak"), "selection": case.get("selection")}
         assert c.reason(item), case["id"]
     assert "bench name" in c.reason({"transcript": "ping priya about it"})

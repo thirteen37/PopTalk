@@ -1,0 +1,1180 @@
+{
+  "cases" : [
+    {
+      "id" : "h-d-names-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Ffion\"",
+            "missing \"MagSafe\"",
+            "missing \"Ruairí\"",
+            "contains \"ruairi\""
+          ],
+          "output" : "Could Fiona send the Safe Runbook to Ruairi before the incident review?",
+          "seconds" : 0.07418704032897949
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Ffion\"",
+            "missing \"MagSafe\"",
+            "missing \"Ruairí\"",
+            "contains \"ruairi\""
+          ],
+          "output" : "Could Fiona send the Safe Runbook to Ruairi before the incident review?",
+          "seconds" : 0.07580292224884033
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Ffion\"",
+            "missing \"MagSafe\"",
+            "missing \"Ruairí\"",
+            "contains \"ruairi\""
+          ],
+          "output" : "Could Fiona send the Safe Runbook to Ruairi before the incident review?",
+          "seconds" : 0.07522904872894287
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Joaquín\"",
+            "missing \"Fitzgerald\"",
+            "missing \"Tern Health\"",
+            "contains \"joaquin\""
+          ],
+          "output" : "I'm meeting Joaquin Fittinggerald from Terre N Health next Wednesday to talk about pricing.",
+          "seconds" : 0.09227800369262695
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Joaquín\"",
+            "missing \"Fitzgerald\"",
+            "missing \"Tern Health\"",
+            "contains \"joaquin\""
+          ],
+          "output" : "I'm meeting Joaquin Fittinggerald from Terre N Health next Wednesday to talk about pricing.",
+          "seconds" : 0.09177196025848389
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Joaquín\"",
+            "missing \"Fitzgerald\"",
+            "missing \"Tern Health\"",
+            "contains \"joaquin\""
+          ],
+          "output" : "I'm meeting Joaquin Fittinggerald from Terre N Health next Wednesday to talk about pricing.",
+          "seconds" : 0.09105002880096436
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"HarborDeck\""
+          ],
+          "output" : "The harbordeck invoice still lists pandas as a line item.",
+          "seconds" : 0.06361305713653564
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"HarborDeck\""
+          ],
+          "output" : "The harbordeck invoice still lists pandas as a line item.",
+          "seconds" : 0.06451797485351562
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"HarborDeck\""
+          ],
+          "output" : "The harbordeck invoice still lists pandas as a line item.",
+          "seconds" : 0.06354999542236328
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Gwendolyn\"",
+            "contains \"gwendolin\""
+          ],
+          "output" : "Please add Gwendolin as a reviewer on the pandas change.",
+          "seconds" : 0.0663299560546875
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Gwendolyn\"",
+            "contains \"gwendolin\""
+          ],
+          "output" : "Please add Gwendolin as a reviewer on the pandas change.",
+          "seconds" : 0.06671404838562012
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Gwendolyn\"",
+            "contains \"gwendolin\""
+          ],
+          "output" : "Please add Gwendolin as a reviewer on the pandas change.",
+          "seconds" : 0.06684303283691406
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Paavo\"",
+            "missing \"Firebase\"",
+            "missing \"VS Code\"",
+            "contains \"pavo\""
+          ],
+          "output" : "Pavo thinks we should drop fire base and keep vs code.",
+          "seconds" : 0.06571090221405029
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Paavo\"",
+            "missing \"Firebase\"",
+            "missing \"VS Code\"",
+            "contains \"pavo\""
+          ],
+          "output" : "Pavo thinks we should drop fire base and keep vs code.",
+          "seconds" : 0.06560897827148438
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Paavo\"",
+            "missing \"Firebase\"",
+            "missing \"VS Code\"",
+            "contains \"pavo\""
+          ],
+          "output" : "Pavo thinks we should drop fire base and keep vs code.",
+          "seconds" : 0.06534504890441895
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Kestrel Migration\"",
+            "missing \"Fargate\""
+          ],
+          "output" : "Our kestrel migration demo uses far gate for the backend.",
+          "seconds" : 0.06540095806121826
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Kestrel Migration\"",
+            "missing \"Fargate\""
+          ],
+          "output" : "Our kestrel migration demo uses far gate for the backend.",
+          "seconds" : 0.06595098972320557
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Kestrel Migration\"",
+            "missing \"Fargate\""
+          ],
+          "output" : "Our kestrel migration demo uses far gate for the backend.",
+          "seconds" : 0.06627404689788818
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Yarrowly Freight\"",
+            "missing \"SharePoint\""
+          ],
+          "output" : "Can you check whether Yarrowly freight renewed their share point seats?",
+          "seconds" : 0.06792593002319336
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Yarrowly Freight\"",
+            "missing \"SharePoint\""
+          ],
+          "output" : "Can you check whether Yarrowly freight renewed their share point seats?",
+          "seconds" : 0.06867694854736328
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Yarrowly Freight\"",
+            "missing \"SharePoint\""
+          ],
+          "output" : "Can you check whether Yarrowly freight renewed their share point seats?",
+          "seconds" : 0.06897807121276855
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Deepika\"",
+            "contains \"deepeeka\""
+          ],
+          "output" : "Thank Deepeeka for the Kafka workshop notes.",
+          "seconds" : 0.05670297145843506
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Deepika\"",
+            "contains \"deepeeka\""
+          ],
+          "output" : "Thank Deepeeka for the Kafka workshop notes.",
+          "seconds" : 0.05839395523071289
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Deepika\"",
+            "contains \"deepeeka\""
+          ],
+          "output" : "Thank Deepeeka for the Kafka workshop notes.",
+          "seconds" : 0.056980013847351074
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-8",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Rowan\"",
+            "missing \"Rhys\"",
+            "contains \"reese\"",
+            "contains \"rees\""
+          ],
+          "output" : "The project rowan retro moved to Sunday because Reese is traveling.",
+          "seconds" : 0.06680107116699219
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Rowan\"",
+            "missing \"Rhys\"",
+            "contains \"reese\"",
+            "contains \"rees\""
+          ],
+          "output" : "The project rowan retro moved to Sunday because Reese is traveling.",
+          "seconds" : 0.06500792503356934
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Rowan\"",
+            "missing \"Rhys\"",
+            "contains \"reese\"",
+            "contains \"rees\""
+          ],
+          "output" : "The project rowan retro moved to Sunday because Reese is traveling.",
+          "seconds" : 0.0656200647354126
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-9",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Søren\"",
+            "missing \"dbt\"",
+            "contains \"soren\""
+          ],
+          "output" : "Soren wrote the Nimbus Energy onboarding checklist in DBT.",
+          "seconds" : 0.07275605201721191
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Søren\"",
+            "missing \"dbt\"",
+            "contains \"soren\""
+          ],
+          "output" : "Soren wrote the Nimbus Energy onboarding checklist in DBT.",
+          "seconds" : 0.07265198230743408
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Søren\"",
+            "missing \"dbt\"",
+            "contains \"soren\""
+          ],
+          "output" : "Soren wrote the Nimbus Energy onboarding checklist in DBT.",
+          "seconds" : 0.07300198078155518
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-10",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Auth0\"",
+            "missing \"Rhys\"",
+            "contains \"kwamee\"",
+            "contains \"rees\""
+          ],
+          "output" : "Could Kwamee send the auth 0 runbook to Rees before the incident review?",
+          "seconds" : 0.08304095268249512
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Auth0\"",
+            "missing \"Rhys\"",
+            "contains \"kwamee\"",
+            "contains \"rees\""
+          ],
+          "output" : "Could Kwamee send the auth 0 runbook to Rees before the incident review?",
+          "seconds" : 0.08323395252227783
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Auth0\"",
+            "missing \"Rhys\"",
+            "contains \"kwamee\"",
+            "contains \"rees\""
+          ],
+          "output" : "Could Kwamee send the auth 0 runbook to Rees before the incident review?",
+          "seconds" : 0.0820169448852539
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-11",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Mahina\"",
+            "missing \"Toivonen\"",
+            "contains \"maheena\""
+          ],
+          "output" : "I'm meeting Maheena Toyvonen from PrismNova next Sunday to talk about pricing.",
+          "seconds" : 0.08277904987335205
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Mahina\"",
+            "missing \"Toivonen\"",
+            "contains \"maheena\""
+          ],
+          "output" : "I'm meeting Maheena Toyvonen from PrismNova next Sunday to talk about pricing.",
+          "seconds" : 0.08159589767456055
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Mahina\"",
+            "missing \"Toivonen\"",
+            "contains \"maheena\""
+          ],
+          "output" : "I'm meeting Maheena Toyvonen from PrismNova next Sunday to talk about pricing.",
+          "seconds" : 0.08184599876403809
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-12",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Birch\"",
+            "missing \"Dagster\""
+          ],
+          "output" : "The project birch invoice still lists dagster as a line item.",
+          "seconds" : 0.06836295127868652
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Birch\"",
+            "missing \"Dagster\""
+          ],
+          "output" : "The project birch invoice still lists dagster as a line item.",
+          "seconds" : 0.06876003742218018
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Project Birch\"",
+            "missing \"Dagster\""
+          ],
+          "output" : "The project birch invoice still lists dagster as a line item.",
+          "seconds" : 0.06742298603057861
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-13",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Niamh\"",
+            "missing \"HubSpot\""
+          ],
+          "output" : "Please add \"Nev\" as a reviewer on the hub spot change.",
+          "seconds" : 0.0708550214767456
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Niamh\"",
+            "missing \"HubSpot\""
+          ],
+          "output" : "Please add \"Nev\" as a reviewer on the hub spot change.",
+          "seconds" : 0.07176196575164795
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Niamh\"",
+            "missing \"HubSpot\""
+          ],
+          "output" : "Please add \"Nev\" as a reviewer on the hub spot change.",
+          "seconds" : 0.0714559555053711
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-14",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Agnieszka\"",
+            "missing \"dbt\"",
+            "missing \"RabbitMQ\""
+          ],
+          "output" : "Agnesha thinks we should drop DBT and keep rabbitmq.",
+          "seconds" : 0.06819605827331543
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Agnieszka\"",
+            "missing \"dbt\"",
+            "missing \"RabbitMQ\""
+          ],
+          "output" : "Agnesha thinks we should drop DBT and keep rabbitmq.",
+          "seconds" : 0.06744706630706787
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Agnieszka\"",
+            "missing \"dbt\"",
+            "missing \"RabbitMQ\""
+          ],
+          "output" : "Agnesha thinks we should drop DBT and keep rabbitmq.",
+          "seconds" : 0.06790399551391602
+        }
+      ]
+    },
+    {
+      "id" : "h-d-names-15",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Initiative Copper\""
+          ],
+          "output" : "Our initiative Copper Demo uses pandas for the backend.",
+          "seconds" : 0.05822396278381348
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Initiative Copper\""
+          ],
+          "output" : "Our initiative Copper Demo uses pandas for the backend.",
+          "seconds" : 0.05718696117401123
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Initiative Copper\""
+          ],
+          "output" : "Our initiative Copper Demo uses pandas for the backend.",
+          "seconds" : 0.056691884994506836
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"eight\""
+          ],
+          "output" : "Set the alarm for 8 tomorrow.",
+          "seconds" : 0.050656914710998535
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"eight\""
+          ],
+          "output" : "Set the alarm for 8 tomorrow.",
+          "seconds" : 0.050209999084472656
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"eight\""
+          ],
+          "output" : "Set the alarm for 8 tomorrow.",
+          "seconds" : 0.05139005184173584
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius instead.",
+          "seconds" : 0.05059695243835449
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius instead.",
+          "seconds" : 0.05080902576446533
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius instead.",
+          "seconds" : 0.05114901065826416
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.04789996147155762
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.04788410663604736
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.04966402053833008
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"five\""
+          ],
+          "output" : "We need 12 extra chairs.",
+          "seconds" : 0.05159902572631836
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"five\""
+          ],
+          "output" : "We need 12 extra chairs.",
+          "seconds" : 0.0506129264831543
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"five\""
+          ],
+          "output" : "We need 12 extra chairs.",
+          "seconds" : 0.0520859956741333
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.04825401306152344
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.04767298698425293
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.047486066818237305
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Like send the draft to Mateus instead.",
+          "seconds" : 0.053694963455200195
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Like send the draft to Mateus instead.",
+          "seconds" : 0.05341196060180664
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Like send the draft to Mateus instead.",
+          "seconds" : 0.05367898941040039
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Sunday evening.",
+          "seconds" : 0.04748201370239258
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Sunday evening.",
+          "seconds" : 0.047714948654174805
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Sunday evening.",
+          "seconds" : 0.0478900671005249
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"twenty\"",
+            "contains \"three\""
+          ],
+          "output" : "We need three, actually, 20 extra chairs.",
+          "seconds" : 0.06219196319580078
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"twenty\"",
+            "contains \"three\""
+          ],
+          "output" : "We need three, actually, 20 extra chairs.",
+          "seconds" : 0.0625619888305664
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"twenty\"",
+            "contains \"three\""
+          ],
+          "output" : "We need three, actually, 20 extra chairs.",
+          "seconds" : 0.06275296211242676
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually think the old version was faster.",
+          "seconds" : 0.05325198173522949
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually think the old version was faster.",
+          "seconds" : 0.05401194095611572
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually think the old version was faster.",
+          "seconds" : 0.05339193344116211
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, the review is still on for today.",
+          "seconds" : 0.05783402919769287
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, the review is still on for today.",
+          "seconds" : 0.05691397190093994
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, the review is still on for today.",
+          "seconds" : 0.05774199962615967
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry, I didn't catch your name at the start.",
+          "seconds" : 0.06179499626159668
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry, I didn't catch your name at the start.",
+          "seconds" : 0.06297993659973145
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry, I didn't catch your name at the start.",
+          "seconds" : 0.06171703338623047
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "It sounds like the speakers are broken.",
+          "seconds" : 0.0515589714050293
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "It sounds like the speakers are broken.",
+          "seconds" : 0.05030703544616699
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "It sounds like the speakers are broken.",
+          "seconds" : 0.050379037857055664
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you remind everyone about the deadline?",
+          "seconds" : 0.05189406871795654
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you remind everyone about the deadline?",
+          "seconds" : 0.05122506618499756
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you remind everyone about the deadline?",
+          "seconds" : 0.05069899559020996
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What should we name the new project?",
+          "seconds" : 0.05029404163360596
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What should we name the new project?",
+          "seconds" : 0.0506669282913208
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What should we name the new project?",
+          "seconds" : 0.051377058029174805
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Write a summary of today's standup.",
+          "seconds" : 0.053285956382751465
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Write a summary of today's standup.",
+          "seconds" : 0.05422806739807129
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Write a summary of today's standup.",
+          "seconds" : 0.05748701095581055
+        }
+      ]
+    },
+    {
+      "id" : "h-d-keep-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "How long does the battery last on these headphones?",
+          "seconds" : 0.05592000484466553
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "How long does the battery last on these headphones?",
+          "seconds" : 0.057711005210876465
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "How long does the battery last on these headphones?",
+          "seconds" : 0.05661308765411377
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The bakery on the corner closes early on Sundays.",
+          "seconds" : 0.056872010231018066
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The bakery on the corner closes early on Sundays.",
+          "seconds" : 0.05615592002868652
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The bakery on the corner closes early on Sundays.",
+          "seconds" : 0.05606198310852051
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "My cousin is visiting for a few days next month.",
+          "seconds" : 0.0600360631942749
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "My cousin is visiting for a few days next month.",
+          "seconds" : 0.05918097496032715
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "My cousin is visiting for a few days next month.",
+          "seconds" : 0.0595170259475708
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The elevator in our building is out of order again.",
+          "seconds" : 0.05848991870880127
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The elevator in our building is out of order again.",
+          "seconds" : 0.05875098705291748
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The elevator in our building is out of order again.",
+          "seconds" : 0.060270071029663086
+        }
+      ]
+    },
+    {
+      "id" : "h-d-noecho-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We planted tomatoes and herbs on the balcony.",
+          "seconds" : 0.05472397804260254
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We planted tomatoes and herbs on the balcony.",
+          "seconds" : 0.0534210205078125
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We planted tomatoes and herbs on the balcony.",
+          "seconds" : 0.0547330379486084
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-20-223331",
+  "provider" : {
+    "cleanupModel" : "/Users/yuxi/Library/Application Support/Poptalk/models/s1-mini-4bit",
+    "editModel" : "/Users/yuxi/Library/Application Support/Poptalk/models/s1-mini-4bit",
+    "footprintMB" : "1502",
+    "footprintMBAfterRun" : "555",
+    "hwModel" : "Mac16,7",
+    "loadSeconds" : "5.91",
+    "macOS" : "Version 27.0.1 (Build 26A434)",
+    "provider" : "mlx",
+    "runs" : "3"
+  }
+}

@@ -58,4 +58,4 @@ zsh training/bench.zsh mlx-community/gemma-4-e2b-it-4bit   # benchmark: dictatio
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The bundled fine-tune adapter is a Gemma 4 derivative under Apache 2.0, see [adapters/gemma-4-e2b-poptalk-v2](adapters/gemma-4-e2b-poptalk-v2/README.md). Speech models are downloaded at runtime under their own licenses.
+MIT, see [LICENSE](LICENSE). The bundled fine-tune adapter is a Gemma 4 derivative under Apache 2.0, see [adapters/gemma-4-e2b-poptalk-v3](adapters/gemma-4-e2b-poptalk-v3/README.md). Speech models are downloaded at runtime under their own licenses.
