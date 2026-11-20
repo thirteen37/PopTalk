@@ -19,14 +19,21 @@ public enum MLXProvider {
             var progress = LoadProgressHandlers()
             if let download { progress.download = { @Sendable (p: Progress) in download(p.fractionCompleted) } }
             let t = Task {
-                guard let (base, dir) = ModelSettings.adapter(id, roots: MLXProvider.roots) else {
-                    return try await load(id, progress)
+                let container: ModelContainer
+                if let (base, dir) = ModelSettings.adapter(id, roots: MLXProvider.roots) {
+                    // Base + LoRA adapter, fused in memory (QLoRALinear.fused(): dequantize, add, requantize, as
+                    // mlx_lm.fuse). Lazy: the fused weights are computed on first use, i.e. by `prepare`'s warm-up.
+                    container = try await load(base, progress)
+                    let adapter = try LoRAContainer.from(directory: dir)
+                    try await container.perform { try $0.model.fuse(with: adapter) }
+                } else {
+                    container = try await load(id, progress)
                 }
-                // Base + LoRA adapter, fused in memory (QLoRALinear.fused(): dequantize, add, requantize, as
-                // mlx_lm.fuse). Lazy: the fused weights are computed on first use, i.e. by `prepare`'s warm-up.
-                let container = try await load(base, progress)
-                let adapter = try LoRAContainer.from(directory: dir)
-                try await container.perform { try $0.model.fuse(with: adapter) }
+                if MappedPLE.enabled {
+                    let dir = try await container.modelDirectory
+                    let mapped = try await container.perform { try MappedPLE.install(in: $0.model, directory: dir) }
+                    timing.info("llm \((id as NSString).lastPathComponent, privacy: .public) PLE mapped from disk: \(mapped)")
+                }
                 return container
             }
             loaded[id] = t
