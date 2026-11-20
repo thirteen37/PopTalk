@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         updateIcon()
         status.onChange = { [weak self] in self?.updateIcon() }
+        overlay.statusStrip = { [unowned self] in
+            let sel = Settings.selection
+            return StatusStrip.badges(status.value, llm: sel.provider == "mlx" ? modelStatus[sel.cleanupModel] ?? .loading : .ready,
+                                      sources: ContextSources(.standard), ocrWarm: ScreenContext.isOCRWarm, history: history.isEnabled)
+        }
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu

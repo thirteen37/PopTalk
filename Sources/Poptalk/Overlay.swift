@@ -40,9 +40,12 @@ final class Overlay {
     private var note: String?
     private func noted(_ s: String) -> String { note.map { "\(s)  ·  \($0)" } ?? s }
 
-    func showRecording(note: String? = nil) { self.note = note; show(noted("● Listening…"), for: nil) }
+    /// Inactive subsystems for the strip under recording and outcome text (#57); set by `AppDelegate`.
+    var statusStrip: () -> [StatusBadge] = { [] }
+
+    func showRecording(note: String? = nil) { self.note = note; show(noted("● Listening…"), for: nil, strip: true) }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible.
-    func showPreview(_ text: String) { show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil) }
+    func showPreview(_ text: String) { show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil, strip: true) }
     func showWorking() { show("Working…", for: nil) }
     func showError(_ msg: String) { show("⚠️ \(msg)", for: 3) }
     func showNotice(_ msg: String) { show(msg, for: 2) }
@@ -84,6 +87,7 @@ final class Overlay {
             let footer = lines.result == nil ? (CGFloat(13), NSFont.Weight.medium, NSColor.labelColor) : (11, .regular, .secondaryLabelColor)
             line(parts.joined(separator: "  ·  "), size: footer.0, weight: footer.1, color: footer.2)
         }
+        appendStrip(to: out)
         show(out, for: Self.outcomeSeconds)
         keys = KeyCatcher { [weak self] code, flags in
             switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
@@ -107,10 +111,31 @@ final class Overlay {
 
     private static let centered = { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }()
 
-    private func show(_ text: String, for seconds: TimeInterval?) {
-        show(NSAttributedString(string: text, attributes: [
+    private func show(_ text: String, for seconds: TimeInterval?, strip: Bool = false) {
+        let out = NSMutableAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: Self.centered]), for: seconds)
+            .paragraphStyle: Self.centered])
+        if strip { appendStrip(to: out) }
+        show(out, for: seconds)
+    }
+
+    /// A last line of ~10 pt muted SF Symbols, each with an accessibility label. No tooltips: the panel
+    /// ignores the mouse.
+    private func appendStrip(to out: NSMutableAttributedString) {
+        let badges = statusStrip()
+        guard !badges.isEmpty else { return }
+        let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
+            .applying(.init(hierarchicalColor: .tertiaryLabelColor))
+        out.append(NSAttributedString(string: "\n"))
+        for b in badges {
+            guard let img = NSImage(systemSymbolName: b.symbol, accessibilityDescription: b.help)?
+                    .withSymbolConfiguration(config) else { continue }
+            let a = NSTextAttachment()
+            a.image = img
+            out.append(NSAttributedString(attachment: a))
+            out.append(NSAttributedString(string: "  "))
+        }
+        out.addAttribute(.paragraphStyle, value: Self.centered, range: NSRange(location: 0, length: out.length))
     }
 
     private func show(_ text: NSAttributedString, for seconds: TimeInterval?) {
