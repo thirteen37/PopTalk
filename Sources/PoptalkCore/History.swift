@@ -36,6 +36,8 @@ public struct HistoryRequest: Codable, Equatable, Sendable {
     public var kind: String?
     public var promptTokens: Int?
     public var sharedPrefix: Int?
+    /// The speech model id (`ModelSettings.speechModels`) loaded when this was recorded (#73); absent in older lines.
+    public var speechModel: String?
 
     public init(id: UUID, at: Date, app: String, bundleID: String? = nil, rawTranscript: String, transcript: String,
                 boost: [String] = [], selection: String? = nil, provider: String, model: String? = nil,

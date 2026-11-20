@@ -88,6 +88,15 @@ private func tempDir(_ files: [String: String]) -> URL {
     #expect(ModelSettings.displayName("mlx-community/Qwen3.5-2B-MLX-4bit") == "Qwen3.5-2B-MLX-4bit")
 }
 
+@Test func speechModelDefaultsToV2AndFallsBackOnUnknownIds() {
+    #expect(ModelSettings.speechModels.map(\.id) == ["v2", "v3", "ultra", "bark3Clean", "phonon2"])
+    #expect(suite().string(forKey: "speechModel") == "v2")
+    #expect(ModelSettings.speechModel(nil) == "v2")
+    #expect(ModelSettings.speechModel("ultra") == "ultra")
+    #expect(ModelSettings.speechModel("garbage") == "v2")
+    #expect(ModelSettings.speechModels.allSatisfy { !$0.name.isEmpty && !$0.note.isEmpty })
+}
+
 @Test func modelStatusTitles() {
     #expect(ModelStatus.loading.title == "loading…")
     #expect(ModelStatus(downloaded: 0.423).title == "downloading 42%")

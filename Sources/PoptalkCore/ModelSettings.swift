@@ -22,7 +22,23 @@ public enum ModelSettings {
         knownMLXModels.first { $0.id == id }?.name ?? (id as NSString).lastPathComponent
     }
 
+    /// Parakeet TDT speech models offered in Settings and by PoptalkBench `--speech-model` (#73), by stable id;
+    /// `Transcriber.version(_:)` maps each to FluidAudio's `AsrModelVersion`.
+    public static let speechModels: [(id: String, name: String, note: String)] = [
+        ("v2", "Parakeet TDT v2", "English."),
+        ("v3", "Parakeet TDT v3", "25 European languages."),
+        ("ultra", "Parakeet Ultra", "25 European languages; more accurate than v3 at the same speed."),
+        ("bark3Clean", "Bark 3.0 Clean", "English. Drops fillers, false starts and repeated words."),
+        ("phonon2", "Phonon-2", "English. Faster than v3; needs macOS 15."),
+    ]
+
+    /// A saved speech model id, or the default for an unset or unknown one.
+    public static func speechModel(_ saved: String?) -> String {
+        speechModels.contains { $0.id == saved } ? saved! : defaults["speechModel"]!
+    }
+
     public static let defaults: [String: String] = [
+        "speechModel": "v2",
         "provider": "mlx",  // mlx | lmstudio | apple
         "baseURL": "http://localhost:1234/v1",
         "mlxCleanupModel": fineTune,

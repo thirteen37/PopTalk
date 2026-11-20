@@ -116,3 +116,13 @@ private func lines(_ store: HistoryStore) throws -> [Data] {
     let old = try HistoryStore.decoder.decode(HistoryRequest.self, from: HistoryStore.encoder.encode(sample()))
     #expect(old.kind == nil && old.promptTokens == nil && old.sharedPrefix == nil)
 }
+
+@Test func requestSpeechModelIsOptionalAndRoundTrips() throws {
+    var r = sample()
+    r.speechModel = "ultra"
+    #expect(try HistoryStore.decoder.decode(HistoryRequest.self, from: HistoryStore.encoder.encode(r)) == r)
+    // A line written before #73 has no speechModel and still decodes.
+    let line = try HistoryStore.encoder.encode(sample())
+    #expect(!String(decoding: line, as: UTF8.self).contains("speechModel"))
+    #expect(try HistoryStore.decoder.decode(HistoryRequest.self, from: line).speechModel == nil)
+}

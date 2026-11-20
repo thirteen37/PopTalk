@@ -13,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let recorder = AudioRecorder()
     let status = StatusModel()
     private var transcriber: Transcriber? { didSet { syncSpeech() } }
+    /// The `ModelSettings.speechModels` id `transcriber` was loaded with.
+    private var transcriberModel: String?
+    /// A selection that failed to load while another model was in use: not retried on every press, only once it is
+    /// selected again after another.
+    private var failedSwitch: String?
     private var loadingTranscriber = false { didSet { syncSpeech() } }
     private var transcriberError: String? { didSet { syncSpeech() } }
     /// Speech model download fraction while files are fetched; nil when cached or not started.
@@ -48,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.settingsWork?.cancel()
-                let work = DispatchWorkItem { self?.prepareModels() }
+                let work = DispatchWorkItem { self?.prepareModels(); self?.loadTranscriber() }
                 self?.settingsWork = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
             }
@@ -77,21 +82,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = image
     }
 
-    /// Loads (or, after a failure, retries loading) the speech model; the last error is kept for the overlay and Settings.
+    /// Loads (or, after a failure, retries loading) the selected speech model; the last error is kept for the overlay
+    /// and Settings. Switching to another selection (#73) starts only between requests and loads alongside the current
+    /// model, which keeps serving (requests hold their own reference) and is replaced once the new one is ready; a
+    /// failed switch keeps it.
     private func loadTranscriber() {
-        guard transcriber == nil, !loadingTranscriber else { return }
+        let id = Settings.speechModel
+        if failedSwitch != id { failedSwitch = nil }
+        let from = transcriber == nil ? nil : transcriberModel
+        let switching = from != nil && from != id
+        guard !loadingTranscriber, transcriber == nil || (switching && failedSwitch == nil && !recording && !busy) else { return }
         loadingTranscriber = true
         speechDownload = nil
         Task {
-            defer { loadingTranscriber = false }
+            let name = { (id: String?) in ModelSettings.speechModels.first { $0.id == id }?.name ?? id ?? "" }
+            let idle = { !self.recording && !self.busy }  // don't cover a request's overlay
             do {
-                transcriber = try await Transcriber { f in
+                let t = try await Transcriber(version: Transcriber.version(id) ?? .v2) { f in
                     Task { @MainActor [weak self] in self?.speechDownload = f }
                 }
-                transcriberError = nil
+                (transcriber, transcriberModel, transcriberError) = (t, id, nil)
+                if switching, idle() { overlay.showNotice("Speech model: \(name(id))") }
+            } catch where switching {
+                failedSwitch = id
+                if idle() {
+                    overlay.showError("Couldn't load \(name(id)), still using \(name(from)): \(error.localizedDescription)"
+                                      + " Select it again to retry.")
+                }
             } catch {
                 transcriberError = error.localizedDescription
             }
+            loadingTranscriber = false
+            if Settings.speechModel != id { loadTranscriber() }  // changed while loading
         }
     }
 
@@ -164,7 +186,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var startWork: DispatchWorkItem?
     private var previewTask: Task<Void, Never>?
     private var recording = false { didSet { syncBusyMarker() } }
-    private var busy = false { didSet { syncBusyMarker() } }
+    /// Going idle applies a speech model change that waited for the request (#73).
+    private var busy = false { didSet { syncBusyMarker(); if !busy { loadTranscriber() } } }
     private var targetPID: pid_t?
 
     /// Sets the marker at once; clears it a run-loop turn later, so release's recording → busy handoff
@@ -311,6 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             latency: Date().timeIntervalSince(started), audio: audio)
         entry.outcome = shown
         entry.system = system
+        entry.speechModel = transcriberModel
         (entry.kind, entry.promptTokens, entry.sharedPrefix) = (call?.kind, call?.promptTokens, call?.sharedPrefix)
         history.append(entry)
         if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
