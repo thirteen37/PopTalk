@@ -219,6 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         preview?.cancel()
         let samples = recorder.stop()
         Timing.log.info("release: key up")
+        let system = SystemSample.now()
         let (ctx, sel) = (contextTask, selectionTask)
         (contextTask, selectionTask) = (nil, nil)
         guard AudioGate.hasSpeech(samples) else { overlay.hide(); return }
@@ -233,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let app = targetPID.flatMap { NSRunningApplication(processIdentifier: $0) }
         Task {
             defer { busy = false; offerCleanup() }  // the model may have become ready while this ran
-            let t0 = ContinuousClock.now
+            let t0 = Timing.start()
             let snapshot = await ctx?.value ?? ScreenSnapshot()
             Timing.mark("release: context awaited", since: t0)
             let selection = await sel?.value
@@ -248,14 +249,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             Timing.mark("release: transcribed", since: t0)
             await process(Request(transcript: heard.text, selection: selection, context: snapshot),
-                          raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app, since: t0)
+                          raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app, since: t0, system: system)
         }
     }
 
     /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
     /// earlier raw insert, whose text is replaced in place rather than inserted again.
     private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
-                         app: NSRunningApplication?, cleanup: RawInsert? = nil, since t0: ContinuousClock.Instant) async {
+                         app: NSRunningApplication?, cleanup: RawInsert? = nil, since t0: ContinuousClock.Instant,
+                         system: SystemSample = .now()) async {
         // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
         // Apple Intelligence off) still dictates raw.
         let complete: Pipeline.Complete
@@ -290,6 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         raw: RawInsert(request: request, rawTranscript: raw, boost: boost))
         }
         Timing.mark("release: applied", since: t0)
+        let system = Timing.summary(system, since: t0)
         guard history.isEnabled else { return }
         let audio = samples != nil && UserDefaults.standard.bool(forKey: "historyAudio") ? "\(id).m4a" : nil
         if let audio, let samples { history.saveFile(audio) { try AudioRecorder.write(samples, to: $0) } }
@@ -301,6 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             outcome: result.outcome, vocabularyOffer: result.vocabularyOffer?.text, remembered: result.remembered?.text,
             latency: Date().timeIntervalSince(started), audio: audio)
         entry.outcome = shown
+        entry.system = system
         history.append(entry)
         if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
     }

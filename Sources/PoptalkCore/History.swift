@@ -29,6 +29,8 @@ public struct HistoryRequest: Codable, Equatable, Sendable {
     public var latency: Double
     /// Saved audio file name in the history directory.
     public var audio: String?
+    /// Machine conditions at release and the request's CPU time (#58); absent in older lines.
+    public var system: SystemSample?
 
     public init(id: UUID, at: Date, app: String, bundleID: String? = nil, rawTranscript: String, transcript: String,
                 boost: [String] = [], selection: String? = nil, provider: String, model: String? = nil,
