@@ -19,14 +19,21 @@ public enum MLXProvider {
             var progress = LoadProgressHandlers()
             if let download { progress.download = { @Sendable (p: Progress) in download(p.fractionCompleted) } }
             let t = Task {
-                guard let (base, dir) = ModelSettings.adapter(id, roots: MLXProvider.roots) else {
-                    return try await load(id, progress)
+                let container: ModelContainer
+                if let (base, dir) = ModelSettings.adapter(id, roots: MLXProvider.roots) {
+                    // Base + LoRA adapter, fused in memory (QLoRALinear.fused(): dequantize, add, requantize, as
+                    // mlx_lm.fuse). Lazy: the fused weights are computed on first use, i.e. by `prepare`'s warm-up.
+                    container = try await load(base, progress)
+                    let adapter = try LoRAContainer.from(directory: dir)
+                    try await container.perform { try $0.model.fuse(with: adapter) }
+                } else {
+                    container = try await load(id, progress)
                 }
-                // Base + LoRA adapter, fused in memory (QLoRALinear.fused(): dequantize, add, requantize, as
-                // mlx_lm.fuse). Lazy: the fused weights are computed on first use, i.e. by `prepare`'s warm-up.
-                let container = try await load(base, progress)
-                let adapter = try LoRAContainer.from(directory: dir)
-                try await container.perform { try $0.model.fuse(with: adapter) }
+                if MappedPLE.enabled {
+                    let dir = try await container.modelDirectory
+                    let mapped = try await container.perform { try MappedPLE.install(in: $0.model, directory: dir) }
+                    timing.info("llm \((id as NSString).lastPathComponent, privacy: .public) PLE mapped from disk: \(mapped)")
+                }
                 return container
             }
             loaded[id] = t
@@ -53,7 +60,48 @@ public enum MLXProvider {
         if FileManager.default.fileExists(atPath: local.appendingPathComponent("config.json").path) {
             return try await loadModelContainer(from: local, using: #huggingFaceTokenizerLoader(), progress: progress)
         }
+        if let dir = TextOnlyModel.directory(for: id, appSupport: appSupport) {
+            try await textOnly.make(id, dir, progress.download)
+            // The registry's settings for `id` (e.g. Gemma's extra `<turn|>` EOS), with the weights from `dir`.
+            var config = LLMModelFactory.shared.configuration(id: id)
+            config.id = .directory(dir)
+            return try await loadModelContainer(from: #hubDownloader(), using: #huggingFaceTokenizerLoader(), configuration: config, progress: progress)
+        }
         return try await loadModelContainer(from: #hubDownloader(), using: #huggingFaceTokenizerLoader(), id: id, progress: progress)
+    }
+
+    static let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    private static let textOnly = TextOnly()
+    /// Builds the text-only copy of a model on first use (#51), once per process however many loads ask.
+    // ponytail: no cross-process lock; the app and PoptalkBench both stripping on their first run could clash.
+    private actor TextOnly {
+        var running: [URL: Task<Void, Error>] = [:]
+        func make(_ id: String, _ dir: URL, _ download: (@Sendable (Progress) -> Void)?) async throws {
+            if TextOnlyModel.isComplete(dir) { return }
+            let t = running[dir] ?? Task { try await build(id, dir, download) }
+            running[dir] = t
+            defer { running[dir] = nil }
+            try await t.value
+        }
+        /// Strips the full model from the shared HF cache when it's already there (read only: other tools may use
+        /// it), else downloads it into Poptalk's own cache and deletes that after a verified strip.
+        private nonisolated func build(_ id: String, _ dir: URL, _ download: (@Sendable (Progress) -> Void)?) async throws {
+            guard let repo = Repo.ID(rawValue: id) else { throw LLMError(description: "mlx: bad model id \(id)") }
+            let patterns = ["*.safetensors", "*.json", "*.jinja"]
+            let start = Date()
+            if let shared = try? await HubClient.default.downloadSnapshot(of: repo, matching: patterns, localFilesOnly: true),
+               FileManager.default.fileExists(atPath: shared.appendingPathComponent("model.safetensors").path) {
+                try TextOnlyModel.make(from: shared, to: dir)
+                timing.info("text-only \(dir.lastPathComponent, privacy: .public) from shared HF cache in \(Date().timeIntervalSince(start), format: .fixed(precision: 1))s")
+                return
+            }
+            let staging = TextOnlyModel.download(appSupport: appSupport)
+            let full = try await HubClient(cache: HubCache(cacheDirectory: staging)).downloadSnapshot(
+                of: repo, matching: patterns, progressHandler: { p in download?(p) })
+            try TextOnlyModel.make(from: full, to: dir)
+            try? FileManager.default.removeItem(at: staging)
+            timing.info("text-only \(dir.lastPathComponent, privacy: .public) downloaded and stripped in \(Date().timeIntervalSince(start), format: .fixed(precision: 1))s")
+        }
     }
     /// Where relative adapter ids live: the app bundle's Resources (`scripts/install.zsh` copies `adapters/`
     /// there), else the working directory (the repo, for `swift run`).

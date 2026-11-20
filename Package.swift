@@ -32,5 +32,7 @@ let package = Package(
         // Fine-tuning data (#21): batch transcription, production prompt rendering, teacher completions.
         .executableTarget(name: "PoptalkDatagen", dependencies: ["PoptalkCore", "PoptalkSpeech", "PoptalkMLX"]),
         .testTarget(name: "PoptalkCoreTests", dependencies: ["PoptalkCore"]),
+        // Checks against the real model files; each test skips when they aren't downloaded.
+        .testTarget(name: "PoptalkMLXTests", dependencies: ["PoptalkMLX"]),
     ]
 )

@@ -1,0 +1,33 @@
+import Foundation
+import MLX
+import MLXNN
+import Testing
+import PoptalkCore
+@testable import PoptalkMLX
+
+/// E2B's weights where downloaded: the shared Hugging Face cache and Poptalk's text-only copy (#51).
+private let cached: [URL] = {
+    let fm = FileManager.default
+    let snapshots = fm.homeDirectoryForCurrentUser
+        .appendingPathComponent(".cache/huggingface/hub/models--mlx-community--gemma-4-e2b-it-4bit/snapshots")
+    let full = (try? fm.contentsOfDirectory(at: snapshots, includingPropertiesForKeys: nil)) ?? []
+    let text = TextOnlyModel.directory(for: ModelSettings.e2b, appSupport: MLXProvider.appSupport)!
+    return (full + [text]).map { $0.appendingPathComponent("model.safetensors") }.filter { fm.fileExists(atPath: $0.path) }
+}()
+
+@Test(.enabled(if: !cached.isEmpty, "E2B not downloaded"), arguments: cached)
+func mappedPLEMatchesQuantizedEmbedding(url: URL) throws {
+    // Lazy: reads only the header; just the three PLE tensors are materialized.
+    let all = try loadArrays(url: url)
+    let p = MappedPLE.path
+    let original = QuantizedEmbedding(weight: all[p + ".weight"]!, scales: all[p + ".scales"]!,
+                                      biases: all[p + ".biases"]!, groupSize: 64, bits: 4)
+    let mapped = try #require(try MappedPLE(file: url, groupSize: 64, bits: 4))
+    #expect(mapped.shape == (262_144, 35 * 256))
+    let ids = MLXArray([0, 1, 2, 106, 1000, 50_000, 131_071, 200_000, 262_143] as [Int32]).reshaped(1, 9)
+    let a = original(ids), b = mapped(ids)
+    #expect(a.shape == [1, 9, 35 * 256])
+    #expect(a.shape == b.shape)
+    #expect(a.dtype == b.dtype)
+    #expect(MLX.arrayEqual(a, b).item(Bool.self))
+}
