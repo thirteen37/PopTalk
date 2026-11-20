@@ -10,8 +10,9 @@ public enum SpeechMetrics {
             .filter { !$0.isEmpty }
     }
 
-    /// Levenshtein alignment over words: edit count and the reference positions matched exactly.
-    static func align(_ ref: [String], _ hyp: [String]) -> (errors: Int, matched: Set<Int>) {
+    /// Levenshtein alignment over words: edit count, the reference positions matched exactly, and the
+    /// hypothesis position matched or substituted at each reference position.
+    static func align(_ ref: [String], _ hyp: [String]) -> (errors: Int, matched: Set<Int>, pairs: [Int: Int]) {
         var d = [[Int]](repeating: [Int](repeating: 0, count: hyp.count + 1), count: ref.count + 1)
         for i in 0...ref.count { d[i][0] = i }
         for j in 0...hyp.count { d[0][j] = j }
@@ -20,15 +21,16 @@ public enum SpeechMetrics {
                 d[i][j] = min(d[i - 1][j - 1] + (ref[i - 1] == hyp[j - 1] ? 0 : 1), d[i - 1][j] + 1, d[i][j - 1] + 1)
             }
         }
-        var matched = Set<Int>(), (i, j) = (ref.count, hyp.count)
+        var matched = Set<Int>(), pairs: [Int: Int] = [:], (i, j) = (ref.count, hyp.count)
         while i > 0, j > 0 {
             let same = ref[i - 1] == hyp[j - 1]
             if d[i][j] == d[i - 1][j - 1] + (same ? 0 : 1) {
                 if same { matched.insert(i - 1) }
+                pairs[i - 1] = j - 1
                 (i, j) = (i - 1, j - 1)
             } else if d[i][j] == d[i - 1][j] + 1 { i -= 1 } else { j -= 1 }
         }
-        return (d[ref.count][hyp.count], matched)
+        return (d[ref.count][hyp.count], matched, pairs)
     }
 
     /// (substitutions + deletions + insertions) / reference words.
@@ -46,11 +48,13 @@ public enum SpeechMetrics {
     }
 
     /// Reference words boosting got right that raw recognition missed (`fixed`), and ones raw recognition
-    /// heard correctly that boosting replaced (`broken`).
+    /// heard correctly that boosting replaced, or heard wrong and boosting made a different word raw lacks (`broken`;
+    /// #70: "3.30pm" → "PopTalk" for "three thirty pm" was wrong both times, so it counted as neither).
     public static func boostChanges(reference: String, raw: String, boosted: String) -> (fixed: Int, broken: Int) {
-        let ref = words(reference)
-        let (r, b) = (align(ref, words(raw)).matched, align(ref, words(boosted)).matched)
-        return (b.subtracting(r).count, r.subtracting(b).count)
+        let (ref, rawWords, boostedWords) = (words(reference), words(raw), words(boosted))
+        let (r, b) = (align(ref, rawWords).matched, align(ref, boostedWords))
+        let worse = b.pairs.filter { i, j in !r.contains(i) && !b.matched.contains(i) && !rawWords.contains(boostedWords[j]) }
+        return (b.matched.subtracting(r).count, r.subtracting(b.matched).count + worse.count)
     }
 
     /// Expected terms heard in `raw` but not in `boosted`. Matched inside words, ignoring case, spaces and

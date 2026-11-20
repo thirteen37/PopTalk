@@ -86,3 +86,40 @@ import Testing
     let old = try JSONEncoder().encode(rep(lost: nil))
     #expect(try JSONDecoder().decode(BenchReport.self, from: old).cases[0].runs[0].speech?.termsLost == nil)
 }
+
+// #70: the rescorer's spotter rescue ignores minSimilarity: it swapped "Pop Talk build" (every word under the
+// detection) and "3.30pm" (sim ~0) for "PopTalk". Only the span that sounds like the term is replaced.
+@Test func applyBoostsKeepsOnlyPlausibleSpans() {
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "PopTalk")], context: ScreenSnapshot(), fromScreen: false)
+    #expect(Pipeline.applyBoosts("Send the Pop Talk build to Uzai at 3.30pm",
+                                 [(span: "Pop Talk build", term: "PopTalk"), (span: "3.30pm", term: "PopTalk")], terms: terms)
+        == "Send the PopTalk build to Uzai at 3.30pm")
+    // Neighbours on both sides survive; a dissimilar span is left alone.
+    #expect(Pipeline.applyBoosts("ask the pop talk team", [(span: "the pop talk team", term: "PopTalk")], terms: terms)
+        == "ask the PopTalk team")
+    #expect(Pipeline.applyBoosts("send it to Uzai", [(span: "Uzai", term: "PopTalk")], terms: terms) == "send it to Uzai")
+    // Once per heard occurrence: two spans, two replacements; whole words only.
+    #expect(Pipeline.applyBoosts("pop talk talking, then pop talk",
+                                 [(span: "pop talk", term: "PopTalk"), (span: "pop talk", term: "PopTalk")], terms: terms)
+        == "PopTalk talking, then PopTalk")
+    // Punctuation kept; misspellings within the similarity floor still fixed (raw or consonant skeleton).
+    let priya = [VocabTerm(text: "Priya")]
+    #expect(Pipeline.applyBoosts("call Pria, then", [(span: "Pria,", term: "Priya")], terms: priya) == "call Priya, then")
+}
+
+@Test func applyBoostsRejectsDigitSpansUnlessTheTermHasDigits() {
+    #expect(Pipeline.applyBoosts("at 3.30 p.m.", [(span: "3.30", term: "Pop")], terms: []) == "at 3.30 p.m.")
+    #expect(Pipeline.applyBoosts("meet at 10", [(span: "10", term: "Tenn")], terms: []) == "meet at 10")
+    let q3 = Pipeline.boostTerms(saved: [VocabTerm(text: "Q3 OKRs")], context: ScreenSnapshot(), fromScreen: false)
+    #expect(Pipeline.applyBoosts("about the Q3 okrs", [(span: "Q3 okrs", term: "Q3 OKRs")], terms: q3) == "about the Q3 OKRs")
+}
+
+// #70: "3.30pm" → "PopTalk" was invisible to boost broken: raw "3 30pm" never matched "three thirty pm", so a
+// wrong word turned into a different wrong word counted as neither fixed nor broken.
+@Test func boostChangesCountWrongWordsBoostingMadeDifferentlyWrong() {
+    let ref = "Send the PopTalk build to Yu-Xi at three thirty pm", raw = "Send the Pop Talk build to Uzai at 3.30pm"
+    let c = SpeechMetrics.boostChanges(reference: ref, raw: raw, boosted: "Send the PopTalk to Uzai at PopTalk")
+    #expect(c.fixed == 1 && c.broken == 2)  // fixed poptalk; broke build and the time
+    let ok = SpeechMetrics.boostChanges(reference: ref, raw: raw, boosted: "Send the PopTalk build to Uzai at 3.30pm")
+    #expect(ok.fixed == 1 && ok.broken == 0)
+}

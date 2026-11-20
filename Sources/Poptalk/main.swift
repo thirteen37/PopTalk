@@ -9,7 +9,8 @@ import PoptalkSpeech
 let args = CommandLine.arguments
 if args.count >= 3, args[1] == "--transcribe" {
     let samples = try AudioConverter().resampleAudioFile(URL(fileURLWithPath: args[2]))
-    let terms = args.dropFirst(3).map { VocabTerm(text: $0) }
+    // With the app's aliases (`boostTerms`), so this hears what the app does.
+    let terms = Pipeline.boostTerms(saved: args.dropFirst(3).map { VocabTerm(text: $0) }, context: ScreenSnapshot(), fromScreen: false)
     let t = try await Transcriber()
     let start = Date()
     let text = try await t.transcribe(samples, boost: terms).text
