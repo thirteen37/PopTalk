@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var transcriber: Transcriber? { didSet { syncSpeech() } }
     private var loadingTranscriber = false { didSet { syncSpeech() } }
     private var transcriberError: String? { didSet { syncSpeech() } }
+    /// Speech model download fraction while files are fetched; nil when cached or not started.
+    private var speechDownload: Double? { didSet { syncSpeech() } }
     private var hotkey: Hotkey!
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -51,7 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func syncSpeech() {
-        status.value.speech = transcriber != nil ? .ready : loadingTranscriber ? .loading
+        status.value.speech = transcriber != nil ? .ready
+            : loadingTranscriber ? speechDownload.map { ModelStatus(downloaded: $0) } ?? .loading
             : transcriberError.map { .failed($0) } ?? .loading
     }
 
@@ -70,9 +73,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func loadTranscriber() {
         guard transcriber == nil, !loadingTranscriber else { return }
         loadingTranscriber = true
+        speechDownload = nil
         Task {
             defer { loadingTranscriber = false }
-            do { transcriber = try await Transcriber(); transcriberError = nil } catch {
+            do {
+                transcriber = try await Transcriber { f in
+                    Task { @MainActor [weak self] in self?.speechDownload = f }
+                }
+                transcriberError = nil
+            } catch {
                 transcriberError = error.localizedDescription
             }
         }
@@ -168,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.log.info("press: capture start")
             contextTask = Task { await ScreenContext.capture() }
             selectionTask = Task { await TextIO.selectedText() }
-            overlay.showRecording(note: mode == .raw ? "raw — model loading" : nil)
+            overlay.showRecording(note: { if case .raw(let note) = mode { note } else { nil } }())
             startPreview()
         }
         startWork = work

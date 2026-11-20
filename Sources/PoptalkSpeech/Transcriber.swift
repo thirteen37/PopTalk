@@ -18,13 +18,32 @@ public actor Transcriber {
     private let ctcModels: CtcModels
     public private(set) var lastRescoreSeconds: Double = 0
 
-    /// - Parameter version: Parakeet TDT `v2` (English, the app's default) or `v3` (multilingual).
-    public init(version: AsrModelVersion = .v2) async throws {
+    /// - Parameters:
+    ///   - version: Parakeet TDT `v2` (English, the app's default) or `v3` (multilingual).
+    ///   - progress: Download fraction 0…1, called on any queue, only while files are fetched (not when cached).
+    ///     The TDT and CTC models download one after the other, each from 0 to 1.
+    public init(version: AsrModelVersion = .v2, progress: (@Sendable (Double) -> Void)? = nil) async throws {
         Self.quietLogs()
-        let models = try await AsrModels.downloadAndLoad(version: version)
+        let models = try await AsrModels.downloadAndLoad(
+            version: version, progressHandler: Self.downloadOnly(progress, endingAt: 0.5))
         asr = AsrManager()
         try await asr.loadModels(models)
-        ctcModels = try await CtcModels.downloadAndLoad(variant: .ctc110m)
+        ctcModels = try await CtcModels.downloadAndLoad(
+            variant: .ctc110m, progressHandler: Self.downloadOnly(progress, endingAt: 0.25))
+    }
+
+    /// Reports only the download phase, rescaled to 0…1. FluidAudio 0.18.3 weights a repo load's download as its
+    /// first half (compile is the rest) and the first load fetches the whole repo; CtcModels squeezes the first of
+    /// its two loads into 0…0.5, so its download ends at 0.25. A cached repo reports 0 total files.
+    private static func downloadOnly(_ report: (@Sendable (Double) -> Void)?, endingAt end: Double) -> ProgressHandler? {
+        guard let report else { return nil }
+        return { p in
+            switch p.phase {
+            case .listing: report(0)
+            case .downloading(_, let total) where total > 0: report(min(p.fractionCompleted / end, 1))
+            default: break
+            }
+        }
     }
 
     /// Drops FluidAudio's debug and info logs, which include transcripts (the rescorer's

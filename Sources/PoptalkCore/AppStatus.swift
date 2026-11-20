@@ -55,7 +55,7 @@ public struct AppStatus: Equatable, Sendable {
 
     public var summary: String {
         if let problem { return "Needs attention: \(problem)" }
-        let downloads = models.values.compactMap { if case .downloading(let f) = $0 { f } else { nil } }
+        let downloads = ([speech] + models.values).compactMap { if case .downloading(let f) = $0 { f } else { nil } }
         if let f = downloads.min() { return "Downloading model \(Int(f * 100))%" }
         if speech != .ready || models.values.contains(where: { $0 != .ready }) { return "Loading models…" }
         return "Ready"
