@@ -12,9 +12,8 @@ private func dictate(_ transcript: String, reply: String) async -> Outcome {
 
 @Test func lastSentenceOnlyFallsBackToRaw() async {
     let said = "One of my earlier dictations had quote and unquote, but those weren't translated properly. Whose job is that?"
-    // The raw fallback still gets the spoken-quote pre-pass (#48).
-    #expect(await dictate(said, reply: "Whose job is that?") == .insert(
-        "One of my earlier dictations had “and”, but those weren't translated properly. Whose job is that?", label: "Dictated (raw)"))
+    // "quote and unquote" is a mention, not a spoken quote (#69).
+    #expect(await dictate(said, reply: "Whose job is that?") == .insert(said, label: "Dictated (raw)"))
     let ask = "I pushed the fix to staging this morning. Can you check whether the login bug is gone?"
     #expect(await dictate(ask, reply: "Can you check whether the login bug is gone?") == .insert(ask, label: "Dictated (raw)"))
 }
