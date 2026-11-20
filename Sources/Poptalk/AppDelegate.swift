@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
         // Set on the system-wide element, this is the process-wide AX timeout (default ~6 s): a hung app can't freeze us.
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.25)
-        ScreenContext.prewarmOCR()
+        if ContextSources(.standard).ocr { ScreenContext.prewarmOCR() }
         if !AXIsProcessTrusted() {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
@@ -219,7 +219,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.mark("release: selection awaited", since: t0)
             await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
             Timing.mark("release: preview drained", since: t0)
-            let boost = Pipeline.boostTerms(saved: store.terms, context: snapshot)
+            let boost = Pipeline.boostTerms(saved: store.terms, context: snapshot,
+                                            fromScreen: ContextSources(.standard).screenVocabulary)
             let heard: Transcription
             do { heard = try await transcriber.transcribe(samples, boost: boost) } catch {
                 overlay.showError("Transcription failed"); return

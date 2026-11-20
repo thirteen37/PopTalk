@@ -14,6 +14,7 @@ enum ScreenContext {
         guard let app = NSWorkspace.shared.frontmostApplication else { return ScreenSnapshot() }
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
         guard !isSensitive() else { return snap }
+        let sources = ContextSources(.standard)  // #40: a disabled source is never read
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         exposeTree(axApp, app)
         Timing.mark("context sensitive+exposeTree", since: start)
@@ -25,7 +26,7 @@ enum ScreenContext {
             windowFrame = frame(of: window)
         }
         let focused: AXUIElement? = attr(axApp, kAXFocusedUIElementAttribute)
-        if let focused {
+        if let focused, sources.focusedText {
             let parent: AXUIElement? = attr(focused, kAXParentAttribute)
             snap.text = attr(focused, kAXValueAttribute) ?? parent.flatMap { attr($0, kAXValueAttribute) } ?? ""
             if let range: AXValue = attr(focused, kAXSelectedTextRangeAttribute) {
@@ -36,22 +37,23 @@ enum ScreenContext {
 
         Timing.mark("context focused field", since: start)
         let fieldChars = snap.text.count
-        let nearby = isPrivate() ? [] : focused.map(nearbyText) ?? []
+        let nearby = isPrivate() || !sources.nearbyText ? [] : focused.map(nearbyText) ?? []
         for t in nearby { snap.text += (snap.text.isEmpty ? "" : "\n") + t }
         Timing.mark("context nearby", since: start)
-        let wantsOCR = NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars)
+        let wantsOCR = sources.ocr && NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars)
         // A cold Vision load (~14 s) would stall the request: go without OCR until the prewarm finishes (#39).
-        if wantsOCR, !ocrWarm.withLock({ $0 }) { Timing.mark("ocr skipped (not warm)", since: start) }
+        // OCR may have been off at launch, so start the prewarm now if it never ran.
+        if wantsOCR, !ocrWarm.withLock({ $0 }) { prewarmOCR(); Timing.mark("ocr skipped (not warm)", since: start) }
         else if wantsOCR, CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
             pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle, field: focused.flatMap(frame)) {
             snap.ocrText = ocr  // own budget in Prompts.window (#25)
         }
         Timing.mark("context ocr done", since: start)
         // ponytail: domain rides in the window title until ScreenSnapshot/<screen> grow a domain field.
-        if !isPrivate(), let domain = focused.flatMap(webDomain) {
+        if sources.windowTitle, !isPrivate(), let domain = focused.flatMap(webDomain) {
             snap.windowTitle += snap.windowTitle.isEmpty ? domain : " (\(domain))"
         }
-        return snap
+        return sources.apply(snap)
     }
 
     /// Chromium and Electron build their AX tree only when asked. Skips attributes already on, so it's
@@ -123,8 +125,11 @@ enum ScreenContext {
 
     /// The first accurate-OCR request in a process loads Vision's models (~14 s measured); pay that at launch.
     private static let ocrWarm = OSAllocatedUnfairLock(initialState: false)
+    private static let ocrPrewarmStarted = OSAllocatedUnfairLock(initialState: false)
 
+    /// Runs once per process; later calls are no-ops.
     static func prewarmOCR() {
+        guard ocrPrewarmStarted.withLock({ started in defer { started = true }; return !started }) else { return }
         Task.detached(priority: .utility) {
             let start = ContinuousClock.now
             defer { ocrWarm.withLock { $0 = true } }  // also when the prewarm gives up: OCR then loads on use, as before

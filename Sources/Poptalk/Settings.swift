@@ -37,6 +37,7 @@ extension SettingsTab {
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .context: "text.viewfinder"
         case .models: "cpu"
         case .permissions: "lock.shield"
         case .vocabulary: "character.book.closed"
@@ -61,6 +62,11 @@ struct SettingsView: View {
     @AppStorage("lmstudioCleanupModel") private var lmstudioCleanupModel = ModelSettings.defaults["lmstudioCleanupModel"]!
     @AppStorage("lmstudioEditModel") private var lmstudioEditModel = ModelSettings.defaults["lmstudioEditModel"]!
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
+    @AppStorage(ContextSources.Key.focusedText) private var ctxFocusedText = true
+    @AppStorage(ContextSources.Key.nearbyText) private var ctxNearbyText = true
+    @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
+    @AppStorage(ContextSources.Key.windowTitle) private var ctxWindowTitle = true
+    @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var terms: [VocabTerm] = []
     @State private var vocabMessage: String?
@@ -78,6 +84,7 @@ struct SettingsView: View {
         Group {
             switch tab {
             case .general: general
+            case .context: context
             case .models: models
             case .permissions: permissions
             case .vocabulary: vocabulary
@@ -104,7 +111,6 @@ struct SettingsView: View {
                     ForEach(devices, id: \.uniqueID) { Text($0.localizedName).tag($0.uniqueID) }
                 }
             }
-            HistorySection(history: history)
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
@@ -115,6 +121,27 @@ struct SettingsView: View {
                     .font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
                     .frame(maxWidth: .infinity).padding(.top, 8)
             }
+        }
+        .formStyle(.grouped)
+        .fitted()
+    }
+
+    /// What's read at each press (#40), then what's recorded (#38).
+    private var context: some View {
+        Form {
+            Section {
+                Toggle("Focused field text", isOn: $ctxFocusedText)
+                Toggle("Nearby text", isOn: $ctxNearbyText)
+                Toggle("Screen text (OCR)", isOn: $ctxOCR)
+                Toggle("App & window title, web domain", isOn: $ctxWindowTitle)
+                Toggle("Boost recognition with words on screen", isOn: $ctxScreenVocabulary)
+            } header: {
+                Text("Context sources")
+            } footer: {
+                Text("What Poptalk reads on each press to understand what you're writing. Selected text is always used (edits need it), saved vocabulary always boosts recognition, and password fields are never read. Screen text needs Screen Recording.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            HistorySection(history: history)
         }
         .formStyle(.grouped)
         .fitted()
@@ -301,7 +328,7 @@ private struct HistorySection: View {
                 }
             }
         } header: {
-            Text("History")
+            Text("Recording")
         } footer: {
             Text("Keeps transcripts, the context sent to the model, its replies, and your undos and corrections on this Mac, to train a better model. Nothing leaves the Mac.")
                 .font(.footnote).foregroundStyle(.secondary)

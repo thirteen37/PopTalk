@@ -13,7 +13,7 @@ public enum Permission: String, CaseIterable, Sendable {
     }
 }
 
-public enum SettingsTab: String, CaseIterable, Sendable { case general, models, permissions, vocabulary }
+public enum SettingsTab: String, CaseIterable, Sendable { case general, context, models, permissions, vocabulary }
 
 /// "Poptalk 0.1 (412 · 9b4cc05)" from an Info.plist dictionary; install.zsh stamps the build and commit keys.
 public func versionLabel(_ info: [String: Any]?) -> String {

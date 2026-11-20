@@ -131,11 +131,12 @@ public struct Pipeline: Sendable {
 extension Pipeline {
     /// Saved vocabulary, then up to 60 screen terms ranked by closeness to the cursor in the
     /// window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
-    public static func boostTerms(saved: [VocabTerm], context: ScreenSnapshot) -> [VocabTerm] {
+    /// `fromScreen` false (#40): saved terms only.
+    public static func boostTerms(saved: [VocabTerm], context: ScreenSnapshot, fromScreen: Bool = true) -> [VocabTerm] {
         let known = Set(saved.map { $0.text.lowercased() })
         let w = Prompts.window(context)
-        return (saved + TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.windowTitle)
-            .filter { !known.contains($0.text.lowercased()) })
+        let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.windowTitle) : []
+        return (saved + screen.filter { !known.contains($0.text.lowercased()) })
             .map { t in
                 var t = t
                 t.aliases += boostAliases(t.text).filter { a in !t.aliases.contains { $0.lowercased() == a } }

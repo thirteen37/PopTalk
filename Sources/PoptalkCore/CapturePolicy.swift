@@ -43,3 +43,29 @@ public enum CapturePolicy {
         return ["incognito", "inprivate", "private browsing", "private window"].contains { t.contains($0) }
     }
 }
+
+/// Which context sources the user allows (#40), read at capture time so a change applies to the next press.
+/// The selection and saved vocabulary aren't optional; password fields are excluded regardless.
+public struct ContextSources: Sendable, Equatable {
+    public enum Key {
+        public static let focusedText = "contextFocusedText", nearbyText = "contextNearbyText", ocr = "contextOCR"
+        public static let windowTitle = "contextWindowTitle", screenVocabulary = "contextScreenVocabulary"
+    }
+    public var focusedText = true, nearbyText = true, ocr = true, windowTitle = true, screenVocabulary = true
+
+    public init() {}
+
+    /// Unset keys are on.
+    public init(_ d: UserDefaults) {
+        func on(_ k: String) -> Bool { d.object(forKey: k) as? Bool ?? true }
+        (focusedText, nearbyText, ocr) = (on(Key.focusedText), on(Key.nearbyText), on(Key.ocr))
+        (windowTitle, screenVocabulary) = (on(Key.windowTitle), on(Key.screenVocabulary))
+    }
+
+    /// The title is still read during capture (private-window check, OCR window match); it's dropped here.
+    public func apply(_ s: ScreenSnapshot) -> ScreenSnapshot {
+        var s = s
+        if !windowTitle { s.windowTitle = "" }
+        return s
+    }
+}
