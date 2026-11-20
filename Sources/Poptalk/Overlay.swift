@@ -43,10 +43,31 @@ final class Overlay {
     /// Inactive subsystems for the strip under recording and outcome text (#57); set by `AppDelegate`.
     var statusStrip: () -> [StatusBadge] = { [] }
 
-    func showRecording(note: String? = nil) { self.note = note; show(noted("● Listening…"), for: nil, strip: true) }
+    /// The last live transcript, kept on screen while working after release.
+    private var preview: String?
+
+    func showRecording(note: String? = nil) {
+        self.note = note
+        preview = nil
+        show(noted("● Listening…"), for: nil, strip: true)
+    }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible.
-    func showPreview(_ text: String) { show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil, strip: true) }
-    func showWorking() { show("Working…", for: nil) }
+    func showPreview(_ text: String) {
+        preview = text
+        show(noted("● " + PreviewText.tail(text, limit: 400)), for: nil, strip: true)
+    }
+    /// `heard`: the final transcript; without it, the last preview (once) stays up above a small "Working…".
+    func showWorking(heard: String? = nil) {
+        defer { preview = nil }
+        guard let text = heard ?? preview, !text.isEmpty else { return show("Working…", for: nil) }
+        let out = NSMutableAttributedString(string: PreviewText.tail(text, limit: 400), attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: Self.centered])
+        out.append(NSAttributedString(string: "\n◌ Working…", attributes: [
+            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: Self.centered]))
+        show(out, for: nil)
+    }
     func showError(_ msg: String) { show("⚠️ \(msg)", for: 3) }
     func showNotice(_ msg: String) { show(msg, for: 2) }
 
@@ -106,6 +127,7 @@ final class Overlay {
     func hide() {
         hideWork?.cancel()
         keys = nil
+        preview = nil
         panel.orderOut(nil)
     }
 

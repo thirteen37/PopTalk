@@ -240,6 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 overlay.showError("Transcription failed"); return
             }
             Timing.mark("release: transcribed", since: t0)
+            overlay.showWorking(heard: heard.text)
             await process(Request(transcript: heard.text, selection: selection, context: snapshot),
                           raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app, since: t0)
         }
