@@ -21,6 +21,19 @@ private let f = Pipeline.spokenFormatting
     #expect(f("end quote") == "end quote")
 }
 
+// #69: "quote and unquote" names the words; a body that is only a conjunction is a mention, not a command.
+@Test func mentionedQuoteWordsStayLiteral() {
+    #expect(f("one of my dictations had quote and unquote, but it got mangled")
+        == "one of my dictations had quote and unquote, but it got mangled")
+    #expect(f("I said the words quote and unquote.") == "I said the words quote and unquote.")
+    #expect(f("Say quote, or end quote, to close it.") == "Say quote, or end quote, to close it.")
+    #expect(f("Quote and unquote work, so quote hi unquote becomes curly.")
+        == "Quote and unquote work, so “hi” becomes curly.")
+    #expect(f("type open paren and close paren") == "type open paren and close paren")
+    // A real body that happens to start or end with a conjunction is still a command.
+    #expect(f("she said quote and then he left unquote") == "she said “and then he left”")
+}
+
 @Test func parensBecomeBrackets() {
     #expect(f("the deadline open paren tentative close paren is Friday") == "the deadline (tentative) is Friday")
     #expect(f("Ship it, open parenthesis, finally, close parenthesis.") == "Ship it, (finally).")
