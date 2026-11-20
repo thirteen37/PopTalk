@@ -104,12 +104,15 @@ public struct Pipeline: Sendable {
             return PipelineResult(outcome: .error("Didn't understand the model's reply"))
         }
 
+        // A bare phrase over a selection replaces it; models sometimes pick insert anyway.
+        var action = edit.action
+        if action == .insertBefore || action == .insertAfter, !Self.asksToInsert(transcript) { action = .replace }
         // An empty replacement would silently delete the selection.
-        if edit.action != .insertBefore, edit.action != .insertAfter, Self.isBlank(edit.text) {
+        if action != .insertBefore, action != .insertAfter, Self.isBlank(edit.text) {
             return PipelineResult(outcome: .nothing)
         }
-        let outcome: Outcome = switch edit.action {
-        case .replace: .replaceSelection(edit.text, label: "Replaced")
+        let outcome: Outcome = switch action {
+        case .replace: .replaceSelection(edit.text.trimmingCharacters(in: .whitespaces), label: "Replaced")
         case .correct: .replaceSelection(edit.text, label: "Corrected")
         case .edit: .replaceSelection(edit.text, label: "Edited")
         // Models sometimes repeat the selection in an insert; drop it so it isn't duplicated.
@@ -148,6 +151,13 @@ extension Pipeline {
 
     private static let hesitation = try! NSRegularExpression(
         pattern: #"\b(?:u+m+|u+h+|e+r+m*|h+m+)\b[,.!?]?"#, options: .caseInsensitive)
+
+    /// The utterance explicitly asks to add text rather than replace the selection.
+    /// ponytail: English keyword list; extend if users phrase inserts differently.
+    public static func asksToInsert(_ utterance: String) -> Bool {
+        utterance.range(of: #"\b(add|append|prepend|insert|before|after|at the (start|end|beginning|top|bottom))\b"#,
+                        options: [.regularExpression, .caseInsensitive]) != nil
+    }
 
     /// Drops pure hesitation sounds (um, uh, er, erm, hmm). Context-dependent fillers
     /// ("like", "basically", "you know") are left to the LLM, since they can be real words.

@@ -118,6 +118,25 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(r.outcome == .insertAfter(" See you Thursday."))
 }
 
+// A bare phrase over a selection replaces it; inserting needs an explicit ask ("add", "after"…).
+@Test func insertWithoutAskReplaces() async {
+    let reply = #"{"action":"insertAfter","text":" Debounce period.","vocabulary":null,"remember":false}"#
+    let r = await pipeline(reply: reply).run(req("Debounce period.", selection: "time limit"))
+    #expect(r.outcome == .replaceSelection("Debounce period.", label: "Replaced"))
+    let before = #"{"action":"insertBefore","text":"Note: ","vocabulary":null,"remember":false}"#
+    #expect(await pipeline(reply: before).run(req("Note.", selection: "x")).outcome == .replaceSelection("Note:", label: "Replaced"))
+}
+
+@Test func insertCuesKeepInsert() {
+    for u in ["add after this: see you Thursday", "Append thanks", "insert a greeting before it", "put hi at the start",
+              "and then at the end say thanks", "prepend Note"] {
+        #expect(Pipeline.asksToInsert(u), "\(u)")
+    }
+    for u in ["Debounce period.", "Quarterly Review", "Afternoon tea", "Addison Lee"] {
+        #expect(!Pipeline.asksToInsert(u), "\(u)")
+    }
+}
+
 // #2: a model that repeats the selection inside an insert must not duplicate it.
 @Test func insertAfterStripsRepeatedSelection() async {
     let reply = #"{"action":"insertAfter","text":"Thanks for the update. See you Thursday.","vocabulary":null,"remember":false}"#
