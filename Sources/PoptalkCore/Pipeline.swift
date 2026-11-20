@@ -90,6 +90,7 @@ public struct Pipeline: Sendable {
             if let reply, case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
                Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40,
                !Self.dropsContent(cleaned, transcript: transcript),
+               !Self.dropsProtected(cleaned, transcript: transcript),
                !Self.echoesContext(cleaned, transcript: transcript,
                                    context: r.context.windowTitle + " " + Prompts.trimmedContext(r.context)) {
                 return PipelineResult(outcome: .insert(space + cleaned, label: "Dictated"))
@@ -222,6 +223,22 @@ extension Pipeline {
             .filter { $0.count >= 3 && !droppable.contains(String($0)) }
         let lost = content.filter { !out.contains($0) }.count
         return lost > 3 && Double(lost) > 0.4 * Double(content.count)
+    }
+
+    /// True when the cleanup lost a protected span (#61): the words of each ( … ), “ … ” or " … " in the
+    /// transcript must appear in the output together and in order, ignoring case, punctuation and quote
+    /// style. Also true when the output has fewer line breaks than the transcript ("new line", #48).
+    static func dropsProtected(_ output: String, transcript: String) -> Bool {
+        func words(_ s: some StringProtocol) -> String {
+            " " + s.lowercased().replacing("’", with: "'").split { !$0.isLetter && !$0.isNumber && $0 != "'" }
+                .map { $0.trimmingCharacters(in: ["'"]) }.filter { !$0.isEmpty }.joined(separator: " ") + " "
+        }
+        let out = words(output)
+        if output.filter({ $0 == "\n" }).count < transcript.filter({ $0 == "\n" }).count { return true }
+        return transcript.matches(of: /\(([^()]*)\)|“([^“”]*)”|"([^"]*)"/).contains { m in
+            let span = words(m.1 ?? m.2 ?? m.3 ?? "")
+            return span != "  " && !out.contains(span)
+        }
     }
 
     /// Removes reasoning blocks and echoed tags from a model reply.
