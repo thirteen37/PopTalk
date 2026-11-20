@@ -99,3 +99,59 @@ private func report(_ runs: [String: [Bool]], variant: String = "AFM 3 Core Adva
     let ins = c.score(PipelineResult(outcome: .insertAfter(" more")), seconds: 0.1)
     #expect(!ins.failures.isEmpty)
 }
+
+// #54: score the model's raw action separately from the guarded outcome.
+@Test func scoresModelActionAndGuardOverride() throws {
+    let c = try one(#"{"id":"t","kind":"edit","transcript":"Debounce period.","selection":"time limit","expectAction":"replace"}"#)
+    let overridden = c.score(PipelineResult(outcome: .replaceSelection("Debounce period.", label: "Replaced"), modelAction: "insertAfter"), seconds: 1)
+    #expect(overridden.passed)
+    #expect(overridden.modelAction == "insertAfter")
+    #expect(overridden.modelActionOK == false)
+    #expect(overridden.overridden)
+    let fine = c.score(PipelineResult(outcome: .replaceSelection("x", label: "Edited"), modelAction: "correct"), seconds: 1)
+    #expect(fine.modelActionOK == true)
+    #expect(!fine.overridden)
+    // No model call (literally, fast path): nothing to score.
+    let none = c.score(PipelineResult(outcome: .replaceSelection("x", label: "Replaced")), seconds: 1)
+    #expect(none.modelActionOK == nil)
+    #expect(!none.overridden)
+    // No expectAction: overrides still count, accuracy doesn't.
+    let free = try one(#"{"id":"u","kind":"edit","transcript":"x","selection":"y"}"#)
+        .score(PipelineResult(outcome: .nothing, modelAction: "replace"), seconds: 1)
+    #expect(free.modelActionOK == nil)
+    #expect(free.overridden)
+}
+
+private func editReport(_ runs: [(String?, String, Bool?)]) -> BenchReport {
+    BenchReport(date: "d", provider: [:], cases: [BenchCaseResult(id: "e1", kind: .edit, runs: runs.map { m, a, ok in
+        var r = BenchRun(output: "o", action: a, vocabOffer: nil, seconds: 1, failures: [])
+        r.modelAction = m
+        r.modelActionOK = ok
+        return r
+    })])
+}
+
+@Test func summaryCountsModelActionAndOverrides() {
+    let r = editReport([("insertAfter", "replace", false), ("replace", "replace", true), (nil, "replace", nil), ("edit", "correct", true)])
+    let s = r.summaries()[0]
+    #expect(s.modelActionRuns == 3)
+    #expect(s.modelActionPassed == 2)
+    #expect(s.overrides == 1)
+    print(r.table())
+    #expect(r.table().contains("  2/3 "))
+}
+
+@Test func compareShowsModelActionAndOverrides() {
+    let a = editReport([("insertAfter", "replace", false), ("replace", "replace", true)])
+    let b = editReport([("replace", "replace", true), ("replace", "replace", true)])
+    let lines = BenchReport.compare(a, b)
+    #expect(lines.contains("edit model action 1/2 → 2/2"))
+    #expect(lines.contains("edit guard overrides 1 → 0"))
+}
+
+@Test func oldResultsWithoutModelActionDecode() throws {
+    let json = #"{"date":"d","provider":{},"cases":[{"id":"e","kind":"edit","runs":[{"output":"o","action":"replace","seconds":1,"failures":[]}]}]}"#
+    let r = try JSONDecoder().decode(BenchReport.self, from: Data(json.utf8))
+    #expect(r.cases[0].runs[0].modelAction == nil)
+    #expect(r.summaries()[0].modelActionRuns == 0)
+}

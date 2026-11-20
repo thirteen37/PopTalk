@@ -27,12 +27,16 @@ public struct PipelineResult: Equatable, Sendable {
     public var remembered: VocabTerm?
     /// Inserted raw because the language model was still loading: can be cleaned up once it's ready.
     public var degraded: Bool
+    /// The edit model's parsed action (`EditAction` raw value) before code guards; nil without an edit model reply (#54).
+    public var modelAction: String?
 
-    public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false) {
+    public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
+                modelAction: String? = nil) {
         self.outcome = outcome
         self.vocabularyOffer = vocabularyOffer
         self.remembered = remembered
         self.degraded = degraded
+        self.modelAction = modelAction
     }
 }
 
@@ -110,7 +114,7 @@ public struct Pipeline: Sendable {
         if action == .insertBefore || action == .insertAfter, !Self.asksToInsert(transcript) { action = .replace }
         // An empty replacement would silently delete the selection.
         if action != .insertBefore, action != .insertAfter, Self.isBlank(edit.text) {
-            return PipelineResult(outcome: .nothing)
+            return PipelineResult(outcome: .nothing, modelAction: edit.action.rawValue)
         }
         let outcome: Outcome = switch action {
         case .replace: .replaceSelection(edit.text.trimmingCharacters(in: .whitespaces), label: "Replaced")
@@ -124,11 +128,11 @@ public struct Pipeline: Sendable {
         guard let term = edit.vocabulary,
               edit.text.localizedCaseInsensitiveContains(term.text),
               term.text.caseInsensitiveCompare(selection) != .orderedSame
-        else { return PipelineResult(outcome: outcome) }
+        else { return PipelineResult(outcome: outcome, modelAction: edit.action.rawValue) }
         if edit.remember, (try? vocabulary.add(term)) != nil {
-            return PipelineResult(outcome: outcome, remembered: term)
+            return PipelineResult(outcome: outcome, remembered: term, modelAction: edit.action.rawValue)
         }
-        return PipelineResult(outcome: outcome, vocabularyOffer: term)
+        return PipelineResult(outcome: outcome, vocabularyOffer: term, modelAction: edit.action.rawValue)
     }
 }
 

@@ -181,3 +181,21 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(r.outcome == .replaceSelection("Quarterly Review", label: "Corrected"))
     #expect(r.vocabularyOffer == nil)
 }
+
+// #54: the model's own action, before guards, for the bench.
+@Test func modelActionIsTheParsedActionBeforeGuards() async {
+    let reply = #"{"action":"insertAfter","text":" Debounce period.","vocabulary":null,"remember":false}"#
+    let r = await pipeline(reply: reply).run(req("Debounce period.", selection: "time limit"))
+    #expect(r.outcome == .replaceSelection("Debounce period.", label: "Replaced"))
+    #expect(r.modelAction == "insertAfter")
+    let blank = #"{"action":"replace","text":"  ","vocabulary":null,"remember":false}"#
+    #expect(await pipeline(reply: blank).run(req("x", selection: "y")).modelAction == "replace")
+    let vocab = #"{"action":"correct","text":"Todoist","vocabulary":{"text":"Todoist","aliases":[]},"remember":false}"#
+    #expect(await pipeline(reply: vocab).run(req("Todoist", selection: "todo list")).modelAction == "correct")
+}
+
+@Test func modelActionIsNilWithoutAnEditModelCall() async {
+    #expect(await pipeline(reply: "x").run(req("literally hi", selection: "y")).modelAction == nil)
+    #expect(await pipeline(reply: "Hi.").run(req("hi")).modelAction == nil)
+    #expect(await pipeline(reply: nil).run(req("fix", selection: "y")).modelAction == nil)
+}
