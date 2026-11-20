@@ -260,6 +260,13 @@ def text_dictation():
         trap = (w.capitalize() + r.choice(["ly", "ify", "Stack", "Labs", " Works"]), [], "product")
         out.append({"id": f"tx-echo-{i}", "cat": "d-no-echo", "transcript": lower_transcript(clean),
                     "context": context(r, [trap], long=r.random() < 0.2), "target": clean})
+    for i in range(400):  # several sentences, usually ending in a question or request: keep every one (#47)
+        parts = r.sample(L.PLAIN, r.randint(1, 2)) + [r.choice(L.ASKS)]
+        if r.random() < 0.25:
+            r.shuffle(parts)
+        spoken = " ".join(add_fillers(r, p, 1) if r.random() < 0.3 else p for p in parts)
+        out.append({"id": f"tx-multi-{i}", "cat": "d-multi-text", "transcript": lower_transcript(spoken) if r.random() < 0.8 else spoken,
+                    "context": unrelated_context(r), "target": " ".join(parts)})
     return out
 
 
