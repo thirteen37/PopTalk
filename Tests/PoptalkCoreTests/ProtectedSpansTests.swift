@@ -53,6 +53,30 @@ private func dictate(_ transcript: String, reply: String) async -> Outcome {
         == .insert("Hi team.\n\nThe build is green.", label: "Dictated (raw)"))
 }
 
+// #77: v3 copies a bullet-heavy screen and adds a list marker to a plain sentence; it goes, real lists stay.
+@Test func addedListMarkerIsDropped() async {
+    let said = "the build is green so we can ship tomorrow"
+    for marker in ["- ", "* ", "• ", "– ", "1. ", "1) ", "12. "] {
+        #expect(await dictate(said, reply: marker + "The build is green, so we can ship tomorrow.")
+            == .insert("The build is green, so we can ship tomorrow.", label: "Dictated"), "\(marker)")
+    }
+    // Spoken list cues keep the marker.
+    #expect(await dictate("bullet point buy milk", reply: "- Buy milk") == .insert("- Buy milk", label: "Dictated"))
+    #expect(await dictate("first we test and second we ship", reply: "1. First we test, and second we ship.")
+        == .insert("1. First we test, and second we ship.", label: "Dictated"))
+    // A multi-line transcript (pre-pass "new line") is a cue too.
+    #expect(await dictate("Shopping, new line, buy milk", reply: "Shopping,\n- Buy milk")
+        == .insert("Shopping,\n- Buy milk", label: "Dictated"))
+    // The transcript started with a marker itself (stripHesitations trims a leading "- ", so check the rule too).
+    #expect(await dictate("1. buy milk", reply: "1. Buy milk.") == .insert("1. Buy milk.", label: "Dictated"))
+    #expect(Pipeline.restoreMarks("- Buy milk.", transcript: "- buy milk") == "- Buy milk.")
+    // More than one item: untouched.
+    #expect(await dictate("buy milk eggs and bread", reply: "- Buy milk\n- Eggs\n- Bread")
+        == .insert("- Buy milk\n- Eggs\n- Bread", label: "Dictated"))
+    // A hyphen that isn't a marker stays.
+    #expect(await dictate("minus five degrees today", reply: "-5 degrees today.") == .insert("-5 degrees today.", label: "Dictated"))
+}
+
 @Test func protectedSpanRule() {
     let drops = Pipeline.dropsProtected
     // Curly and straight quotes, either side, count as kept; so do case and punctuation changes.
