@@ -227,9 +227,10 @@ final class PrefixCache: @unchecked Sendable {
         ProcessInfo.processInfo.environment["POPTALK_PROMPT_CACHE"] != "0"
             && (UserDefaults.standard.object(forKey: "mlxPromptCache") as? Bool ?? true)
     }
-    /// Shorter prefixes are prefilled as usual: one prefill step (512 tokens) is where reuse starts to pay off.
-    /// `POPTALK_PROMPT_CACHE_MIN` overrides it for bench sweeps.
-    static let minReuse = ProcessInfo.processInfo.environment["POPTALK_PROMPT_CACHE_MIN"].flatMap(Int.init) ?? 512
+    /// Shorter prefixes are prefilled as usual. 256 keeps v3's 258-token dictation system prompt cached: at 512 its
+    /// dictation saw no reuse (0.26 s median either way), at 256 it went 0.32 → 0.20 s. Revisit if that prompt
+    /// shrinks below it. `POPTALK_PROMPT_CACHE_MIN` overrides it for bench sweeps.
+    static let minReuse = ProcessInfo.processInfo.environment["POPTALK_PROMPT_CACHE_MIN"].flatMap(Int.init) ?? 256
     /// Per model. Holds E4B with the long GEPA prompts' dictation (~30 MB) and edit (~80 MB) system-prompt entries plus
     /// a screen-context one; v3's entries are 5–20 MB.
     static let budgetBytes = 200 << 20
