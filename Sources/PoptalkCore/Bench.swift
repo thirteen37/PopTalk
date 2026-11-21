@@ -244,7 +244,7 @@ public struct BenchReport: Codable, Sendable {
     /// Lines describing what changed from `a` to `b`: metadata warnings, then per-case pass-rate changes.
     public static func compare(_ a: BenchReport, _ b: BenchReport) -> [String] {
         var lines = Set(a.provider.keys).union(b.provider.keys).sorted().compactMap { k -> String? in
-            guard ["provider", "variant", "cleanupModel", "editModel", "quantization", "speechModel", "boost", "cbw", "minSimilarity"].contains(k), a.provider[k] != b.provider[k] else { return nil }
+            guard ["provider", "variant", "cleanupModel", "editModel", "quantization", "speechModel", "boost", "cbw", "minSimilarity", "oracleTerms", "recaseTerms", "skipGate"].contains(k), a.provider[k] != b.provider[k] else { return nil }
             return "warning: \(k) differs: \(a.provider[k] ?? "-") vs \(b.provider[k] ?? "-")"
         }
         let bByID = Dictionary(b.cases.map { ($0.id, $0) }, uniquingKeysWith: { x, _ in x })

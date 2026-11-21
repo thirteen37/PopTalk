@@ -75,7 +75,9 @@ public struct Pipeline: Sendable {
         guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
 
         guard let selection = r.selection, !selection.isEmpty else {
-            let transcript = Self.dictationPrepass(transcript)
+            let screen = r.context.windowTitle + "\n" + Prompts.trimmedContext(r.context)
+            let transcript = Self.dictationPrepass(!Self.recasesTerms(cleanupModel) ? transcript
+                : Self.recaseTerms(transcript, terms: Self.boostTerms(saved: vocabulary.terms, context: r.context).map(\.text), screen: screen))
             let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             let space = Self.leadingSpace(r.context)
             // Base covers cold starts; 20 ms per word covers long dictations.

@@ -11,6 +11,7 @@ import PoptalkSpeech
 //     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
 //     [--dictation-prompt-file F] [--edit-prompt-file F]   (#74: replace the system prompts for this run)
 //     [--oracle-terms]   (#75: recase on-screen mustContain terms in the transcript before the LLM; a ceiling)
+//     [--recase-terms on|off]   (#75: force the label-free screen-term recaser on or off; default: per model)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
@@ -110,6 +111,8 @@ meta["runs"] = "\(runs)"
 meta.merge(promptFiles) { $1 }
 let oracleTerms = args.contains("--oracle-terms")
 if oracleTerms { meta["oracleTerms"] = "on" }
+if let v = opt("--recase-terms") { Pipeline.recaseOverride = v != "off" }
+meta["recaseTerms"] = Pipeline.recasesTerms(cleanupModel) ? "on" : "off"
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)
