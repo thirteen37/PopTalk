@@ -54,12 +54,12 @@ public struct Pipeline: Sendable {
     let vocabulary: VocabularyStore
     let cleanupModel: String, editModel: String
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
-    /// Insert a clean dictation without the cleanup model (`skipsLLM`, #75 prototype).
-    let skipGate: Bool
+    /// Term recasing and the skip gate (#75); the app reads them from Settings on each press.
+    let features: DictationFeatures
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
-                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, skipGate: Bool = false) {
-        self.skipGate = skipGate
+                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, features: DictationFeatures = DictationFeatures()) {
+        self.features = features
         self.complete = complete
         self.vocabulary = vocabulary
         self.cleanupModel = cleanupModel
@@ -83,10 +83,12 @@ public struct Pipeline: Sendable {
         guard let selection = r.selection, !selection.isEmpty else {
             let screen = r.context.windowTitle + "\n" + Prompts.trimmedContext(r.context)
             let terms = Self.boostTerms(saved: vocabulary.terms, context: r.context).map(\.text)
-            let transcript = Self.dictationPrepass(!Self.recasesTerms(cleanupModel) ? transcript
-                : Self.recaseTerms(transcript, terms: terms, screen: screen))
+            let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
+            let transcript = Self.dictationPrepass(!recase ? transcript : Self.recaseTerms(
+                transcript, terms: features.screenTerms ? terms : vocabulary.terms.map(\.text), screen: screen))
             let space = Self.leadingSpace(r.context)
-            if skipGate, Self.skipsLLM(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)) {
+            // Near misses count screen terms either way: the model still sees the screen.
+            if features.skipGate, Self.skipsLLM(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)) {
                 return PipelineResult(outcome: .insert(space + transcript, label: "Dictated"), skippedLLM: true)
             }
             let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)

@@ -47,6 +47,35 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(recase("start the meal prep", screen: "Meal Prep. I need to meal prep tonight") == "start the meal prep")
 }
 
+// Settings, read per press: each request's pipeline gets `DictationFeatures(defaults)` as the app builds it.
+@Test func dictationFeaturesFollowSettingsPerRequest() async {
+    final class Seen: @unchecked Sendable { var prompt = ""; var calls = 0 }
+    let d = UserDefaults(suiteName: "poptalk-test-\(UUID())")!
+    let store = VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+    try? store.add(VocabTerm(text: "PopTalk"))
+    let screen = ScreenSnapshot(text: "Todoist — Projects: Inbox, Meal Prep, Work.")
+    func dictate(_ t: String) async -> (prompt: String, calls: Int) {
+        let seen = Seen()
+        let p = Pipeline(complete: { _, m, _, _ in seen.calls += 1; seen.prompt = m.last!.content; return "Ok." },
+                         vocabulary: store, cleanupModel: ModelSettings.fineTune, editModel: ModelSettings.fineTune,
+                         features: DictationFeatures(d, environment: [:]))
+        _ = await p.run(Request(transcript: t, selection: nil, context: screen))
+        return (seen.prompt, seen.calls)
+    }
+    let said = "ship poptalk to meal prep."
+    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Meal Prep.</transcript>"))
+    d.set(false, forKey: ContextSources.Key.screenVocabulary)  // screen terms off: saved vocabulary only
+    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to meal prep.</transcript>"))
+    d.set(false, forKey: DictationFeatures.Key.recaseTerms)  // recasing off: untouched
+    #expect(await dictate(said).prompt.contains("<transcript>ship poptalk to meal prep.</transcript>"))
+    // Gate off by default: the model is always called; on, a clean dictation skips it.
+    #expect(await dictate("Can you send me the report by Friday?").calls == 1)
+    d.set(true, forKey: DictationFeatures.Key.skipGate)
+    #expect(await dictate("Can you send me the report by Friday?").calls == 0)
+    #expect(DictationFeatures(d, environment: ["POPTALK_SKIP_LLM": "0"]).skipGate == false)
+    #expect(DictationFeatures(UserDefaults(suiteName: "poptalk-test-\(UUID())")!, environment: ["POPTALK_SKIP_LLM": "1"]).skipGate)
+}
+
 // Gated per model: E4B fixes screen terms itself and regressed when they were pre-fixed (#75).
 @Test func recaseIsOnForE2BAdaptersOnly() async {
     final class Seen: @unchecked Sendable { var prompt = "" }

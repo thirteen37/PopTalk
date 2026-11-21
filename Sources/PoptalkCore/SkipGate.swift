@@ -1,11 +1,26 @@
 import Foundation
 
-extension Pipeline {
-    /// #75 prototype, off by default: `POPTALK_SKIP_LLM=1` or the `skipLLMGate` default.
-    public static var skipGateSetting: Bool {
-        ProcessInfo.processInfo.environment["POPTALK_SKIP_LLM"] == "1" || UserDefaults.standard.bool(forKey: "skipLLMGate")
-    }
+/// The #75 dictation settings, read per press like `ContextSources` so a change applies to the next one.
+public struct DictationFeatures: Sendable, Equatable {
+    public enum Key { public static let recaseTerms = "recaseScreenTerms", skipGate = "skipLLMGate" }
+    /// "Fix screen-term casing before cleanup": still only for the models `Pipeline.recasesTerms` names.
+    public var recaseTerms = true
+    /// Screen terms for recasing too (#40 "Boost recognition with words on screen"); off: saved vocabulary only.
+    public var screenTerms = true
+    /// "Skip cleanup for clean dictations (experimental)".
+    public var skipGate = false
 
+    public init() {}
+
+    /// Unset keys take the defaults; `POPTALK_SKIP_LLM=1` or `0` overrides the skip gate.
+    public init(_ d: UserDefaults, environment: [String: String] = ProcessInfo.processInfo.environment) {
+        recaseTerms = d.object(forKey: Key.recaseTerms) as? Bool ?? true
+        screenTerms = ContextSources(d).screenVocabulary
+        skipGate = environment["POPTALK_SKIP_LLM"].map { $0 == "1" } ?? d.bool(forKey: Key.skipGate)
+    }
+}
+
+extension Pipeline {
     /// Fillers and self-corrections, which need the model (raw passes 1 of 10). Hesitations are matched in what
     /// was said, before `stripHesitations`: they often come with a correction.
     private static let cue = try! NSRegularExpression(pattern: """

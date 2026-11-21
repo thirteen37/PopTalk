@@ -45,7 +45,7 @@ private func skips(_ said: String, screen: String = "") -> Bool {
         let calls = Calls()
         let p = Pipeline(complete: { _, _, _, _ in calls.n += 1; return "Can you send me the report by Friday?" },
                          vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
-                         cleanupModel: "s", editModel: "b", skipGate: gate)
+                         cleanupModel: "s", editModel: "b", features: { var f = DictationFeatures(); f.skipGate = gate; return f }())
         let r = await p.run(Request(transcript: "Can you send me the report by Friday?", selection: nil, context: ScreenSnapshot()))
         #expect(r.outcome == .insert("Can you send me the report by Friday?", label: "Dictated"))
         #expect(r.skippedLLM == gate)

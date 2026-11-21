@@ -3,8 +3,8 @@ import AppKit
 extension Pipeline {
     /// #75: whether `recaseTerms` runs before the cleanup model: the E2B fine-tunes, which keep the transcript's
     /// casing and spacing as given. E4B fixes screen terms itself and regressed when some were pre-fixed.
-    public static func recasesTerms(_ model: String) -> Bool { recaseOverride ?? model.lowercased().contains("gemma-4-e2b-poptalk") }
-    /// PoptalkBench `--recase-terms on|off`; the app never sets it.
+    public static func recasesTerms(_ model: String) -> Bool { model.lowercased().contains("gemma-4-e2b-poptalk") }
+    /// PoptalkBench `--recase-terms on|off`, over the setting and the model check; the app never sets it.
     public nonisolated(unsafe) static var recaseOverride: Bool?
 
     /// Rewrites each span of `transcript` that equals one of `terms` (saved vocabulary and screen terms, as

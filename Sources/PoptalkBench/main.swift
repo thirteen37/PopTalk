@@ -113,8 +113,10 @@ meta.merge(promptFiles) { $1 }
 let oracleTerms = args.contains("--oracle-terms")
 if oracleTerms { meta["oracleTerms"] = "on" }
 if let v = opt("--recase-terms") { Pipeline.recaseOverride = v != "off" }
-meta["recaseTerms"] = Pipeline.recasesTerms(cleanupModel) ? "on" : "off"
+meta["recaseTerms"] = Pipeline.recaseOverride ?? Pipeline.recasesTerms(cleanupModel) ? "on" : "off"
 let skipGate = opt("--skip-gate") == "on"
+var features = DictationFeatures()
+features.skipGate = skipGate
 if skipGate { meta["skipGate"] = "on" }
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
@@ -163,7 +165,7 @@ if !audioCases.isEmpty {
 let pipeline = { (calls: ModelCallRecorder?) in
     Pipeline(complete: calls?.wrap(complete) ?? complete,
              vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json")),
-             cleanupModel: cleanupModel, editModel: editModel, skipGate: skipGate)
+             cleanupModel: cleanupModel, editModel: editModel, features: features)
 }
 
 // Warm up (model load, caches), then time a trivial request: a slow one means the server is busy,
