@@ -10,6 +10,8 @@ final class Hotkey {
     private var tap: CFMachPort?
     private var pressedAt: Date?
     private var cancelled = false
+    /// Key-downs seen from other processes: an insert in a terminal is only taken back if none came since (#79).
+    private(set) var keyDowns = 0
 
     init(onPress: @escaping () -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.onPress = onPress
@@ -41,6 +43,7 @@ final class Hotkey {
     private func handle(_ type: CGEventType, _ event: CGEvent) {
         // Ignore keystrokes PopTalk itself posts (⌘C fallback while the key is held).
         if event.getIntegerValueField(.eventSourceUnixProcessID) == Int64(getpid()) { return }
+        if type == .keyDown { keyDowns += 1 }
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }

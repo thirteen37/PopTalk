@@ -123,7 +123,7 @@ final class Overlay {
     /// `heard`/`result`: the transcript and the text applied, shown above the label (#56); `edit` puts the label
     /// in front of the result as its action.
     func showOutcome(_ text: String, heard: String? = nil, result: String? = nil, edit: Bool = false,
-                     undo: (() -> Void)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
+                     undo: (() async -> Bool)?, vocabularyOffer: VocabTerm?, onAccept: @escaping () -> Void) {
         show(Self.outcomeHUD(text, heard: heard, result: result, edit: edit, undo: undo != nil,
                              vocabulary: vocabularyOffer?.text, strip: statusStrip(), seconds: Self.outcomeSeconds),
              for: Self.outcomeSeconds)
@@ -131,7 +131,8 @@ final class Overlay {
             switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
             // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
             case .undo:
-                DispatchQueue.main.async { undo?(); self?.show(Self.confirmHUD("Undone"), for: 1) }
+                // False: it couldn't be undone safely and has said so (#79).
+                DispatchQueue.main.async { Task { if await undo?() == true { self?.show(Self.confirmHUD("Undone"), for: 1) } } }
                 return true
             case .accept:
                 DispatchQueue.main.async { onAccept(); self?.show(Self.confirmHUD("Added “\(vocabularyOffer!.text)”"), for: 1.5) }

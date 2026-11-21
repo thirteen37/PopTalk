@@ -110,6 +110,12 @@ enum TextIO {
 
     static func undo() { press(.z, flags: .maskCommand) }
 
+    /// Deletes `n` characters before the cursor, then pastes `s` if any: PopTalk's edit of its insert in a terminal (#79).
+    static func retype(deleting n: Int, then s: String) async {
+        for _ in 0..<n { press(.delete) }
+        if !s.isEmpty { await paste(s) }
+    }
+
     private static func paste(_ s: String) async {
         let pb = NSPasteboard.general
         await ClipboardGuard.withPreserved(pb) {
