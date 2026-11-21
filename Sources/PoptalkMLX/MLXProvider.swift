@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import os
 import HuggingFace
+import MLX
 import MLXHuggingFace
 import MLXLLM
 import MLXLMCommon
@@ -12,10 +13,12 @@ import Tokenizers
 /// standard HF cache on first use) or a local directory, loaded once and kept resident.
 public enum MLXProvider {
     private actor Models {
-        var loaded: [String: Task<ModelContainer, Error>] = [:]
+        /// Each load gets its own prefix cache (#42), so a reload starts empty and a request still running on an
+        /// unloaded model only fills a cache nothing reads.
+        var loaded: [String: (task: Task<ModelContainer, Error>, prefixes: PrefixCache)] = [:]
         /// `download` (fraction done) only reaches the first caller for `id`; later callers share its load.
-        func get(_ id: String, download: (@Sendable (Double) -> Void)? = nil) -> Task<ModelContainer, Error> {
-            if let t = loaded[id] { return t }
+        func get(_ id: String, download: (@Sendable (Double) -> Void)? = nil) -> (task: Task<ModelContainer, Error>, prefixes: PrefixCache) {
+            if let l = loaded[id] { return l }
             var progress = LoadProgressHandlers()
             if let download { progress.download = { @Sendable (p: Progress) in download(p.fractionCompleted) } }
             let t = Task {
@@ -36,22 +39,16 @@ public enum MLXProvider {
                 }
                 return container
             }
-            loaded[id] = t
-            return t
+            loaded[id] = (t, PrefixCache())
+            return loaded[id]!
         }
         /// A failed load is forgotten so the next request retries it.
-        func container(_ id: String, download: (@Sendable (Double) -> Void)? = nil) async throws -> ModelContainer {
-            do { return try await get(id, download: download).value } catch { loaded[id] = nil; throw error }
+        func container(_ id: String, download: (@Sendable (Double) -> Void)? = nil) async throws -> (ModelContainer, PrefixCache) {
+            let l = get(id, download: download)
+            do { return (try await l.task.value, l.prefixes) } catch { loaded[id] = nil; throw error }
         }
         func keepOnly(_ ids: Set<String>) {
-            for (id, t) in loaded where !ids.contains(id) { t.cancel(); loaded[id] = nil; lastTokens[id] = nil }
-        }
-        /// The previous request's prompt tokens per model, to measure what a KV cache could reuse (#42).
-        var lastTokens: [String: [Int]] = [:]
-        /// Stores `tokens` as `id`'s latest prompt; returns the leading tokens shared with the previous one.
-        func shared(_ id: String, _ tokens: [Int]) -> Int {
-            defer { lastTokens[id] = tokens }
-            return sharedPrefix(lastTokens[id] ?? [], tokens)
+            for (id, l) in loaded where !ids.contains(id) { l.task.cancel(); loaded[id] = nil }
         }
     }
     /// A local model directory or a Hugging Face id.
@@ -134,7 +131,8 @@ public enum MLXProvider {
     }
 
     static let complete: Pipeline.Complete = { model, messages, _, timeout in
-        let container = try await models.container(model)
+        let (container, prefixes) = try await models.container(model)
+        let name = (model as NSString).lastPathComponent
         return try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
                 // Thinking off for templates that support the flag; Pipeline strips any <think> that slips through.
@@ -142,17 +140,25 @@ public enum MLXProvider {
                                       additionalContext: ["enable_thinking": false])
                 let lm = try await container.prepare(input: input)
                 let tokens = lm.text.tokens.asArray(Int.self)
-                let shared = await models.shared(model, tokens)
+                let (plan, entry, shared) = prefixes.plan(tokens)
                 ModelCallRecorder.current?.prompt(tokens: tokens.count, shared: shared)
-                timing.info("llm \((model as NSString).lastPathComponent, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
+                timing.info("llm \(name, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
+                let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0)
+                let stream = if PrefixCache.enabled {
+                    try await container.perform(nonSendable: lm) { context, lm in
+                        try MLXProvider.generate(lm, tokens, plan, entry, prefixes, parameters, context, name)
+                    }
+                } else {
+                    try await container.generate(input: lm, parameters: parameters)
+                }
                 var out = ""
                 // Leaving the loop on cancellation terminates the stream, which stops generation.
-                for await g in try await container.generate(input: lm, parameters: GenerateParameters(maxTokens: maxTokens, temperature: 0)) {
+                for await g in stream {
                     switch g {
                     case .chunk(let s): out += s
                     // Timing only (no text), for diagnosing latency: `log stream --predicate 'subsystem == "io.lyx.poptalk"'`.
                     case .info(let i):
-                        timing.info("llm \((model as NSString).lastPathComponent, privacy: .public) prompt \(i.promptTokenCount) tok \(i.promptTime, format: .fixed(precision: 2))s, gen \(i.generationTokenCount) tok \(i.generateTime, format: .fixed(precision: 2))s")
+                        timing.info("llm \(name, privacy: .public) prompt \(i.promptTokenCount) tok \(i.promptTime, format: .fixed(precision: 2))s, gen \(i.generationTokenCount) tok \(i.generateTime, format: .fixed(precision: 2))s")
                     default: break
                     }
                 }
@@ -168,6 +174,32 @@ public enum MLXProvider {
         }
     }
 
+    /// Generation on top of a stored prompt prefix (#42): a copy of `entry`'s cache, cut back to the shared prefix,
+    /// is prefilled up to `plan.snapshot` and stored again there; `generate` prefills the rest as usual. Stored
+    /// caches are only ever copied, never generated into.
+    private static func generate(_ lm: LMInput, _ tokens: [Int], _ plan: PrefixPlan, _ entry: PrefixCache.Entry?, _ prefixes: PrefixCache,
+                                 _ parameters: GenerateParameters, _ context: ModelContext, _ name: String) throws -> AsyncStream<Generation> {
+        let cache = try entry?.cache.map { $0.copy() } ?? context.model.newCache(parameters: parameters)
+        if let entry { for c in cache { c.trim(entry.tokens.count - plan.keep) } }
+        var start = plan.keep
+        if let end = plan.snapshot {
+            let step = PrefillParameters.defaultStepSize
+            for s in stride(from: start, to: end, by: step) {
+                // Only the cache is evaluated, so the unused logits are never computed (as in `LLMModel.prepare`).
+                _ = context.model(lm.text[.newAxis, s ..< min(s + step, end)], cache: cache, state: nil)
+                eval(cache)
+            }
+            let copy = cache.map { $0.copy() }
+            eval(copy)
+            let mb = copy.flatMap(\.state).reduce(0) { $0 + $1.nbytes } / 1_048_576
+            prefixes.insert(.init(tokens: Array(tokens[..<end]), cache: copy, maxTrim: copy.map(\.maxTrimCount).min() ?? 0))
+            timing.info("llm \(name, privacy: .public) prefix-cache stored \(end) tok \(mb) MB")
+            start = end
+        }
+        timing.info("llm \(name, privacy: .public) prefix-reused \(plan.keep)/\(tokens.count) tok")
+        return try MLXLMCommon.generate(input: LMInput(text: lm.text[start...]), cache: cache, parameters: parameters, context: context)
+    }
+
     /// Physical memory footprint of this process (what Activity Monitor shows), including MLX's Metal buffers.
     public static func footprintMB() -> Int {
         var info = task_vm_info_data_t()
@@ -176,5 +208,43 @@ public enum MLXProvider {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
         }
         return kr == KERN_SUCCESS ? Int(info.phys_footprint) / 1_048_576 : -1
+    }
+}
+
+/// Prompt-prefix KV snapshots for one loaded model (#42): a few caches, each holding exactly a token prefix that
+/// recent prompts repeat (a kind's system prompt, unchanged screen context), so a prompt starting with it skips
+/// that much prefill. One per load: unloading or reloading the model drops them.
+// ponytail: a fixed entry count, not a byte budget (per-entry MB is in the timing log); add one if prompts grow a lot.
+final class PrefixCache: @unchecked Sendable {
+    /// `maxTrim`: how many trailing tokens every layer can drop exactly (a sliding window that has wrapped can't).
+    struct Entry: @unchecked Sendable { let tokens: [Int]; let cache: [KVCache]; let maxTrim: Int }
+
+    /// On unless `POPTALK_PROMPT_CACHE=0` or the `mlxPromptCache` default is false, for A/B runs.
+    static var enabled: Bool {
+        ProcessInfo.processInfo.environment["POPTALK_PROMPT_CACHE"] != "0"
+            && (UserDefaults.standard.object(forKey: "mlxPromptCache") as? Bool ?? true)
+    }
+    /// Room for each prompt kind's system prompt plus a screen-context prefix or two.
+    static let maxEntries = 4, maxRecent = 8
+
+    private let lock = NSLock()
+    private var entries: [Entry] = []  // most recently used first
+    private var recent: [[Int]] = []  // prompts, newest first
+
+    /// Plans `tokens` against the entries (marking the one it uses as most recent) and records it as the newest
+    /// prompt. `shared`: tokens shared with the previous prompt, for history.
+    func plan(_ tokens: [Int]) -> (plan: PrefixPlan, entry: Entry?, shared: Int) {
+        lock.withLock {
+            let plan = prefixPlan(tokens, entries: entries.map { ($0.tokens, $0.maxTrim) }, recent: recent)
+            let entry = plan.entry.map { entries.remove(at: $0) }
+            if let entry { entries.insert(entry, at: 0) }
+            let shared = recent.first.map { sharedPrefix($0, tokens) } ?? 0
+            recent = Array(([tokens] + recent).prefix(Self.maxRecent))
+            return (plan, entry, shared)
+        }
+    }
+
+    func insert(_ entry: Entry) {
+        lock.withLock { entries = Array(([entry] + entries).prefix(Self.maxEntries)) }
     }
 }
