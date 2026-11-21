@@ -10,6 +10,8 @@ import PoptalkSpeech
 //     [--base-url URL] [--cleanup-model ID] [--edit-model ID] [--runs 3] [--filter 'e-*'] [--cases FILE] [--out DIR]
 //     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
 //     [--dictation-prompt-file F] [--edit-prompt-file F]   (#74: replace the system prompts for this run)
+//     [--oracle-terms]   (#75: recase on-screen mustContain terms in the transcript before the LLM; a ceiling)
+// --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
 //   swift run PoptalkBench --compare a.json b.json
@@ -99,12 +101,15 @@ var meta: [String: String]
 let complete: Pipeline.Complete
 do {
     // mlx: cleanup/edit models are Hugging Face ids or local MLX directories, loaded in-process.
-    (complete, meta) = provider == "mlx" ? try await MLXProvider.make(preload: [cleanupModel, editModel])
+    (complete, meta) = provider == "raw" ? ({ _, _, _, _ in throw LLMError(description: "raw: no LLM") }, [:])
+        : provider == "mlx" ? try await MLXProvider.make(preload: [cleanupModel, editModel])
         : try Providers.make(provider, baseURL: baseURL, appleVariant: appleVariant)
 } catch { fail(error) }
 meta["provider"] = provider
 meta["runs"] = "\(runs)"
 meta.merge(promptFiles) { $1 }
+let oracleTerms = args.contains("--oracle-terms")
+if oracleTerms { meta["oracleTerms"] = "on" }
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)
@@ -175,9 +180,11 @@ for c in cases {
             catch { fail("\(c.id): \(error)") }
             request = Request(transcript: heard!.text, selection: request.selection, context: request.context)
         }
+        if oracleTerms, c.kind == .dictation { request.transcript = c.oracleRecase(request.transcript) }
         let start = Date()
         let r = await pipeline().run(request)
         var run = c.score(r, seconds: Date().timeIntervalSince(start))
+        if provider == "raw" { run.failures.removeAll { $0 == "raw fallback" } }
         if let heard {
             run.speech = SpeechRun(reference: c.transcript, terms: c.mustContain, raw: heard.raw, boosted: heard.text, final: run.output,
                                    boostTerms: boost.count, asrSeconds: heard.asrSeconds, rescoreSeconds: heard.rescoreSeconds)

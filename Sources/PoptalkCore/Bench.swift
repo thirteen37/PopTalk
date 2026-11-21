@@ -114,6 +114,20 @@ public struct BenchCase: Decodable, Sendable {
         return run
     }
 
+    /// #75 oracle: writes each `mustContain` term that is on screen with its exact spelling wherever `transcript`
+    /// has it up to case and spacing ("meal prep" → "Meal Prep", "cloud front" → "CloudFront"). It reads the
+    /// labels, so it's a ceiling for a screen-term matcher, not a feature.
+    public func oracleRecase(_ transcript: String) -> String {
+        let screen = (context ?? "") + " " + (ocr ?? "")
+        return mustContain.filter { screen.contains($0) }.reduce(transcript) { t, term in
+            let chars = term.filter { !$0.isWhitespace }.map { NSRegularExpression.escapedPattern(for: String($0)) }
+            guard !chars.isEmpty, let re = try? NSRegularExpression(pattern: #"(?<!\w)"# + chars.joined(separator: #"\s*"#) + #"(?!\w)"#,
+                                                                    options: .caseInsensitive) else { return t }
+            return re.stringByReplacingMatches(in: t, range: NSRange(t.startIndex..., in: t),
+                                               withTemplate: NSRegularExpression.escapedTemplate(for: term))
+        }
+    }
+
     /// replace / correct / edit all replace the selection identically; only the overlay label differs.
     static func family(_ action: String) -> String { ["replace", "correct", "edit"].contains(action) ? "replaceSelection" : action }
 }
