@@ -312,7 +312,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
     /// earlier raw insert, whose text is replaced in place rather than inserted again. `reused`: a speculative run's
     /// result and model call for this exact request (#43), applied without running the pipeline. `editLast` (#80): an
-    /// edit of the last dictation, applied like "no, I meant X"; with nothing to edit, nothing is inserted.
+    /// edit of the last dictation, applied like "no, I meant X" unless it's a delete command (#83); with nothing to edit,
+    /// nothing is inserted.
     private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
                          app: NSRunningApplication?, cleanup: RawInsert? = nil, editLast: Bool = false,
                          reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
@@ -326,11 +327,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
                                 cleanupModel: models.cleanupModel, editModel: models.editModel, features: DictationFeatures(.standard))
         let id = UUID()
-        // #49: with nothing selected, "scratch that" / "no, I meant X" act on the last dictation.
+        // #49: with nothing selected, or after tap-then-hold (#83), "scratch that" / "no, I meant X" act on the last dictation.
         let amend: (last: LastInsert<AXUIElement>, command: InsertCommand)? = {
-            guard cleanup == nil, let last = lastInsert else { return nil }
-            let command = editLast ? .change : request.selection == nil ? InsertCommand(request.transcript, last: last.text) : nil
-            guard let command, canEdit(last) else { return nil }
+            guard cleanup == nil, let last = lastInsert,
+                  let command = InsertCommand.forPress(request.transcript, last: last.text, selection: request.selection,
+                                                       editLast: editLast),
+                  canEdit(last) else { return nil }
             return (last, command)
         }()
         if editLast, amend == nil { overlay.showNotice(Self.nothingToEdit); return }
@@ -500,7 +502,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startPreview(live: Bool) {
         guard let transcriber else { return }
         (speculation, speculativeRuns, liveText, cleaned) = (nil, 0, nil, nil)
-        let (ctx, sel) = (contextTask, selectionTask)
+        let (ctx, sel, editLast) = (contextTask, selectionTask, editLast)
         previewTask = Task {
             var fixed: LiveInput?
             while !Task.isCancelled {
@@ -514,8 +516,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let previous = liveText
                 liveText = text
                 if let s = speculation, s.request.transcript != text { s.task.cancel() }  // new words: stale
-                // Not for a command on the last dictation (#49): release acts on that, not on this text.
-                if let fixed, fixed.selection != nil || lastInsert.flatMap({ InsertCommand(text, last: $0.text) }) == nil,
+                // Not for a command on the last dictation (#49): release acts on that, not on this text. Tap-then-hold's
+                // `.change` is the exception: release edits with the same selection (#80); its deletes skip it (#83).
+                let command = InsertCommand.forPress(text, last: lastInsert?.text, selection: fixed?.selection, editLast: editLast)
+                if let fixed, command == nil || editLast && command == .change,
                    LivePreview.shouldRun(text, lastRun: speculation?.request.transcript, previous: previous,
                                          paused: LivePreview.paused(samples), edit: fixed.selection != nil) {
                     speculate(Request(transcript: text, selection: fixed.selection, context: fixed.context), fixed, since: tick)
