@@ -147,6 +147,8 @@ public struct BenchRun: Codable, Sendable {
     public var modelActionOK: Bool? = nil
     /// The skip gate inserted it without the cleanup model (#75); nil otherwise.
     public var skippedLLM: Bool? = nil
+    /// A dictation reply that differs from `output`: changed or rejected by code after the model.
+    public var modelReply: String? = nil
     public var passed: Bool { failures.isEmpty }
     /// A guard (insert ask, blank text) changed the model's action family.
     public var overridden: Bool { modelAction.map { BenchCase.family($0) != BenchCase.family(action) } ?? false }

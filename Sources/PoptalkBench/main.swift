@@ -160,13 +160,15 @@ if !audioCases.isEmpty {
     } catch { fail(error) }
 }
 
-let pipeline = { Pipeline(complete: complete,
-                          vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json")),
-                          cleanupModel: cleanupModel, editModel: editModel, skipGate: skipGate) }
+let pipeline = { (calls: ModelCallRecorder?) in
+    Pipeline(complete: calls?.wrap(complete) ?? complete,
+             vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json")),
+             cleanupModel: cleanupModel, editModel: editModel, skipGate: skipGate)
+}
 
 // Warm up (model load, caches), then time a trivial request: a slow one means the server is busy,
 // e.g. with orphaned generations from an earlier timed-out client (#4), and timings would be skewed.
-_ = await pipeline().run(cases[0].request)
+_ = await pipeline(nil).run(cases[0].request)
 let probeStart = Date()
 _ = try? await complete(cleanupModel, [ChatMessage(role: "user", content: "Reply with: ok")], false, 30)
 let probe = Date().timeIntervalSince(probeStart)
@@ -188,8 +190,13 @@ for c in cases {
         }
         if oracleTerms, c.kind == .dictation { request.transcript = c.oracleRecase(request.transcript) }
         let start = Date()
-        let r = await pipeline().run(request)
+        let calls = ModelCallRecorder()
+        let r = await pipeline(calls).run(request)
         var run = c.score(r, seconds: Date().timeIntervalSince(start))
+        // A dictation reply the code changed or rejected (restoreMarks, fidelity guards), to see why.
+        if c.kind == .dictation, let reply = calls.call?.reply?.trimmingCharacters(in: .whitespacesAndNewlines), reply != run.output {
+            run.modelReply = reply
+        }
         if provider == "raw" { run.failures.removeAll { $0 == "raw fallback" } }
         if let heard {
             run.speech = SpeechRun(reference: c.transcript, terms: c.mustContain, raw: heard.raw, boosted: heard.text, final: run.output,
