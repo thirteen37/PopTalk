@@ -3,24 +3,27 @@ import PoptalkCore
 
 /// Small non-activating HUD at the bottom of the screen ("glyph capsule", #63). While an outcome is shown,
 /// bare Esc undoes it and bare Return accepts a vocabulary or cleanup offer; those keys are consumed only then.
+/// It moves off the focused field, and can be dragged elsewhere (remembered per display; right-click resets, #78).
 @MainActor
 final class Overlay {
-    private let panel: NSPanel
+    private let panel: DragPanel
     /// Holds the current `Capsule` view, inside the glass (macOS 26+) or the HUD material.
     private let container = NSView()
     private var hideWork: DispatchWorkItem?
     private var keys: KeyCatcher?
     /// Bumped on every show/hide, so a fade-out that finishes after a newer show doesn't hide it.
     private var generation = 0
+    /// The focused field or caret (AppKit coordinates), read once per press when the overlay first shows.
+    private var field: CGRect?
+    private var fieldRead = false
 
     init() {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 48),
+        panel = DragPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 48),
                         styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: true)
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         container.frame = NSRect(x: 0, y: 0, width: 360, height: 48)
         container.wantsLayer = true
@@ -40,6 +43,34 @@ final class Overlay {
             blur.addSubview(container)
             panel.contentView = blur
         }
+        panel.onDrop = { [unowned self] in
+            guard let screen = panel.screen, let key = Self.key(screen) else { return }
+            let a = OverlayPlacement.anchor(of: panel.frame, visible: screen.visibleFrame)
+            Self.anchors[key] = [a.x, a.y]
+            field = nil  // placed by hand: don't move it off the field again this press
+        }
+        panel.onReset = { [unowned self] in
+            guard let screen = panel.screen else { return }
+            if let key = Self.key(screen) { Self.anchors[key] = nil }
+            panel.setFrame(place(panel.frame.size, on: screen), display: true, animate: true)
+        }
+    }
+
+    /// Dragged anchors (`OverlayPlacement.anchor`) by display UUID; Settings → General resets them all.
+    private static var anchors: [String: [Double]] {
+        get { UserDefaults.standard.dictionary(forKey: OverlayPlacement.anchorsKey) as? [String: [Double]] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: OverlayPlacement.anchorsKey) }
+    }
+
+    private static func key(_ screen: NSScreen) -> String? {
+        guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+              let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
+    }
+
+    private func place(_ size: CGSize, on screen: NSScreen) -> NSRect {
+        let a = Self.key(screen).flatMap { Self.anchors[$0] }.flatMap { $0.count == 2 ? CGPoint(x: $0[0], y: $0[1]) : nil }
+        return OverlayPlacement.frame(size: size, visible: screen.visibleFrame, field: field, anchor: a)
     }
 
     /// Shown under the recording text until the next recording, e.g. "raw — model loading" (#39).
@@ -54,6 +85,7 @@ final class Overlay {
     func showRecording(note: String? = nil) {
         self.note = note
         preview = nil
+        fieldRead = false  // a new press
         show(Self.recordingHUD(preview: nil, note: note, strip: statusStrip()), for: nil)
     }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible. `cleaned` (#43): the
@@ -113,6 +145,7 @@ final class Overlay {
         hideWork?.cancel()
         keys = nil
         preview = nil
+        fieldRead = false
         generation += 1
         let g = generation
         guard panel.isVisible else { return }
@@ -219,8 +252,14 @@ final class Overlay {
         let size = view.frame.size
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
                 ?? NSScreen.main ?? NSScreen.screens.first else { return }
-        let f = screen.visibleFrame
-        let target = NSRect(x: round(f.midX - size.width / 2), y: f.minY + 50, width: size.width, height: size.height)
+        if !fieldRead {
+            fieldRead = true
+            field = TextIO.focusedRect().map { OverlayPlacement.appKit($0, primaryHeight: NSScreen.screens[0].frame.maxY) }
+        }
+        // Mid-drag, follow the drag (bottom-centre under the mouse) instead of the placement.
+        let target = panel.dragging
+            ? NSRect(x: round(panel.frame.midX - size.width / 2), y: panel.frame.minY, width: size.width, height: size.height)
+            : place(size, on: screen)
         let appearing = !panel.isVisible
         // Bottom-anchored and centred, so it stays put while the panel animates to the new size.
         let old = appearing ? size : container.bounds.size
@@ -239,7 +278,7 @@ final class Overlay {
             container.layer?.add(fade, forKey: "fade")
         }
         NSAnimationContext.runAnimationGroup({ c in
-            c.duration = appearing ? 0.22 : 0.18
+            c.duration = panel.dragging ? 0 : appearing ? 0.22 : 0.18
             c.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.2, 1)
             panel.animator().setFrame(target, display: true)
             panel.animator().alphaValue = 1
@@ -466,7 +505,7 @@ enum Capsule {
         return (row, CGSize(width: keyW + 5 + ceil(textFit.width), height: keyH))
     }
 
-    /// A muted ~11 pt SF Symbol with an accessibility label. No tooltips: the panel ignores the mouse.
+    /// A muted ~11 pt SF Symbol with an accessibility label. No tooltips: PopTalk never activates, so they wouldn't show.
     private static func badge(_ b: StatusBadge) -> (NSView, CGSize)? {
         guard let img = NSImage(systemSymbolName: b.symbol, accessibilityDescription: b.help)?
                 .withSymbolConfiguration(.init(pointSize: 11, weight: .regular)) else { return nil }
@@ -474,6 +513,32 @@ enum Capsule {
         v.contentTintColor = .tertiaryLabelColor
         v.setAccessibilityLabel(b.help)
         return (v, img.size)
+    }
+}
+
+/// Dragged by hand with left-drag, reset with right-click. Borderless and non-activating, so it never becomes key or
+/// activates PopTalk: the target app keeps focus.
+private final class DragPanel: NSPanel {
+    var onDrop: () -> Void = {}
+    var onReset: () -> Void = {}
+    private(set) var dragging = false
+    /// The mouse relative to the bottom-centre at mouse-down, so a size change mid-drag stays under the mouse.
+    private var grab: NSPoint?
+
+    override func sendEvent(_ e: NSEvent) {
+        let m = NSEvent.mouseLocation
+        switch e.type {
+        case .leftMouseDown: grab = NSPoint(x: m.x - frame.midX, y: m.y - frame.minY)
+        case .leftMouseDragged:
+            guard let grab else { break }
+            dragging = true
+            setFrameOrigin(NSPoint(x: round(m.x - grab.x - frame.width / 2), y: round(m.y - grab.y)))
+        case .leftMouseUp:
+            if dragging { onDrop() }
+            (dragging, grab) = (false, nil)
+        case .rightMouseDown: onReset()
+        default: super.sendEvent(e)
+        }
     }
 }
 

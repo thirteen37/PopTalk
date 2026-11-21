@@ -124,6 +124,8 @@ struct SettingsView: View {
                 Toggle("Live cleanup preview", isOn: $liveCleanup)
                 Text("Shows the cleanup or edit while you talk, so release can insert it at once. Uses the GPU at each pause.")
                     .font(.footnote).foregroundStyle(.secondary)
+                Button("Reset Overlay Position") { UserDefaults.standard.removeObject(forKey: OverlayPlacement.anchorsKey) }
+                    .help("Drag the overlay to move it on a display; right-click it to reset that display. This resets all.")
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()

@@ -55,6 +55,29 @@ enum TextIO {
         return (focused as! AXUIElement)
     }
 
+    /// Where the focused field is, for the overlay to avoid (#78): the caret (or selection) bounds, else the
+    /// element's frame; AX coordinates (top-left origin). Geometry only. Bounded by the process-wide AX timeout.
+    static func focusedRect() -> CGRect? {
+        guard let el = focusedElement() else { return nil }
+        func get<T>(_ v: CFTypeRef?, _ type: AXValueType, _ out: T) -> T? {
+            guard let v, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+            var out = out
+            return AXValueGetValue(v as! AXValue, type, &out) ? out : nil
+        }
+        var range: CFTypeRef?, bounds: CFTypeRef?, pos: CFTypeRef?, size: CFTypeRef?
+        if AXUIElementCopyAttributeValue(el, kAXSelectedTextRangeAttribute as CFString, &range) == .success, let range,
+           AXUIElementCopyParameterizedAttributeValue(el, kAXBoundsForRangeParameterizedAttribute as CFString, range,
+                                                      &bounds) == .success,
+           let r = get(bounds, .cgRect, CGRect.zero), r.height > 0 {
+            return r
+        }
+        guard AXUIElementCopyAttributeValue(el, kAXPositionAttribute as CFString, &pos) == .success,
+              AXUIElementCopyAttributeValue(el, kAXSizeAttribute as CFString, &size) == .success,
+              let p = get(pos, .cgPoint, CGPoint.zero), let s = get(size, .cgSize, CGSize.zero), s.height > 0
+        else { return nil }
+        return CGRect(origin: p, size: s)
+    }
+
     /// The field's whole text, when the app exposes it.
     static func value(of el: AXUIElement) -> String? {
         var v: CFTypeRef?
