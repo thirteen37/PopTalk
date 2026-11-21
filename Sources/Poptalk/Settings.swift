@@ -327,37 +327,84 @@ private struct MLXModelPicker: View {
     }
 }
 
-/// Opt-in usage history (#38): toggles, what's stored, and a wipe.
+/// Opt-in usage history (#38): toggles, what's stored, iCloud sync (#76), and a wipe.
 private struct HistorySection: View {
     let history: HistoryStore
     @AppStorage("historyEnabled") private var enabled = false
     @AppStorage("historyAudio") private var audio = false
+    @AppStorage("historySync") private var sync = false
     @State private var stats: HistoryStore.Stats?
     @State private var confirmWipe = false
+    @State private var confirmSync = false
+    @State private var confirmUnsync = false
 
     var body: some View {
         Section {
             Toggle("Keep usage history", isOn: $enabled)
             Toggle("Also save audio", isOn: $audio).disabled(!enabled)
+            // On asks first (and whether to copy what's here); off offers to delete this Mac's synced copy.
+            Toggle("Sync history via iCloud", isOn: Binding(get: { sync }, set: { on in
+                if on { confirmSync = true } else { sync = false; confirmUnsync = true }
+            })).disabled(!enabled)
+            if sync && enabled {
+                LabeledContent("Synced", value: stats.map(syncStatus) ?? "…")
+            }
             LabeledContent("Stored") {
                 HStack {
                     Text(stats.map { "\($0.requests) requests · \(ByteCountFormatter.string(fromByteCount: Int64($0.bytes), countStyle: .file))" } ?? "…")
-                    Button("Wipe History…") { confirmWipe = true }.disabled(stats?.bytes == 0)
+                    Button("Wipe History…") { confirmWipe = true }.disabled(stats?.requests == 0 && stats?.bytes == 0)
                 }
             }
         } header: {
             Text("Recording")
         } footer: {
-            Text("Keeps transcripts, the context sent to the model, its replies, and your undos and corrections on this Mac, to train a better model. Nothing leaves the Mac.")
+            Text("Keeps transcripts, the context sent to the model, its replies, and your undos and corrections on this Mac, to train a better model. Nothing leaves the Mac unless you sync it.\n\nSync copies the history, but not audio, to PopTalk/history in your iCloud Drive and merges in your other Macs' history. With standard iCloud data protection it's encrypted, but Apple holds the keys. With Advanced Data Protection it's end-to-end encrypted.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .task { await refresh() }
-        .confirmationDialog("Delete all usage history and saved audio?", isPresented: $confirmWipe) {
-            Button("Wipe History", role: .destructive) {
-                history.wipe()
+        .confirmationDialog("Sync history via iCloud?", isPresented: $confirmSync, titleVisibility: .visible) {
+            Button("Copy Existing History") { startSync(copy: true) }
+            Button("Sync New History Only") { startSync(copy: false) }
+        } message: {
+            Text("From now on this Mac also writes its history to iCloud Drive. Copy the history already on this Mac there too?")
+        }
+        .confirmationDialog("Delete this Mac's synced history from iCloud Drive?", isPresented: $confirmUnsync, titleVisibility: .visible) {
+            Button("Delete from iCloud", role: .destructive) {
+                history.deleteSyncedCopy()
                 Task { await refresh() }
             }
+            Button("Keep", role: .cancel) {}
+        } message: {
+            Text("Syncing has stopped. The history on this Mac and your other Macs' synced history stay.")
         }
+        .confirmationDialog("Delete all usage history and saved audio?", isPresented: $confirmWipe, titleVisibility: .visible) {
+            if sync && enabled {
+                Button("This Mac", role: .destructive) { wipe(allMacs: false) }
+                Button("All Macs", role: .destructive) { wipe(allMacs: true) }
+            } else {
+                Button("Wipe History", role: .destructive) { wipe(allMacs: false) }
+            }
+        } message: {
+            if sync && enabled {
+                Text("This Mac deletes its history and its synced copy. All Macs also deletes the synced folder in iCloud Drive, and your other Macs delete their history the next time they check.")
+            }
+        }
+    }
+
+    private func syncStatus(_ s: HistoryStore.Stats) -> String {
+        let macs = s.devices == 1 ? "1 Mac" : "\(s.devices) Macs"
+        return "\(macs) · " + (s.lastSync.map { "last write \($0.formatted(.relative(presentation: .named)))" } ?? "nothing written yet")
+    }
+
+    private func startSync(copy: Bool) {
+        sync = true
+        history.startSync(copyExisting: copy)
+        Task { await refresh() }
+    }
+
+    private func wipe(allMacs: Bool) {
+        history.wipe(allMacs: allMacs)
+        Task { await refresh() }
     }
 
     private func refresh() async {
