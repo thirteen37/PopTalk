@@ -110,6 +110,7 @@ public struct BenchCase: Decodable, Sendable {
         }
         var run = BenchRun(output: text, action: action, vocabOffer: offer, seconds: seconds, failures: f)
         run.modelAction = r.modelAction
+        if r.skippedLLM { run.skippedLLM = true }
         if let e = expectAction, let m = r.modelAction { run.modelActionOK = Self.family(e) == Self.family(m) }
         return run
     }
@@ -144,6 +145,10 @@ public struct BenchRun: Codable, Sendable {
     public var modelAction: String? = nil
     /// `modelAction` is in `expectAction`'s family; nil when either is missing.
     public var modelActionOK: Bool? = nil
+    /// The skip gate inserted it without the cleanup model (#75); nil otherwise.
+    public var skippedLLM: Bool? = nil
+    /// A dictation reply that differs from `output`: changed or rejected by code after the model.
+    public var modelReply: String? = nil
     public var passed: Bool { failures.isEmpty }
     /// A guard (insert ask, blank text) changed the model's action family.
     public var overridden: Bool { modelAction.map { BenchCase.family($0) != BenchCase.family(action) } ?? false }
@@ -244,7 +249,7 @@ public struct BenchReport: Codable, Sendable {
     /// Lines describing what changed from `a` to `b`: metadata warnings, then per-case pass-rate changes.
     public static func compare(_ a: BenchReport, _ b: BenchReport) -> [String] {
         var lines = Set(a.provider.keys).union(b.provider.keys).sorted().compactMap { k -> String? in
-            guard ["provider", "variant", "cleanupModel", "editModel", "quantization", "speechModel", "boost", "cbw", "minSimilarity"].contains(k), a.provider[k] != b.provider[k] else { return nil }
+            guard ["provider", "variant", "cleanupModel", "editModel", "quantization", "speechModel", "boost", "cbw", "minSimilarity", "oracleTerms", "recaseTerms", "skipGate"].contains(k), a.provider[k] != b.provider[k] else { return nil }
             return "warning: \(k) differs: \(a.provider[k] ?? "-") vs \(b.provider[k] ?? "-")"
         }
         let bByID = Dictionary(b.cases.map { ($0.id, $0) }, uniquingKeysWith: { x, _ in x })

@@ -71,6 +71,8 @@ struct SettingsView: View {
     @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
     @AppStorage(ContextSources.Key.windowTitle) private var ctxWindowTitle = true
     @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = true
+    @AppStorage(DictationFeatures.Key.recaseTerms) private var recaseTerms = true
+    @AppStorage(DictationFeatures.Key.skipGate) private var skipGate = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var terms: [VocabTerm] = []
     @State private var vocabMessage: String?
@@ -184,6 +186,12 @@ struct SettingsView: View {
                     MLXModelPicker(label: "Dictation cleanup model", id: $mlxCleanupModel)
                     MLXModelPicker(label: "Edit model", id: $mlxEditModel)
                 }
+                Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
+                Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Toggle("Skip cleanup for clean dictations (experimental)", isOn: $skipGate)
+                Text("Inserts a punctuated dictation with no fillers or corrections as heard, without the language model.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Status") {
                 statusRow("Speech model", status.value.speech)

@@ -21,7 +21,36 @@ private func dictate(_ transcript: String, reply: String) async -> Outcome {
 @Test func quoteSpansAreProtected() async {
     let said = "I said quote ship it today unquote and left"
     #expect(await dictate(said, reply: "I said “ship it” and left.") == .insert("I said “ship it today” and left", label: "Dictated (raw)"))
-    #expect(await dictate(said, reply: "I said \"Ship it today!\" and left.") == .insert("I said \"Ship it today!\" and left.", label: "Dictated"))
+    // Straight quotes around the pre-pass's span get its curly ones back (#75).
+    #expect(await dictate(said, reply: "I said \"Ship it today!\" and left.") == .insert("I said “Ship it today!” and left.", label: "Dictated"))
+}
+
+// #75: v3 straightens the pre-pass's curly quotes and moves a comma inside them; both are restored.
+@Test func curlyQuotesAreRestored() async {
+    #expect(await dictate("the error just says quote permission denied end quote and nothing else",
+                          reply: "The error just says \"permission denied\" and nothing else.")
+        == .insert("The error just says “permission denied” and nothing else.", label: "Dictated"))
+    #expect(await dictate("I wanted to replace text and I said, quote, replace this with, unquote, and it was just put verbatim.",
+                          reply: "I wanted to replace text and I said, \"replace this with,\" and it was just put verbatim.")
+        == .insert("I wanted to replace text and I said, “replace this with”, and it was just put verbatim.", label: "Dictated"))
+    // Quotes the transcript didn't have stay as the model wrote them.
+    #expect(await dictate("she said quote yes unquote and he said no", reply: "She said “yes” and he said \"no.\"")
+        == .insert("She said “yes” and he said \"no.\"", label: "Dictated"))
+}
+
+// #75: v3 flattens the pre-pass's line breaks; they go back between the same words instead of falling back.
+@Test func lineBreaksAreRestored() async {
+    #expect(await dictate("Hi team. New paragraph. The build is green and we ship tomorrow.",
+                          reply: "Hi team. The build is green, and we ship tomorrow.")
+        == .insert("Hi team.\n\nThe build is green, and we ship tomorrow.", label: "Dictated"))
+    #expect(await dictate("Thanks for the quick review, new line, Bob", reply: "Thanks for the quick review, Bob.")
+        == .insert("Thanks for the quick review,\nBob.", label: "Dictated"))
+    // Breaks the model kept aren't doubled.
+    #expect(await dictate("Thanks for the quick review, new line, Bob", reply: "Thanks for the quick review,\nBob.")
+        == .insert("Thanks for the quick review,\nBob.", label: "Dictated"))
+    // No place for the break (its neighbours changed): raw, as before.
+    #expect(await dictate("Hi team. New paragraph. The build is green.", reply: "Hello everyone, the build is green.")
+        == .insert("Hi team.\n\nThe build is green.", label: "Dictated (raw)"))
 }
 
 @Test func protectedSpanRule() {

@@ -294,7 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let models = Settings.selection
         let calls = ModelCallRecorder()
         let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
-                                cleanupModel: models.cleanupModel, editModel: models.editModel)
+                                cleanupModel: models.cleanupModel, editModel: models.editModel, features: DictationFeatures(.standard))
         let id = UUID()
         // #49: with nothing selected, "scratch that" / "no, I meant X" act on the last dictation.
         let amend: (last: LastInsert<AXUIElement>, command: InsertCommand)? = {
