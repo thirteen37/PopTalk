@@ -115,7 +115,7 @@ public struct Pipeline: Sendable {
             if !Self.isBlank(text) { return PipelineResult(outcome: .replaceSelection(text, label: "Replaced")) }
         }
 
-        let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms)
+        let messages = Prompts.edit(instruction: transcript, selection: selection, context: r.context, vocabulary: vocabulary.terms, model: editModel)
         let raw: String
         do { raw = try await complete(editModel, messages, true, editTimeout) }
         // Nothing sensible to do raw with a selection: say so and leave it untouched.

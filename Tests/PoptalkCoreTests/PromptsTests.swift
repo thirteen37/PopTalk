@@ -1,3 +1,5 @@
+import CryptoKit
+import Foundation
 import Testing
 @testable import PoptalkCore
 
@@ -134,6 +136,24 @@ private func filler(_ n: Int) -> String { String(repeating: "a ", count: n / 2) 
     #expect(Prompts.isS1Mini("superwhisper/S1-Mini"))
     #expect(Prompts.isS1Mini("/models/s1-mini-4bit"))
     #expect(!Prompts.isS1Mini("adapters/gemma-4-e2b-poptalk-v2"))
+}
+
+// #74: only base E4B gets the GEPA-tuned prompts. The fine-tunes (and E2B, Apple, LM Studio) keep the exact
+// prompts the adapters were trained on: changing those needs a bench re-run and possibly a retrain.
+@Test func onlyBaseE4BGetsTheGEPAPrompts() {
+    let ctx = snap("notes")
+    func systems(_ model: String) -> [String] {
+        [Prompts.dictation(model: model, transcript: "hi", context: ctx, vocabulary: [])[0].content,
+         Prompts.edit(instruction: "fix it", selection: "x", context: ctx, vocabulary: [], model: model)[0].content]
+    }
+    #expect(systems(ModelSettings.e4b) == [Prompts.e4bDictationSystem, Prompts.e4bEditSystem])
+    #expect(Prompts.e4bDictationSystem != Prompts.dictationSystem && Prompts.e4bEditSystem != Prompts.editSystem)
+    for model in [ModelSettings.fineTune, ModelSettings.fineTuneV2, ModelSettings.e2b, "google/gemma-4-e4b"] {
+        #expect(systems(model) == [Prompts.dictationSystem, Prompts.editSystem], "\(model)")
+    }
+    let sha = { (s: String) in SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined() }
+    #expect(sha(Prompts.dictationSystem) == "a4a7089d2f2f6bcda95097796b66e345178c4dd94e959d2a75d2ff6b4079264a")
+    #expect(sha(Prompts.editSystem) == "6aec67cb71c2c35db7848babfa442d3a5183736088a0c1337a1e9457d08a9e92")
 }
 
 @Test func otherModelsKeepTheDefaultDictationPrompt() {
