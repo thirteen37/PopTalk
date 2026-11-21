@@ -9,6 +9,7 @@ import PoptalkSpeech
 //   swift run PoptalkBench [--provider lmstudio|apple|apple-pcc|mlx] [--apple-variant core3|coreAdvanced3]
 //     [--base-url URL] [--cleanup-model ID] [--edit-model ID] [--runs 3] [--filter 'e-*'] [--cases FILE] [--out DIR]
 //     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
+//     [--dictation-prompt-file F] [--edit-prompt-file F]   (#74: replace the system prompts for this run)
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
 //   swift run PoptalkBench --compare a.json b.json
@@ -77,6 +78,15 @@ let editModel = opt("--edit-model") ?? cleanupModel
 let runs = Int(opt("--runs") ?? "3") ?? 3
 let appleVariant = opt("--apple-variant")
 if provider == "apple", appleVariant == nil { fail("--provider apple needs --apple-variant core3|coreAdvanced3") }
+// Candidate system prompts (#74, GEPA): replace the dictation / edit system prompt, E4B's own included, for this run.
+var promptFiles: [String: String] = [:]
+for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-prompt-file", "editPrompt")] {
+    guard let path = opt(flag) else { continue }
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(flag): can't read \(path)") }
+    if key == "dictationPrompt" { Prompts.dictationSystem = text; Prompts.e4bDictationSystem = text }
+    else { Prompts.editSystem = text; Prompts.e4bEditSystem = text }
+    promptFiles[key] = path
+}
 
 let cases: [BenchCase]
 do {
@@ -94,6 +104,7 @@ do {
 } catch { fail(error) }
 meta["provider"] = provider
 meta["runs"] = "\(runs)"
+meta.merge(promptFiles) { $1 }
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)
