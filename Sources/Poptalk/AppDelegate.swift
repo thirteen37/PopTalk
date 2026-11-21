@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
             }
         }
-        hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
+        hotkey = Hotkey(onPress: { [weak self] in self?.pressed(editLast: $0) },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() })
         installHotkeyWhenTrusted()  // also checks permissions
@@ -190,6 +190,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Going idle applies a speech model change that waited for the request (#73).
     private var busy = false { didSet { syncBusyMarker(); if !busy { loadTranscriber() } } }
     private var targetPID: pid_t?
+    /// The current press edits the last dictation (#80).
+    private var editLast = false
+    static let nothingToEdit = "Nothing to edit"
 
     /// Sets the marker at once; clears it a run-loop turn later, so release's recording → busy handoff
     /// (two synchronous assignments) never leaves it briefly absent.
@@ -200,25 +203,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func pressed() {
+    /// `editLast` (#80, tap-then-hold): the utterance is an edit of the last dictation, run as if it were selected.
+    private func pressed(editLast: Bool) {
         guard !busy else { return }  // one request at a time
         loadTranscriber()  // retries after a failed load
         prepareModels()  // likewise for the MLX models
         let mode = runMode
         // No speech model, nothing to record: say why. Release and cancel then no-op (not recording).
         if case .noSpeech(let msg) = mode { overlay.showNotice(msg); return }
+        // Tap-then-hold with nothing that can still be edited: say so rather than record.
+        let editing = editLast ? lastInsert.flatMap { canEdit($0) ? $0.text.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+            : nil
+        if editLast, editing == nil { overlay.showNotice(Self.nothingToEdit); return }
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
         recording = true
+        self.editLast = editLast
         targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         // Hotkey cancels holds under 150 ms; only then read the selection (may post ⌘C), OCR and show the HUD.
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             Timing.log.info("press: capture start")
             contextTask = Task { await ScreenContext.capture() }
-            selectionTask = Task { await TextIO.selectedText() }
-            overlay.showRecording(note: { if case .raw(let note) = mode { note } else { nil } }())
+            // Editing the last dictation: it is the selection, for the live preview (#43) and the final pass.
+            selectionTask = if let editing { Task { editing } } else { Task { await TextIO.selectedText() } }
+            overlay.showRecording(note: editLast ? "Editing last dictation"
+                                  : { if case .raw(let note) = mode { note } else { nil } }())
             // Live cleanup (#43) only with the model ready: degraded mode (#39) previews the raw transcript alone.
             startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
@@ -266,6 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let store = store
         let started = Date()
         let app = targetPID.flatMap { NSRunningApplication(processIdentifier: $0) }
+        let editLast = editLast
         Task {
             defer { busy = false; offerCleanup() }  // the model may have become ready while this ran
             let t0 = Timing.start()
@@ -293,15 +305,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             Timing.log.info("release: speculative runs \(runs), reused \(reused != nil ? "yes" : "no", privacy: .public)")
             await process(request, raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app,
-                          reused: reused, since: t0, system: system)
+                          editLast: editLast, reused: reused, since: t0, system: system)
         }
     }
 
     /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
     /// earlier raw insert, whose text is replaced in place rather than inserted again. `reused`: a speculative run's
-    /// result and model call for this exact request (#43), applied without running the pipeline.
+    /// result and model call for this exact request (#43), applied without running the pipeline. `editLast` (#80): an
+    /// edit of the last dictation, applied like "no, I meant X"; with nothing to edit, nothing is inserted.
     private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
-                         app: NSRunningApplication?, cleanup: RawInsert? = nil,
+                         app: NSRunningApplication?, cleanup: RawInsert? = nil, editLast: Bool = false,
                          reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
                          system: SystemSample = .now()) async {
         // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
@@ -315,11 +328,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let id = UUID()
         // #49: with nothing selected, "scratch that" / "no, I meant X" act on the last dictation.
         let amend: (last: LastInsert<AXUIElement>, command: InsertCommand)? = {
-            guard cleanup == nil, request.selection == nil, let last = lastInsert,
-                  let command = InsertCommand(request.transcript, last: last.text), canEdit(last)
-            else { return nil }
+            guard cleanup == nil, let last = lastInsert else { return nil }
+            let command = editLast ? .change : request.selection == nil ? InsertCommand(request.transcript, last: last.text) : nil
+            guard let command, canEdit(last) else { return nil }
             return (last, command)
         }()
+        if editLast, amend == nil { overlay.showNotice(Self.nothingToEdit); return }
         // Before apply, which moves lastInsert to this request.
         let corrects = history.isEnabled && cleanup == nil
             ? amend?.last.requestID ?? lastInsert?.corrected(by: request.selection, in: TextIO.focusedElement()) : nil
@@ -327,7 +341,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var request = request
         let result: PipelineResult
         if let amend, amend.command != .change { result = PipelineResult(outcome: .nothing) }
-        else if amend == nil, let reused { result = reused.result } else {
+        // An edit-last press's speculative run already had the last dictation as its selection.
+        else if amend == nil || editLast, let reused { result = reused.result } else {
             if let amend { request.selection = amend.last.text.trimmingCharacters(in: .whitespacesAndNewlines) }
             result = await pipeline.run(request)
         }
