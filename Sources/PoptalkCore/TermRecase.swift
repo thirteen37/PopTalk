@@ -10,7 +10,8 @@ extension Pipeline {
     /// Rewrites each span of `transcript` that equals one of `terms` (saved vocabulary and screen terms, as
     /// `boostTerms` lists them) up to case and whitespace to the term's spelling: "meal prep" → "Meal Prep",
     /// "fluid audio" → "FluidAudio". There are no labels, so it holds back:
-    /// - whole words only, and a span split into pieces under 3 characters ("an a") never joins into a term;
+    /// - whole words only; a term under 5 characters joins only pieces of 3+ characters or single letters
+    ///   ("d b t" → "DBT", but not "an a" → "Ana");
     /// - a single-word term made of dictionary words ("Inbox", "Work", "follow-up") is skipped, and a phrase
     ///   mixing dictionary words and names ("Call Priya") gives only its names;
     /// - a term `screen` shows in more than one spelling ("PopTalk" and "Poptalk", "Meal Prep" and "meal prep").
@@ -29,22 +30,25 @@ extension Pipeline {
             var out = text as NSString
             for r in spans(text).reversed() {
                 let pieces = out.substring(with: r).lowercased().split(whereSeparator: \.isWhitespace)
-                guard pieces.count == 1 || pieces == own || pieces.allSatisfy({ $0.count >= 3 }) else { continue }
+                guard chars.count >= 5 || pieces.count == 1 || pieces == own || pieces.allSatisfy({ $0.count >= 3 })
+                        || pieces.allSatisfy({ $0.count == 1 }) else { continue }
                 out = out.replacingCharacters(in: r, with: term) as NSString
             }
             return out as String
         }
     }
 
-    /// The terms worth recasing, longest first: no single dictionary words, and a phrase mixing dictionary
-    /// words and names gives its names.
+    /// The terms worth recasing, longest first: no single dictionary words; a phrase of only dictionary words
+    /// ("Meal Prep") as is; any other phrase without its leading dictionary words ("Call Priya" → "Priya",
+    /// "Yarrowly Freight" stays) and each of its other words alone.
     static func recaseCandidates(_ terms: [String]) -> [String] {
         var seen = Set<String>()
         return terms.flatMap { t -> [String] in
             let words = t.split(separator: " ").map(String.init)
             let common = words.map(isCommonWord)
-            if words.count == 1 { return common[0] ? [] : [t] }
-            return Set(common).count == 1 ? [t] : zip(words, common).filter { !$1 }.map(\.0)
+            if !common.contains(false) { return words.count > 1 ? [t] : [] }
+            let names = zip(words, common).filter { !$1 }.map(\.0)
+            return [words.drop { isCommonWord($0) }.joined(separator: " ")] + (words.count > 1 ? names : [])
         }
         .filter { seen.insert($0.lowercased()).inserted }
         .sorted { $0.count > $1.count }

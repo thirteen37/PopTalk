@@ -18,6 +18,12 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(recase("the email should say quill mate everywhere", screen: "Quillmate notes. We went over it.")
         == "the email should say Quillmate everywhere")
     #expect(recase("Switch to GPT-4o before Friday.", screen: "moving the summarizer to gpt-4o next sprint") == "Switch to gpt-4o before Friday.")
+    // A phrase loses only its leading common words ("Call"); its names also count alone.
+    #expect(recase("did yarrowly freight renew? ask yarrowly", screen: "Tags: Yarrowly Freight, backlog")
+        == "did Yarrowly Freight renew? ask Yarrowly")
+    // Terms of 5+ letters join any pieces; shorter ones only single letters.
+    #expect(recase("keep rabbit m q and auth 0, drop d b t", screen: "Re: RabbitMQ, Auth0 and DBT")
+        == "keep RabbitMQ and Auth0, drop DBT")
     // Saved vocabulary too, with no screen.
     #expect(recase("ask about poptalk", screen: "", saved: ["PopTalk"]) == "ask about PopTalk")
 }
