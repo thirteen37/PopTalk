@@ -12,3 +12,9 @@ import Testing
 @Test func previewCutsAnUnbrokenWord() {
     #expect(PreviewText.tail("abcdefghij", limit: 4) == "…ghij")
 }
+
+// #82: a line break is a word boundary too.
+@Test func previewCutsAtALineBreak() {
+    #expect(PreviewText.tail("Thanks.\n\nCheers,\nGurpreet", limit: 12) == "…Gurpreet")
+    #expect(PreviewText.tail("Thanks.\nGurpreet", limit: 8) == "…Gurpreet")
+}

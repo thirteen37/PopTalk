@@ -183,7 +183,7 @@ final class Overlay {
             }
             if stale { h.mainColor = .secondaryLabelColor }
         } else if let preview {
-            h.main = PreviewText.tail(preview, limit: 400)
+            h.main = PreviewText.tail(preview, limit: previewLimit)
             h.tail = true
         } else {
             h.glyph = .symbol("mic")
@@ -193,9 +193,12 @@ final class Overlay {
         return h
     }
 
+    /// Characters of live text kept: well over `Capsule.maxLines` at the max width, so a cut never shortens the block.
+    private static let previewLimit = 600
+
     /// `PreviewText.tail` of `text`, with `marks` (ranges in `text`) moved into the cut string.
     private static func tail(_ text: String, _ marks: [Range<String.Index>]) -> (String, [NSRange]) {
-        let cut = PreviewText.tail(text, limit: 400)
+        let cut = PreviewText.tail(text, limit: previewLimit)
         let ns = marks.map { NSRange($0, in: text) }
         guard cut != text else { return (cut, ns) }
         let dropped = text.utf16.count - (cut.utf16.count - 1)  // "…" is one UTF-16 unit
@@ -206,7 +209,7 @@ final class Overlay {
         guard let text, !text.isEmpty else {
             return HUD(glyph: .spinner, main: "Working…", mainColor: .secondaryLabelColor)
         }
-        return HUD(glyph: .spinner, main: PreviewText.tail(text, limit: 400), mainColor: .secondaryLabelColor,
+        return HUD(glyph: .spinner, main: PreviewText.tail(text, limit: previewLimit), mainColor: .secondaryLabelColor,
                    tail: true, label: "Working…")
     }
 
@@ -300,7 +303,7 @@ struct HUD {
     /// `.secondaryLabelColor` means neutral: a grey tile (working, notices, confirmations).
     var tint: NSColor = .secondaryLabelColor
     var heard: String?
-    /// Live preview (#43): `heard` on one line like `tail`, with the words the cleanup dropped struck through.
+    /// Live preview (#43): `heard` kept to its end like `tail`, with the words the cleanup dropped struck through.
     var heardTail = false
     var heardMarks: [NSRange] = []
     /// The action verb in the tint (or `actTint`), in front of `main` ("Corrected" Todoist).
@@ -310,7 +313,8 @@ struct HUD {
     /// Words of `main` the cleanup changed, underlined (#43).
     var mainMarks: [NSRange] = []
     var mainColor: NSColor = .labelColor
-    /// Live preview: one line, newest words at the trailing edge, the start fades.
+    /// Live preview: wrapped up to `Capsule.maxLines`, newest words at the bottom, the top fades (#82). Otherwise
+    /// the text is cut in the middle to the same cap (`OutcomeText.fit`).
     var tail = false
     /// Footer text in the tint ("raw — model loading").
     var note: String?
@@ -344,29 +348,31 @@ enum Capsule {
             bodyW = max(bodyW, size.width)
         }
 
+        // Marks index the whole text, so they're dropped once `fitted` cuts it.
         if let h = hud.heard {
-            let s = NSMutableAttributedString(attributedString: attr(h, 11.5, .regular, .secondaryLabelColor))
-            for r in hud.heardMarks {
-                s.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: NSColor.tertiaryLabelColor], range: r)
+            func heard(_ t: String) -> NSAttributedString {
+                let s = NSMutableAttributedString(attributedString: attr(t, 11.5, .regular, .secondaryLabelColor))
+                for r in t == h ? hud.heardMarks : [] {
+                    s.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: NSColor.tertiaryLabelColor], range: r)
+                }
+                return s
             }
-            place(hud.heardTail ? line(s) : wrapping(s))
+            place(hud.heardTail ? block(heard(h)) : fitted(h, heard))
         }
-        let main = NSMutableAttributedString()
-        if let a = hud.act { main.append(attr(a, 13, .semibold, hud.actTint ?? hud.tint)) }
-        if !hud.main.isEmpty {
+        func main(_ body: String) -> NSAttributedString {
+            let main = NSMutableAttributedString()
+            if let a = hud.act { main.append(attr(a, 13, .semibold, hud.actTint ?? hud.tint)) }
+            guard !body.isEmpty else { return main }
             let at = main.length + (hud.act == nil ? 0 : 1)
-            main.append(attr((hud.act == nil ? "" : " ") + hud.main, 13, .medium, hud.mainColor))
-            for r in hud.mainMarks {
+            main.append(attr((hud.act == nil ? "" : " ") + body, 13, .medium, hud.mainColor))
+            for r in body == hud.main ? hud.mainMarks : [] {
                 main.addAttributes([.underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: NSColor.controlAccentColor,
                                     .foregroundColor: hud.mainColor == .labelColor ? NSColor.controlAccentColor : hud.mainColor],
                                    range: NSRange(location: r.location + at, length: r.length))
             }
+            return main
         }
-        if hud.tail {
-            place(line(main))
-        } else {
-            place(wrapping(main))
-        }
+        place(hud.tail ? block(main(hud.main)) : fitted(hud.main, main))
 
         // Footer: label (or note) on the left, a flexible space, then keycaps and the status strip.
         var right: [(NSView, CGSize)] = hud.keys.map(keycap)
@@ -473,10 +479,26 @@ enum Capsule {
             .font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color, .paragraphStyle: p])
     }
 
-    /// One line keeping its end in view (`TailText`).
-    private static func line(_ s: NSAttributedString) -> (NSView, CGSize) {
-        let nat = s.size()
-        return (TailText(s), CGSize(width: min(ceil(nat.width) + 4, maxBody), height: ceil(nat.height)))
+    /// Wrapped text keeping its end in view, at most `maxLines` tall (`TailText`, #82). The height follows the line
+    /// count, so it only changes when a line is added, not on every partial.
+    private static func block(_ s: NSAttributedString) -> (NSView, CGSize) {
+        let fit = s.boundingRect(with: CGSize(width: maxBody - 4, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin)
+        return (TailText(s), CGSize(width: min(ceil(fit.width) + 4, maxBody), height: min(ceil(fit.height), cap(s))))
+    }
+
+    /// `text` built by `build`, wrapped, cut in the middle to `maxLines` so its start and end stay readable (#82).
+    private static func fitted(_ text: String, _ build: (String) -> NSAttributedString) -> (NSView, CGSize) {
+        let limit = cap(build(text))
+        return wrapping(build(OutcomeText.fit(text) { wrapping(build($0)).1.height <= limit }))
+    }
+
+    static let maxLines = 4
+
+    /// Height of `maxLines` lines in `s`'s font and paragraph style.
+    private static func cap(_ s: NSAttributedString) -> CGFloat {
+        let style = s.length > 0 ? s.attributes(at: s.length - 1, effectiveRange: nil) : [:]
+        let lines = NSAttributedString(string: Array(repeating: "X", count: maxLines).joined(separator: "\n"), attributes: style)
+        return ceil(lines.boundingRect(with: CGSize(width: maxBody, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin).height)
     }
 
     private static func wrapping(_ s: NSAttributedString) -> (NSView, CGSize) {
@@ -572,7 +594,7 @@ private final class Box: NSView {
     }
 }
 
-/// One line that keeps its end in view: when too wide, it's right-anchored and the start fades out.
+/// Wrapped text that keeps its end in view: when too tall, it's bottom-anchored and the top fades out (#82).
 private final class TailText: NSView {
     let text: NSAttributedString
     init(_ text: NSAttributedString) {
@@ -586,19 +608,21 @@ private final class TailText: NSView {
 
     override var isFlipped: Bool { true }
     override func draw(_ dirtyRect: NSRect) {
-        let w = ceil(text.size().width) + 2
-        let overflow = w > bounds.width
-        guard overflow, let ctx = NSGraphicsContext.current?.cgContext else {
-            return text.draw(at: NSPoint(x: 2, y: 0))
+        // 2 pt in from each side, like an NSTextField's text.
+        let w = bounds.width - 4
+        let h = ceil(text.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin).height)
+        let r = NSRect(x: 2, y: bounds.height - h, width: w, height: h)
+        guard h > bounds.height, let ctx = NSGraphicsContext.current?.cgContext else {
+            return text.draw(with: r, options: .usesLineFragmentOrigin)
         }
         ctx.clip(to: bounds)
         ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        text.draw(at: NSPoint(x: bounds.width - w, y: 0))
-        let fade: CGFloat = 40
+        text.draw(with: r, options: .usesLineFragmentOrigin)
+        let fade: CGFloat = 14
         let g = CGGradient(colorsSpace: nil, colors: [NSColor.black.cgColor, NSColor.black.withAlphaComponent(0).cgColor] as CFArray,
                            locations: [0, 1])!
         ctx.setBlendMode(.destinationOut)
-        ctx.drawLinearGradient(g, start: .zero, end: CGPoint(x: fade, y: 0), options: [])
+        ctx.drawLinearGradient(g, start: .zero, end: CGPoint(x: 0, y: fade), options: [])
         ctx.endTransparencyLayer()
     }
 }
