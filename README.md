@@ -15,7 +15,7 @@ Everything runs on your Mac. No audio, text or screen content leaves it, unless 
 - **Live preview.** While you hold the key, the overlay shows the transcript and, at each pause, the cleaned-up text or the planned edit, with changed words marked. If you pause before letting go, release inserts that result without running the model again.
 - **Overlay.** After a result, the overlay shows what was heard above what was inserted. **Esc** undoes it and **Return** accepts an offer, such as remembering a corrected word as vocabulary. Both keys work only while the overlay is up (the undo window, 5 s by default). The overlay moves above the field you're typing in if it would cover it. Drag it to move it; the position is remembered per display, and right-clicking it resets that display. A row of small icons shows anything inactive: a model still loading, a missing permission, a context source turned off, history recording on.
 - **Voice commands on the last dictation.** With nothing selected, within a minute and while the field is as PopTalk left it: "scratch that", "delete the last word", "delete the last sentence", "no, I meant …", "change *A* to *B*".
-- **Edit the last dictation.** Tap right ⌥, then press and hold it again within 0.4 s, and say an instruction ("make it more formal"). It applies to the last dictation as if you had selected it, under the same conditions as the voice commands.
+- **Edit the last dictation.** Tap right ⌥, then press and hold it again within 0.4 s, and say an instruction ("make it more formal"). It applies to the last dictation as if you had selected it, under the same conditions as the voice commands. The voice commands work here too: "scratch that" and the deletes run in code, without the model.
 - **Terminals.** In Ghostty, Terminal, iTerm2, kitty, WezTerm, Alacritty, Warp, Hyper and Tabby, undo and the commands above remove the dictated text with backspaces, since ⌘Z isn't a text undo there. They only work if you haven't typed since, and not for dictations containing a line break.
 - **Spoken formatting.** "quote … unquote", "open paren … close paren", "new line" and "new paragraph" are applied in code. Spoken numbers become digits where unambiguous ("twenty five percent" → 25%, "three thirty pm" → 3:30 PM); zero to nine stay words in prose.
 - **While models load.** If the language model isn't ready yet, dictation inserts the raw transcript, and the overlay offers **⏎ clean up now** once it is. Edits need the model: until it's ready they leave the selection unchanged.
@@ -45,17 +45,20 @@ stateDiagram-v2
     Recording --> Working: released
     Working --> Idle: no speech heard
     Working --> Outcome: result applied
-    Working --> Notice: error
+    Working --> Notice: error, or nothing to edit
     Notice --> Idle
     Outcome --> Idle: Esc undoes, Return accepts an offer, or 5 s pass
 ```
 
-What a release does with what was said:
+What a release does with what was said. The last dictation is *editable* within 60 s, while its field is focused and its text is as PopTalk left it (in a terminal: nothing typed since):
 
 ```mermaid
 stateDiagram-v2
     state "Transcribe" as Transcribe
-    state which <<choice>>
+    state press <<choice>>
+    state tapped <<choice>>
+    state held <<choice>>
+    state "Notice: Nothing to edit" as Nothing
     state "Edit the selection" as Edit
     state "Edit the last dictation" as EditLast
     state "Delete from the last dictation" as Delete
@@ -64,19 +67,42 @@ stateDiagram-v2
     state "Apply, show the overlay" as Apply
 
     [*] --> Transcribe
-    Transcribe --> which
-    which --> EditLast: tap-then-hold
-    which --> EditLast: change command, nothing selected
-    which --> Delete: delete command, nothing selected
-    which --> Edit: text selected
-    which --> Cleanup: otherwise
+    Transcribe --> press
+    press --> tapped: tap-then-hold
+    press --> held: plain hold
+    tapped --> Nothing: last dictation not editable
+    tapped --> Delete: delete command
+    tapped --> EditLast: otherwise
+    held --> Delete: delete command, nothing selected, last dictation editable
+    held --> EditLast: change command, nothing selected, last dictation editable
+    held --> Edit: text selected
+    held --> Cleanup: otherwise
     Cleanup --> Raw: model still loading, or cleanup dropped content
     Cleanup --> Apply
     Raw --> Apply
     Edit --> Apply
     EditLast --> Apply
     Delete --> Apply
+    Nothing --> [*]
     Apply --> [*]
+```
+
+What the voice commands and tap-then-hold act on:
+
+```mermaid
+stateDiagram-v2
+    state "No last dictation" as None
+    state "Editable" as Editable
+    state "Not editable" as Stale
+
+    [*] --> None
+    None --> Editable: dictation inserted
+    Stale --> Editable: dictation inserted
+    Editable --> Editable: a new dictation, or an edit or delete that leaves text, starts a fresh 60 s, and Esc on an edit or delete brings back the previous one
+    Editable --> Stale: 60 s pass, field edited or left, or a key typed in a terminal
+    Editable --> None: "scratch that", or a delete leaves nothing
+    Editable --> None: Esc undoes a dictation
+    None --> Editable: Esc undoes "scratch that", the previous one is back
 ```
 
 ## How it works

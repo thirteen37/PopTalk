@@ -29,6 +29,14 @@ public enum InsertCommand: Equatable, Sendable {
         return nil
     }
 
+    /// The command a press gives on the last insert `last`, nil for none. A plain hold has one only with nothing
+    /// selected; tap-then-hold (`editLast`, #80) always does: a delete runs in code (#83), anything else is `.change`.
+    public static func forPress(_ utterance: String, last: String?, selection: String?, editLast: Bool) -> InsertCommand? {
+        guard let last, editLast || selection == nil else { return nil }
+        let command = InsertCommand(utterance, last: last)
+        return editLast ? command ?? .change : command
+    }
+
     /// What's left of `text` after this delete ("" removes it all); nil for `.change`.
     public func remainder(of text: String) -> String? {
         let unit: String.EnumerationOptions

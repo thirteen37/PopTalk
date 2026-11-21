@@ -43,6 +43,20 @@ private let last = "Let's meet on Tuesday at noon."
     #expect(InsertCommand.change.remainder(of: last) == nil)
 }
 
+@Test func commandForPress() {
+    // Plain hold: a command only with nothing selected.
+    #expect(InsertCommand.forPress("scratch that", last: last, selection: nil, editLast: false) == .scratch)
+    #expect(InsertCommand.forPress("scratch that", last: last, selection: "Tuesday", editLast: false) == nil)
+    #expect(InsertCommand.forPress("make it formal", last: last, selection: nil, editLast: false) == nil)
+    #expect(InsertCommand.forPress("scratch that", last: nil, selection: nil, editLast: false) == nil)
+    // Tap-then-hold (#83): deletes run in code; anything else edits the last dictation (its selection).
+    #expect(InsertCommand.forPress("scratch that", last: last, selection: last, editLast: true) == .scratch)
+    #expect(InsertCommand.forPress("delete the last word", last: last, selection: last, editLast: true) == .deleteLastWord)
+    #expect(InsertCommand.forPress("No, I meant Wednesday", last: last, selection: last, editLast: true) == .change)
+    #expect(InsertCommand.forPress("make it formal", last: last, selection: last, editLast: true) == .change)
+    #expect(InsertCommand.forPress("scratch that", last: nil, selection: nil, editLast: true) == nil)
+}
+
 @Test func changedPartForOverlay() {
     #expect(InsertCommand.changed(from: last, to: "Let's meet on Wednesday at noon.") == "Wednesday")
     #expect(InsertCommand.changed(from: "Hi Bob", to: "Hi Bob and Ann") == "and Ann")
