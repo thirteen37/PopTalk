@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
             }
         }
-        hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
+        hotkey = Hotkey(onPress: { [weak self] in self?.pressed(editLast: $0) },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() })
         installHotkeyWhenTrusted()  // also checks permissions
@@ -190,6 +190,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Going idle applies a speech model change that waited for the request (#73).
     private var busy = false { didSet { syncBusyMarker(); if !busy { loadTranscriber() } } }
     private var targetPID: pid_t?
+    /// The current press edits the last dictation (#80).
+    private var editLast = false
+    static let nothingToEdit = "Nothing to edit"
 
     /// Sets the marker at once; clears it a run-loop turn later, so release's recording → busy handoff
     /// (two synchronous assignments) never leaves it briefly absent.
@@ -200,25 +203,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func pressed() {
+    /// `editLast` (#80, tap-then-hold): the utterance is an edit of the last dictation, run as if it were selected.
+    private func pressed(editLast: Bool) {
         guard !busy else { return }  // one request at a time
         loadTranscriber()  // retries after a failed load
         prepareModels()  // likewise for the MLX models
         let mode = runMode
         // No speech model, nothing to record: say why. Release and cancel then no-op (not recording).
         if case .noSpeech(let msg) = mode { overlay.showNotice(msg); return }
+        // Tap-then-hold with nothing that can still be edited: say so rather than record.
+        let editing = editLast ? lastInsert.flatMap { canEdit($0) ? $0.text.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+            : nil
+        if editLast, editing == nil { overlay.showNotice(Self.nothingToEdit); return }
         do { try recorder.start(deviceUID: Settings.inputDeviceUID) } catch {
             overlay.showError("Microphone unavailable"); return
         }
         recording = true
+        self.editLast = editLast
         targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         // Hotkey cancels holds under 150 ms; only then read the selection (may post ⌘C), OCR and show the HUD.
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             Timing.log.info("press: capture start")
             contextTask = Task { await ScreenContext.capture() }
-            selectionTask = Task { await TextIO.selectedText() }
-            overlay.showRecording(note: { if case .raw(let note) = mode { note } else { nil } }())
+            // Editing the last dictation: it is the selection, for the live preview (#43) and the final pass.
+            selectionTask = if let editing { Task { editing } } else { Task { await TextIO.selectedText() } }
+            overlay.showRecording(note: editLast ? "Editing last dictation"
+                                  : { if case .raw(let note) = mode { note } else { nil } }())
             // Live cleanup (#43) only with the model ready: degraded mode (#39) previews the raw transcript alone.
             startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
@@ -266,6 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let store = store
         let started = Date()
         let app = targetPID.flatMap { NSRunningApplication(processIdentifier: $0) }
+        let editLast = editLast
         Task {
             defer { busy = false; offerCleanup() }  // the model may have become ready while this ran
             let t0 = Timing.start()
@@ -293,15 +305,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             Timing.log.info("release: speculative runs \(runs), reused \(reused != nil ? "yes" : "no", privacy: .public)")
             await process(request, raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app,
-                          reused: reused, since: t0, system: system)
+                          editLast: editLast, reused: reused, since: t0, system: system)
         }
     }
 
     /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
     /// earlier raw insert, whose text is replaced in place rather than inserted again. `reused`: a speculative run's
-    /// result and model call for this exact request (#43), applied without running the pipeline.
+    /// result and model call for this exact request (#43), applied without running the pipeline. `editLast` (#80): an
+    /// edit of the last dictation, applied like "no, I meant X"; with nothing to edit, nothing is inserted.
     private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
-                         app: NSRunningApplication?, cleanup: RawInsert? = nil,
+                         app: NSRunningApplication?, cleanup: RawInsert? = nil, editLast: Bool = false,
                          reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
                          system: SystemSample = .now()) async {
         // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
@@ -315,12 +328,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let id = UUID()
         // #49: with nothing selected, "scratch that" / "no, I meant X" act on the last dictation.
         let amend: (last: LastInsert<AXUIElement>, command: InsertCommand)? = {
-            guard cleanup == nil, request.selection == nil, let last = lastInsert,
-                  let command = InsertCommand(request.transcript, last: last.text),
-                  let field = TextIO.focusedElement(), last.canAmend(focused: field, value: TextIO.value(of: field))
-            else { return nil }
+            guard cleanup == nil, let last = lastInsert else { return nil }
+            let command = editLast ? .change : request.selection == nil ? InsertCommand(request.transcript, last: last.text) : nil
+            guard let command, canEdit(last) else { return nil }
             return (last, command)
         }()
+        if editLast, amend == nil { overlay.showNotice(Self.nothingToEdit); return }
         // Before apply, which moves lastInsert to this request.
         let corrects = history.isEnabled && cleanup == nil
             ? amend?.last.requestID ?? lastInsert?.corrected(by: request.selection, in: TextIO.focusedElement()) : nil
@@ -328,7 +341,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var request = request
         let result: PipelineResult
         if let amend, amend.command != .change { result = PipelineResult(outcome: .nothing) }
-        else if amend == nil, let reused { result = reused.result } else {
+        // An edit-last press's speculative run already had the last dictation as its selection.
+        else if amend == nil || editLast, let reused { result = reused.result } else {
             if let amend { request.selection = amend.last.text.trimmingCharacters(in: .whitespacesAndNewlines) }
             result = await pipeline.run(request)
         }
@@ -362,8 +376,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func offerCleanup() {
         guard !busy, !recording, runMode == .full, let raw = lastInsert?.reprocess else { return }
         let valid = { [weak self] () -> Bool in
-            guard let self, let field = TextIO.focusedElement() else { return false }
-            return lastInsert?.canReprocess(focused: field, value: TextIO.value(of: field)) == true
+            guard let self, let last = lastInsert else { return false }
+            return canEdit(last, raw: true)
         }
         guard valid() else { return }
         overlay.showCleanupOffer(isValid: valid) { [weak self] in
@@ -380,28 +394,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Selects the raw text (checked by reading it back) and pastes the cleaned text over it. Every check
-    /// runs before anything changes, so a failure leaves the user's text as it was.
+    /// Replaces the raw text with the cleaned text (`replaceLast`); a failure leaves the user's text as it was.
     private func replaceRaw(_ raw: RawInsert, with result: PipelineResult, id: UUID) async -> String {
         let failed = "Couldn't clean up"
+        let terminal = terminalStamp()
         guard !result.degraded, case .insert(let s, _) = result.outcome, let last = lastInsert,
-              let field = TextIO.focusedElement(), last.canReprocess(focused: field, value: TextIO.value(of: field)),
-              TextIO.selectLast(raw.prefix + last.text, in: field)
+              await replaceLast(last, with: raw.prefix + s, raw: true)
         else { overlay.showError(failed); return failed }
-        await TextIO.replaceSelection(raw.prefix + s)
-        lastInsert = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
-                                prefix: raw.prefix, fieldValue: TextIO.value(of: field))
-        let undo = { [weak self] in
-            TextIO.undo()
-            self?.lastInsert = nil
-            self?.history.append(HistoryEvent(.undo, id: id))
-        }
-        overlay.showOutcome("Cleaned up", undo: undo, vocabularyOffer: nil) {}
+        let field = TextIO.focusedElement() ?? last.target
+        let now = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
+                             prefix: raw.prefix, fieldValue: TextIO.value(of: field), terminal: terminal)
+        lastInsert = now
+        overlay.showOutcome("Cleaned up", undo: undoable(now) ? { [weak self] in
+            await self?.undo(now, previous: raw.prefix + last.text, id: id) ?? false
+        } : nil, vocabularyOffer: nil) {}
         return "Cleaned up"
     }
 
-    /// Applies a voice command to the last insert (#49): selects its text (checked by reading it back), then
-    /// deletes it or pastes the new text over it. Every check runs before anything changes.
+    /// Applies a voice command to the last insert (#49): deletes it or replaces it with the new text (`replaceLast`).
     private func amendLast(_ last: LastInsert<AXUIElement>, _ command: InsertCommand, with result: PipelineResult,
                            id: UUID) async -> String {
         let body = last.prefix + last.text  // exactly what was pasted
@@ -416,20 +426,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let msg = if case .error(let m) = result.outcome { m } else { "Couldn't change that" }
             overlay.showError(msg); return msg
         }
-        let failed = "Couldn't edit the last dictation"
-        guard let field = TextIO.focusedElement(), last.canAmend(focused: field, value: TextIO.value(of: field)),
-              TextIO.selectLast(body, in: field)
-        else { overlay.showError(failed); return failed }
-        if new.isEmpty { TextIO.press(.delete) } else { await TextIO.replaceSelection(new) }
-        lastInsert = new.isEmpty ? nil
-            : LastInsert(target: field, text: new, requestID: history.isEnabled ? id : nil, fieldValue: TextIO.value(of: field))
-        let undo = { [weak self] in
-            TextIO.undo()
-            self?.lastInsert = last  // the field is back as it was, so commands on it work again
-            self?.history.append(HistoryEvent(.undo, id: id))
-        }
-        overlay.showOutcome(label, undo: undo, vocabularyOffer: nil) {}
+        let terminal = terminalStamp()
+        guard await replaceLast(last, with: new) else { overlay.showError(Self.editFailed); return Self.editFailed }
+        let field = TextIO.focusedElement() ?? last.target
+        // Kept for a terminal undo even when empty: it puts `body` back with no backspaces.
+        let now = LastInsert(target: field, text: new, requestID: history.isEnabled ? id : nil,
+                             fieldValue: TextIO.value(of: field), terminal: terminal)
+        lastInsert = new.isEmpty ? nil : now
+        // Restoring `last`: the field is back as it was, so commands on it work again.
+        overlay.showOutcome(label, undo: undoable(now) ? { [weak self] in
+            await self?.undo(now, previous: body, restore: last, id: id) ?? false
+        } : nil, vocabularyOffer: nil) {}
         return label
+    }
+
+    static let editFailed = "Couldn't edit the last dictation"
+
+    /// The frontmost app's pid and the key-down count, when it's a terminal (#79). Taken right before a paste, for
+    /// the `LastInsert` made after it.
+    private func terminalStamp() -> TerminalStamp? {
+        guard let app = NSWorkspace.shared.frontmostApplication, Terminal.contains(app.bundleIdentifier) else { return nil }
+        return TerminalStamp(app: app.processIdentifier, keyDowns: hotkey.keyDowns)
+    }
+
+    private func backspaces(_ last: LastInsert<AXUIElement>) -> Int? {
+        last.backspaces(frontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier, keyDowns: hotkey.keyDowns)
+    }
+
+    /// Whether PopTalk's last insert is still as it left it, so it can be edited in place. In a terminal (#79): no key
+    /// pressed since and the same app frontmost. Elsewhere: its field focused with the same text (`raw`: the text a
+    /// raw insert's cleanup checks, #39; else a voice command's, #49).
+    private func canEdit(_ last: LastInsert<AXUIElement>, raw: Bool = false) -> Bool {
+        if last.terminal != nil { return backspaces(last) != nil && (!raw || last.reprocess != nil) }
+        guard let field = TextIO.focusedElement() else { return false }
+        let value = TextIO.value(of: field)
+        return raw ? last.canReprocess(focused: field, value: value) : last.canAmend(focused: field, value: value)
+    }
+
+    /// Replaces PopTalk's last insert with `new` ("" deletes it), or returns false with nothing changed if `canEdit`
+    /// fails. In a terminal by backspaces and a paste (#79); elsewhere by selecting it (checked by reading it back)
+    /// and pasting over it. Every edit of the last insert, and every undo in a terminal, goes through here.
+    private func replaceLast(_ last: LastInsert<AXUIElement>, with new: String, raw: Bool = false) async -> Bool {
+        guard canEdit(last, raw: raw) else { return false }
+        if let n = backspaces(last) { await TextIO.retype(deleting: n, then: new); return true }
+        guard let field = TextIO.focusedElement(), TextIO.selectLast(last.prefix + last.text, in: field) else { return false }
+        if new.isEmpty { TextIO.press(.delete) } else { await TextIO.replaceSelection(new) }
+        return true
+    }
+
+    /// Whether Esc may take `inserted` back: in a terminal only by backspaces, since ⌘Z there is window undo (#79).
+    private func undoable(_ inserted: LastInsert<AXUIElement>?) -> Bool {
+        inserted.map { $0.terminal == nil || backspaces($0) != nil } ?? (terminalStamp() == nil)
+    }
+
+    /// Esc on an outcome: takes `inserted` back out, putting back `previous` (what it replaced, "" for a dictation),
+    /// and makes `restore` the last insert. ⌘Z, except in a terminal (#79): `replaceLast`, and false (having said so,
+    /// nothing changed) once that isn't safe. Every undo goes through here.
+    private func undo(_ inserted: LastInsert<AXUIElement>?, previous: String = "", restore: LastInsert<AXUIElement>? = nil,
+                      id: UUID) async -> Bool {
+        if let inserted, inserted.terminal != nil {
+            guard await replaceLast(inserted, with: previous) else { overlay.showError(Self.editFailed); return false }
+        } else { TextIO.undo() }
+        lastInsert = restore
+        history.append(HistoryEvent(.undo, id: id))
+        return true
     }
 
     /// While held, re-transcribes the growing recording for the overlay only.
@@ -553,6 +613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var pasted = true
         var space = ""
         let field = TextIO.focusedElement()
+        let terminal = terminalStamp()
         switch result.outcome {
         case .insert(let s, let l):
             // With a known cursor the pipeline already spaced it.
@@ -576,7 +637,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else { nil }
         lastInsert = pasted ? field.map {
             LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
-                       prefix: space, fieldValue: amendable)
+                       prefix: space, fieldValue: amendable, terminal: terminal)
         } : nil
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
@@ -589,10 +650,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
-        let undo: (() -> Void)? = pasted ? { [weak self] in
-            TextIO.undo()
-            self?.lastInsert = nil
-            self?.history.append(HistoryEvent(.undo, id: id))
+        let inserted = lastInsert
+        let undo: (() async -> Bool)? = pasted && undoable(inserted) ? { [weak self] in
+            await self?.undo(inserted, id: id) ?? false
         } : nil
         overlay.showOutcome(shown, heard: raw.request.transcript, result: text,
                             edit: { if case .insert = result.outcome { false } else { true } }(),

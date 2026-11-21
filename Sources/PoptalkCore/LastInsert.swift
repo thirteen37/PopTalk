@@ -15,9 +15,11 @@ public struct LastInsert<Target: Equatable> {
     /// Spacing pasted before `text`, and the field's text right after the paste; nil fieldValue: no voice commands on it (#49).
     public let prefix: String
     public let fieldValue: String?
+    /// Set when pasted into a terminal (#79), where it's taken back by backspaces instead.
+    public let terminal: TerminalStamp?
 
     public init(target: Target, text: String, at: Date = Date(), requestID: UUID? = nil, reprocess: RawInsert? = nil,
-                prefix: String = "", fieldValue: String? = nil) {
+                prefix: String = "", fieldValue: String? = nil, terminal: TerminalStamp? = nil) {
         self.target = target
         self.text = text
         self.at = at
@@ -25,6 +27,7 @@ public struct LastInsert<Target: Equatable> {
         self.reprocess = reprocess
         self.prefix = prefix
         self.fieldValue = fieldValue
+        self.terminal = terminal
     }
 
     /// The space to put before `s` being dictated into `target`.
