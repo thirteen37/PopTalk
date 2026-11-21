@@ -29,3 +29,15 @@ import Testing
     let l = OutcomeText.lines(heard: long + "x", result: long, label: "Dictated", edit: false, limit: 21)
     #expect(l.heard?.count == 21 && l.result?.count == 21)
 }
+
+// #82: the overlay caps the outcome's height; `fit` cuts the middle until it fits, keeping start and end.
+@Test func outcomeFitKeepsStartAndEnd() {
+    #expect(OutcomeText.fit("short") { $0.count <= 11 } == "short")
+    #expect(OutcomeText.fit("abcdefghijklmnopqrstuvwxyz") { $0.count <= 11 } == "abcde…vwxyz")
+    let lines = (1...8).map(String.init).joined(separator: "\n")
+    #expect(OutcomeText.fit(lines) { $0.split(separator: "\n").count <= 4 } == "1\n2…\n7\n8")
+}
+
+@Test func outcomeCutsTheMiddleBetweenWords() {
+    #expect(OutcomeText.middle("one two three four five six", limit: 12) == "one… six")
+}

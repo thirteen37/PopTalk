@@ -59,3 +59,11 @@ private let size = CGSize(width: 300, height: 50)
     let f = CGRect(x: 1050, y: 800, width: 300, height: 50)
     #expect(OverlayPlacement.anchor(of: f, visible: second) == CGPoint(x: 200, y: 600))
 }
+
+// #82: wrapped text grows the overlay upward; once it reaches the field, it moves above it.
+@Test func aTallerOverlayMovesAboveTheFieldItGrowsInto() {
+    let field = CGRect(x: 400, y: 200, width: 200, height: 20)
+    #expect(OverlayPlacement.frame(size: size, visible: screen, field: field, anchor: nil).minY == 50)
+    #expect(OverlayPlacement.frame(size: CGSize(width: 640, height: 190), visible: screen, field: field, anchor: nil)
+            == CGRect(x: 180, y: 220 + OverlayPlacement.margin, width: 640, height: 190))
+}
