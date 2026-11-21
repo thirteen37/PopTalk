@@ -219,7 +219,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             contextTask = Task { await ScreenContext.capture() }
             selectionTask = Task { await TextIO.selectedText() }
             overlay.showRecording(note: { if case .raw(let note) = mode { note } else { nil } }())
-            startPreview()
+            // Live cleanup (#43) only with the model ready: degraded mode (#39) previews the raw transcript alone.
+            startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
         startWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
@@ -232,6 +233,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startWork?.cancel()
         previewTask?.cancel()
         previewTask = nil
+        speculation?.task.cancel()
+        speculation = nil
         // Don't cancel selectionTask: its clipboard guard must finish waiting before it restores.
         contextTask?.cancel()
         overlay.hide()
@@ -246,6 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let preview = previewTask
         previewTask = nil
         preview?.cancel()
+        let (spec, runs) = (speculation, speculativeRuns)
+        (speculation, liveText, cleaned) = (nil, nil, nil)
         let samples = recorder.stop()
         Timing.log.info("release: key up")
         let system = SystemSample.now()
@@ -278,22 +283,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             Timing.mark("release: transcribed", since: t0)
             overlay.showWorking(heard: heard.text)
-            await process(Request(transcript: heard.text, selection: selection, context: snapshot),
-                          raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app, since: t0, system: system)
+            let request = Request(transcript: heard.text, selection: selection, context: snapshot)
+            // #43: the speculative run already saw this exact request: insert its result (waiting if still running).
+            var reused: (result: PipelineResult, calls: ModelCallRecorder)?
+            if let spec {
+                if LivePreview.sameInput(spec.request, request), let r = LivePreview.reusable(await spec.task.value) {
+                    reused = (r, spec.calls)
+                } else { spec.task.cancel() }
+            }
+            Timing.log.info("release: speculative runs \(runs), reused \(reused != nil ? "yes" : "no", privacy: .public)")
+            await process(request, raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app,
+                          reused: reused, since: t0, system: system)
         }
     }
 
     /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
-    /// earlier raw insert, whose text is replaced in place rather than inserted again.
+    /// earlier raw insert, whose text is replaced in place rather than inserted again. `reused`: a speculative run's
+    /// result and model call for this exact request (#43), applied without running the pipeline.
     private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
-                         app: NSRunningApplication?, cleanup: RawInsert? = nil, since t0: ContinuousClock.Instant,
+                         app: NSRunningApplication?, cleanup: RawInsert? = nil,
+                         reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
                          system: SystemSample = .now()) async {
         // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
         // Apple Intelligence off) still dictates raw.
         let complete: Pipeline.Complete
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
         let models = Settings.selection
-        let calls = ModelCallRecorder()
+        let calls = reused?.calls ?? ModelCallRecorder()
         let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
                                 cleanupModel: models.cleanupModel, editModel: models.editModel, features: DictationFeatures(.standard))
         let id = UUID()
@@ -311,7 +327,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Timing.mark("release: provider ready", since: t0)
         var request = request
         let result: PipelineResult
-        if let amend, amend.command != .change { result = PipelineResult(outcome: .nothing) } else {
+        if let amend, amend.command != .change { result = PipelineResult(outcome: .nothing) }
+        else if amend == nil, let reused { result = reused.result } else {
             if let amend { request.selection = amend.last.text.trimmingCharacters(in: .whitespacesAndNewlines) }
             result = await pipeline.run(request)
         }
@@ -415,21 +432,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return label
     }
 
-    /// While held, re-transcribes the growing recording (no boosting) for the overlay only.
+    /// While held, re-transcribes the growing recording for the overlay only.
     /// The loop is sequential, so a slow pass delays the next tick instead of overlapping it.
+    /// `live` (#43): boosts like the final pass, from the press's context, and at each pause runs the pipeline on the
+    /// transcript so far (`speculate`); otherwise unboosted, raw preview only.
     /// ponytail: re-runs the whole buffer each tick; window the tail if long dictations get slow.
-    private func startPreview() {
+    private func startPreview(live: Bool) {
         guard let transcriber else { return }
+        (speculation, speculativeRuns, liveText, cleaned) = (nil, 0, nil, nil)
+        let (ctx, sel) = (contextTask, selectionTask)
         previewTask = Task {
+            var fixed: LiveInput?
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
+                let tick = ContinuousClock.now
                 let samples = recorder.snapshot()
-                guard !Task.isCancelled, AudioGate.hasSpeech(samples),
-                      let text = try? await transcriber.transcribe(samples, boost: []).text,
+                guard !Task.isCancelled, AudioGate.hasSpeech(samples) else { continue }
+                if live, fixed == nil, let ctx { fixed = await liveInput(ctx, sel) }
+                guard let text = try? await transcriber.transcribe(samples, boost: fixed?.boost ?? []).text,
                       !Task.isCancelled, !text.isEmpty else { continue }
-                overlay.showPreview(text)
+                let previous = liveText
+                liveText = text
+                if let s = speculation, s.request.transcript != text { s.task.cancel() }  // new words: stale
+                // Not for a command on the last dictation (#49): release acts on that, not on this text.
+                if let fixed, fixed.selection != nil || lastInsert.flatMap({ InsertCommand(text, last: $0.text) }) == nil,
+                   LivePreview.shouldRun(text, lastRun: speculation?.request.transcript, previous: previous,
+                                         paused: LivePreview.paused(samples), edit: fixed.selection != nil) {
+                    speculate(Request(transcript: text, selection: fixed.selection, context: fixed.context), fixed, since: tick)
+                }
+                showLive()
             }
         }
+    }
+
+    /// What every speculative run of a press shares (#43): the context and selection captured at key-down, the boost
+    /// terms the final pass will use, and the model settings.
+    private struct LiveInput {
+        let context: ScreenSnapshot, selection: String?, boost: [VocabTerm]
+        let complete: Pipeline.Complete, models: ModelSettings.Selection, features: DictationFeatures
+    }
+
+    private func liveInput(_ ctx: Task<ScreenSnapshot, Never>, _ sel: Task<String?, Never>?) async -> LiveInput {
+        let context = await ctx.value
+        let selection = await sel?.value
+        let complete: Pipeline.Complete
+        do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
+        return LiveInput(context: context, selection: selection,
+                         boost: Pipeline.boostTerms(saved: store.terms, context: context,
+                                                    fromScreen: ContextSources(.standard).screenVocabulary),
+                         complete: complete, models: Settings.selection, features: DictationFeatures(.standard))
+    }
+
+    /// The latest speculative run of this press (#43) and its model call; the task returns nil once cancelled.
+    private var speculation: (request: Request, calls: ModelCallRecorder, task: Task<PipelineResult?, Never>)?
+    private var speculativeRuns = 0
+    /// The newest live transcript, and the latest cleaned preview with the transcript it ran on.
+    private var liveText: String?
+    private var cleaned: (input: String, shown: LivePreview.Shown)?
+
+    /// Runs the pipeline on the transcript so far for the overlay only: nothing is applied, saved or recorded in
+    /// history, and MLX keeps it out of the prompt cache (`LivePreview.speculative`).
+    private func speculate(_ request: Request, _ fixed: LiveInput, since tick: ContinuousClock.Instant) {
+        speculativeRuns += 1
+        let calls = ModelCallRecorder()
+        var pipeline = Pipeline(complete: calls.wrap(fixed.complete), vocabulary: store, cleanupModel: fixed.models.cleanupModel,
+                                editModel: fixed.models.editModel, features: fixed.features)
+        pipeline.remembers = false
+        let task = Task { [weak self] () -> PipelineResult? in
+            let r = await LivePreview.$speculative.withValue(true) { await pipeline.run(request) }
+            guard !Task.isCancelled else { return nil }
+            if let self, recording, let shown = LivePreview.shown(r, input: request.transcript, selection: request.selection) {
+                cleaned = (request.transcript, shown)
+                showLive()
+                Timing.mark("preview: cleaned shown", since: tick)
+            }
+            return r
+        }
+        speculation = (request, calls, task)
+    }
+
+    private func showLive() {
+        guard recording, let text = liveText else { return }
+        overlay.showPreview(text, cleaned: cleaned?.shown, input: cleaned?.input)
     }
 
     /// Where PopTalk last pasted; spaces the next dictation when the cursor position is unknown.

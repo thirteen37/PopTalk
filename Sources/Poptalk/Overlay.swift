@@ -56,10 +56,11 @@ final class Overlay {
         preview = nil
         show(Self.recordingHUD(preview: nil, note: note, strip: statusStrip()), for: nil)
     }
-    /// Provisional live transcript; long text keeps its tail so the latest words stay visible.
-    func showPreview(_ text: String) {
+    /// Provisional live transcript; long text keeps its tail so the latest words stay visible. `cleaned` (#43): the
+    /// latest speculative result, run on `input`; stale (greyed) once the transcript has moved on from it.
+    func showPreview(_ text: String, cleaned: LivePreview.Shown? = nil, input: String? = nil) {
         preview = text
-        show(Self.recordingHUD(preview: text, note: note, strip: statusStrip()), for: nil)
+        show(Self.recordingHUD(preview: text, cleaned: cleaned, input: input, note: note, strip: statusStrip()), for: nil)
     }
     /// `heard`: the final transcript; without it, the last preview (once) stays up above a small "Working…".
     func showWorking(heard: String? = nil) {
@@ -128,9 +129,26 @@ final class Overlay {
 
     // MARK: - States
 
-    static func recordingHUD(preview: String?, note: String?, strip: [StatusBadge]) -> HUD {
+    /// With a cleaned preview (#43): the raw transcript small on top, words the cleanup dropped struck through; the
+    /// cleaned text below, the words it changed underlined in the accent colour (an edit: "Correct →" Todoist).
+    static func recordingHUD(preview: String?, cleaned: LivePreview.Shown? = nil, input: String? = nil, note: String?,
+                             strip: [StatusBadge]) -> HUD {
         var h = HUD(glyph: .levels, tint: .systemRed, note: note, strip: strip)
-        if let preview {
+        if let preview, let cleaned {
+            let stale = input != preview
+            // Marks index `input`, which is `preview` when not stale.
+            (h.heard, h.heardMarks) = stale ? tail(preview, []) : tail(input!, cleaned.rawMarks)
+            h.heardTail = true
+            h.act = cleaned.act
+            h.actTint = .systemIndigo
+            if cleaned.act == nil {
+                (h.main, h.mainMarks) = tail(cleaned.text, cleaned.marks)
+                h.tail = true
+            } else {
+                (h.main, h.mainMarks) = (cleaned.text, cleaned.marks.map { NSRange($0, in: cleaned.text) })
+            }
+            if stale { h.mainColor = .secondaryLabelColor }
+        } else if let preview {
             h.main = PreviewText.tail(preview, limit: 400)
             h.tail = true
         } else {
@@ -139,6 +157,15 @@ final class Overlay {
             h.mainColor = .secondaryLabelColor
         }
         return h
+    }
+
+    /// `PreviewText.tail` of `text`, with `marks` (ranges in `text`) moved into the cut string.
+    private static func tail(_ text: String, _ marks: [Range<String.Index>]) -> (String, [NSRange]) {
+        let cut = PreviewText.tail(text, limit: 400)
+        let ns = marks.map { NSRange($0, in: text) }
+        guard cut != text else { return (cut, ns) }
+        let dropped = text.utf16.count - (cut.utf16.count - 1)  // "…" is one UTF-16 unit
+        return (cut, ns.filter { $0.location >= dropped }.map { NSRange(location: $0.location - dropped + 1, length: $0.length) })
     }
 
     static func workingHUD(_ text: String?) -> HUD {
@@ -233,9 +260,15 @@ struct HUD {
     /// `.secondaryLabelColor` means neutral: a grey tile (working, notices, confirmations).
     var tint: NSColor = .secondaryLabelColor
     var heard: String?
-    /// The action verb in the tint, in front of `main` ("Corrected" Todoist).
+    /// Live preview (#43): `heard` on one line like `tail`, with the words the cleanup dropped struck through.
+    var heardTail = false
+    var heardMarks: [NSRange] = []
+    /// The action verb in the tint (or `actTint`), in front of `main` ("Corrected" Todoist).
     var act: String?
+    var actTint: NSColor?
     var main = ""
+    /// Words of `main` the cleanup changed, underlined (#43).
+    var mainMarks: [NSRange] = []
     var mainColor: NSColor = .labelColor
     /// Live preview: one line, newest words at the trailing edge, the start fades.
     var tail = false
@@ -271,16 +304,26 @@ enum Capsule {
             bodyW = max(bodyW, size.width)
         }
 
-        if let h = hud.heard { place(wrapping(attr(h, 11.5, .regular, .secondaryLabelColor))) }
+        if let h = hud.heard {
+            let s = NSMutableAttributedString(attributedString: attr(h, 11.5, .regular, .secondaryLabelColor))
+            for r in hud.heardMarks {
+                s.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue, .foregroundColor: NSColor.tertiaryLabelColor], range: r)
+            }
+            place(hud.heardTail ? line(s) : wrapping(s))
+        }
         let main = NSMutableAttributedString()
-        if let a = hud.act { main.append(attr(a, 13, .semibold, hud.tint)) }
+        if let a = hud.act { main.append(attr(a, 13, .semibold, hud.actTint ?? hud.tint)) }
         if !hud.main.isEmpty {
+            let at = main.length + (hud.act == nil ? 0 : 1)
             main.append(attr((hud.act == nil ? "" : " ") + hud.main, 13, .medium, hud.mainColor))
+            for r in hud.mainMarks {
+                main.addAttributes([.underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: NSColor.controlAccentColor,
+                                    .foregroundColor: hud.mainColor == .labelColor ? NSColor.controlAccentColor : hud.mainColor],
+                                   range: NSRange(location: r.location + at, length: r.length))
+            }
         }
         if hud.tail {
-            let t = TailText(main)
-            let nat = main.size()
-            place((t, CGSize(width: min(ceil(nat.width) + 4, maxBody), height: ceil(nat.height))))
+            place(line(main))
         } else {
             place(wrapping(main))
         }
@@ -388,6 +431,12 @@ enum Capsule {
         p.lineSpacing = 1.5
         return NSAttributedString(string: s, attributes: [
             .font: NSFont.systemFont(ofSize: size, weight: weight), .foregroundColor: color, .paragraphStyle: p])
+    }
+
+    /// One line keeping its end in view (`TailText`).
+    private static func line(_ s: NSAttributedString) -> (NSView, CGSize) {
+        let nat = s.size()
+        return (TailText(s), CGSize(width: min(ceil(nat.width) + 4, maxBody), height: ceil(nat.height)))
     }
 
     private static func wrapping(_ s: NSAttributedString) -> (NSView, CGSize) {
