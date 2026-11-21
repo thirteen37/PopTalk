@@ -18,8 +18,66 @@ Everything runs on your Mac. No audio, text or screen content leaves it, unless 
 - **Edit the last dictation.** Tap right ⌥, then press and hold it again within 0.4 s, and say an instruction ("make it more formal"). It applies to the last dictation as if you had selected it, under the same conditions as the voice commands.
 - **Terminals.** In Ghostty, Terminal, iTerm2, kitty, WezTerm, Alacritty, Warp, Hyper and Tabby, undo and the commands above remove the dictated text with backspaces, since ⌘Z isn't a text undo there. They only work if you haven't typed since, and not for dictations containing a line break.
 - **Spoken formatting.** "quote … unquote", "open paren … close paren", "new line" and "new paragraph" are applied in code. Spoken numbers become digits where unambiguous ("twenty five percent" → 25%, "three thirty pm" → 3:30 PM); zero to nine stay words in prose.
-- **While models load.** If the language model isn't ready yet, dictation inserts the raw transcript, and the overlay offers **⏎ clean up now** once it is. Edits wait for the model.
+- **While models load.** If the language model isn't ready yet, dictation inserts the raw transcript, and the overlay offers **⏎ clean up now** once it is. Edits need the model: until it's ready they leave the selection unchanged.
 - **Safety net.** If the cleanup drops content (sentences, quoted or bracketed text, line breaks), PopTalk inserts the raw transcript instead.
+
+The hotkey, from press to the end of the undo window:
+
+```mermaid
+stateDiagram-v2
+    state "Idle" as Idle
+    state "Held, under 150 ms" as Arming
+    state "Tapped" as Tapped
+    state "Recording, live preview" as Recording
+    state "Working" as Working
+    state "Outcome, undo window" as Outcome
+    state "Notice" as Notice
+
+    [*] --> Idle
+    Idle --> Arming: right ⌥ down
+    Tapped --> Arming: down again within 0.4 s, edits the last dictation
+    Tapped --> Idle: no press within 0.4 s
+    Arming --> Tapped: released, a tap cancels
+    Arming --> Idle: another key, cancels
+    Arming --> Recording: still held at 150 ms
+    Arming --> Notice: speech model loading, or nothing to edit
+    Recording --> Idle: another key, cancels
+    Recording --> Working: released
+    Working --> Idle: no speech heard
+    Working --> Outcome: result applied
+    Working --> Notice: error
+    Notice --> Idle
+    Outcome --> Idle: Esc undoes, Return accepts an offer, or 5 s pass
+```
+
+What a release does with what was said:
+
+```mermaid
+stateDiagram-v2
+    state "Transcribe" as Transcribe
+    state which <<choice>>
+    state "Edit the selection" as Edit
+    state "Edit the last dictation" as EditLast
+    state "Delete from the last dictation" as Delete
+    state "Clean up the dictation" as Cleanup
+    state "Insert the raw transcript" as Raw
+    state "Apply, show the overlay" as Apply
+
+    [*] --> Transcribe
+    Transcribe --> which
+    which --> EditLast: tap-then-hold
+    which --> EditLast: change command, nothing selected
+    which --> Delete: delete command, nothing selected
+    which --> Edit: text selected
+    which --> Cleanup: otherwise
+    Cleanup --> Raw: model still loading, or cleanup dropped content
+    Cleanup --> Apply
+    Raw --> Apply
+    Edit --> Apply
+    EditLast --> Apply
+    Delete --> Apply
+    Apply --> [*]
+```
 
 ## How it works
 
@@ -28,6 +86,77 @@ Everything runs on your Mac. No audio, text or screen content leaves it, unless 
 3. **Language model:** Gemma 4 E2B running in-process with [MLX](https://github.com/ml-explore/mlx-swift-lm), with a LoRA fine-tune trained for PopTalk's two jobs (`adapters/gemma-4-e2b-poptalk-v3`, fused at load). Before cleanup, words that match a term on screen or in your vocabulary up to case are given its spelling ("meal prep" → "Meal Prep"). Gemma 4 E4B (base model, with its own tuned prompts) is an option for Macs with more memory. LM Studio and Apple's on-device model can be used instead.
 
 On an M-series Mac, the time from releasing the key to inserted text is usually under a second. The fixed start of each prompt (instructions, screen context) is cached between requests, which cuts prompt processing time.
+
+While the key is held, screen context and the selection are read alongside the recording, so they're ready at release:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant App as PopTalk
+    participant Mic as Microphone
+    participant Screen as Screen context
+    participant ASR as Parakeet
+    participant LLM as Gemma, MLX
+    participant Overlay
+
+    User->>App: hold right ⌥
+    App->>Mic: start recording
+    Note over App: 150 ms later, unless cancelled
+    par
+        App->>Screen: read field, nearby text, title, OCR
+    and
+        App->>Screen: read the selection, or take the last dictation
+    end
+    App->>Overlay: show recording
+    loop every 0.5 s while held
+        App->>ASR: transcribe the audio so far
+        App->>Overlay: live transcript
+        opt paused with new words, live preview on
+            App->>LLM: speculative cleanup or edit
+            LLM-->>App: result
+            App->>Overlay: cleaned text or planned edit, changes marked
+        end
+    end
+```
+
+At release:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant App as PopTalk
+    participant ASR as Parakeet
+    participant LLM as Gemma, MLX
+    participant Field as Focused app
+    participant Overlay
+    participant History
+
+    User->>App: release right ⌥
+    App->>ASR: transcribe, boosted by vocabulary and screen terms
+    ASR-->>App: transcript
+    App->>Overlay: what was heard
+    alt delete command on the last dictation
+        Note over App: no model needed
+    else live preview ran on this exact transcript
+        Note over App: reuse its result
+    else edit: selection, last dictation, or change command
+        App->>LLM: edit prompt, cached prefix
+        LLM-->>App: action and text
+    else dictation
+        App->>LLM: cleanup prompt, cached prefix
+        LLM-->>App: cleaned text
+        Note over App: safety net, raw transcript if content was dropped
+    end
+    App->>Field: paste, or replace the last dictation
+    App->>Overlay: heard and inserted, Esc to undo
+    opt history on
+        App->>History: request, reply and outcome
+    end
+    opt Esc within the undo window
+        User->>App: Esc
+        App->>Field: ⌘Z, or backspaces in a terminal
+    end
+```
 
 With the default model, PopTalk uses about 1.5 GB of memory; with E4B, about 2.9 GB. PopTalk keeps a text-only copy of the Gemma model (without its vision and audio weights) and reads Gemma's per-layer embeddings from that file on disk rather than holding them in memory.
 
