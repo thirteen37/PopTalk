@@ -15,17 +15,9 @@ extension Pipeline {
     ///   mixing dictionary words and names ("Call Priya") gives only its names;
     /// - a term `screen` shows in more than one spelling ("PopTalk" and "Poptalk", "Meal Prep" and "meal prep").
     public static func recaseTerms(_ transcript: String, terms: [String], screen: String) -> String {
-        var seen = Set<String>()
-        let candidates = terms.flatMap { t -> [String] in
-            let words = t.split(separator: " ").map(String.init)
-            let common = words.map(isCommonWord)
-            if words.count == 1 { return common[0] ? [] : [t] }
-            return Set(common).count == 1 ? [t] : zip(words, common).filter { !$1 }.map(\.0)
-        }
-        .filter { seen.insert($0.lowercased()).inserted }
-        .sorted { $0.count > $1.count }
-
-        return candidates.reduce(transcript) { text, term in
+        recaseCandidates(terms).reduce(transcript) { text, term in
+            // ponytail: a Title Case UI label made of common words ("Recent Files") is recased like "Meal Prep";
+            // drop all-dictionary phrases too if history shows wrong ones.
             let chars = term.filter { !$0.isWhitespace }.map { NSRegularExpression.escapedPattern(for: String($0)) }
             guard !chars.isEmpty, let re = try? NSRegularExpression(
                 pattern: #"(?<![\p{L}\p{N}])"# + chars.joined(separator: #"\s*"#) + #"(?![\p{L}\p{N}])"#, options: .caseInsensitive)
@@ -42,6 +34,20 @@ extension Pipeline {
             }
             return out as String
         }
+    }
+
+    /// The terms worth recasing, longest first: no single dictionary words, and a phrase mixing dictionary
+    /// words and names gives its names.
+    static func recaseCandidates(_ terms: [String]) -> [String] {
+        var seen = Set<String>()
+        return terms.flatMap { t -> [String] in
+            let words = t.split(separator: " ").map(String.init)
+            let common = words.map(isCommonWord)
+            if words.count == 1 { return common[0] ? [] : [t] }
+            return Set(common).count == 1 ? [t] : zip(words, common).filter { !$1 }.map(\.0)
+        }
+        .filter { seen.insert($0.lowercased()).inserted }
+        .sorted { $0.count > $1.count }
     }
 
     nonisolated(unsafe) private static var common: [String: Bool] = [:]

@@ -110,6 +110,7 @@ public struct BenchCase: Decodable, Sendable {
         }
         var run = BenchRun(output: text, action: action, vocabOffer: offer, seconds: seconds, failures: f)
         run.modelAction = r.modelAction
+        if r.skippedLLM { run.skippedLLM = true }
         if let e = expectAction, let m = r.modelAction { run.modelActionOK = Self.family(e) == Self.family(m) }
         return run
     }
@@ -144,6 +145,8 @@ public struct BenchRun: Codable, Sendable {
     public var modelAction: String? = nil
     /// `modelAction` is in `expectAction`'s family; nil when either is missing.
     public var modelActionOK: Bool? = nil
+    /// The skip gate inserted it without the cleanup model (#75); nil otherwise.
+    public var skippedLLM: Bool? = nil
     public var passed: Bool { failures.isEmpty }
     /// A guard (insert ask, blank text) changed the model's action family.
     public var overridden: Bool { modelAction.map { BenchCase.family($0) != BenchCase.family(action) } ?? false }

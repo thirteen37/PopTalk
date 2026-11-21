@@ -29,10 +29,13 @@ public struct PipelineResult: Equatable, Sendable {
     public var degraded: Bool
     /// The edit model's parsed action (`EditAction` raw value) before code guards; nil without an edit model reply (#54).
     public var modelAction: String?
+    /// The skip gate inserted the dictation without the cleanup model (#75).
+    public var skippedLLM: Bool
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
-                modelAction: String? = nil) {
+                modelAction: String? = nil, skippedLLM: Bool = false) {
         self.outcome = outcome
+        self.skippedLLM = skippedLLM
         self.vocabularyOffer = vocabularyOffer
         self.remembered = remembered
         self.degraded = degraded
@@ -51,9 +54,12 @@ public struct Pipeline: Sendable {
     let vocabulary: VocabularyStore
     let cleanupModel: String, editModel: String
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
+    /// Insert a clean dictation without the cleanup model (`skipsLLM`, #75 prototype).
+    let skipGate: Bool
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
-                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20) {
+                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, skipGate: Bool = false) {
+        self.skipGate = skipGate
         self.complete = complete
         self.vocabulary = vocabulary
         self.cleanupModel = cleanupModel
@@ -76,10 +82,14 @@ public struct Pipeline: Sendable {
 
         guard let selection = r.selection, !selection.isEmpty else {
             let screen = r.context.windowTitle + "\n" + Prompts.trimmedContext(r.context)
+            let terms = Self.boostTerms(saved: vocabulary.terms, context: r.context).map(\.text)
             let transcript = Self.dictationPrepass(!Self.recasesTerms(cleanupModel) ? transcript
-                : Self.recaseTerms(transcript, terms: Self.boostTerms(saved: vocabulary.terms, context: r.context).map(\.text), screen: screen))
-            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
+                : Self.recaseTerms(transcript, terms: terms, screen: screen))
             let space = Self.leadingSpace(r.context)
+            if skipGate, Self.skipsLLM(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)) {
+                return PipelineResult(outcome: .insert(space + transcript, label: "Dictated"), skippedLLM: true)
+            }
+            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
