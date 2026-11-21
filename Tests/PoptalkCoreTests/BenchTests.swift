@@ -155,3 +155,10 @@ private func editReport(_ runs: [(String?, String, Bool?)]) -> BenchReport {
     #expect(r.cases[0].runs[0].modelAction == nil)
     #expect(r.summaries()[0].modelActionRuns == 0)
 }
+
+@Test func oracleRecaseFixesOnScreenTermsOnly() throws {
+    let c = try one(#"{"id":"x","kind":"dictation","transcript":"t","context":"Projects: Meal Prep. Docs: CloudFront","mustContain":["Meal Prep","CloudFront","Todoist"]}"#)
+    #expect(c.oracleRecase("refer to my meal  prep project, restart cloud front, open todoist")
+        == "refer to my Meal Prep project, restart CloudFront, open todoist")  // Todoist isn't on screen
+    #expect(c.oracleRecase("mealprepper") == "mealprepper")  // whole words only
+}
