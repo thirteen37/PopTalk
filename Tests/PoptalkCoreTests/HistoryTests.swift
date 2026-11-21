@@ -225,6 +225,7 @@ private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath:
     for m in [a, b] {
         m.startSync(copyExisting: false, now: t0)
         m.append(request(at: t0))
+        m.flush()  // each store has its own queue: B's write must land before A's wipe
     }
     a.wipe(allMacs: true, now: t0 + 60)
     a.flush()
@@ -239,6 +240,7 @@ private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath:
     b.checkSync()
     c.checkSync()
     b.flush()
+    c.flush()  // C's copy must land before B reads it
     #expect(!exists(b.directory) && !exists(b.sync!.file))
     #expect(b.stats().requests == 1)  // both see only C's request
     #expect(c.stats().requests == 1)
@@ -254,6 +256,7 @@ private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath:
     let (b, _) = mac(root)
     a.append(request(at: t0))
     b.append(request(at: t0))
+    b.flush()  // B's queue isn't A's: wait for B's write, or the check races it
     a.wipe()
     a.flush()
     #expect(!exists(a.directory) && !exists(a.sync!.file) && exists(b.sync!.file))
