@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Set on the system-wide element, this is the process-wide AX timeout (default ~6 s): a hung app can't freeze us.
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.25)
         if ContextSources(.standard).ocr { ScreenContext.prewarmOCR() }
+        history.checkSync()  // honors another Mac's "wipe all Macs"
         if !AXIsProcessTrusted() {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
@@ -435,7 +436,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastInsert: LastInsert<AXUIElement>?
 
     /// Opt-in usage history (#38); writes nothing unless enabled in Settings.
-    let history = HistoryStore { UserDefaults.standard.bool(forKey: "historyEnabled") }
+    /// With "historySync" on too, also syncs through iCloud Drive (#76).
+    let history = HistoryStore(sync: .init(defaults: .standard) {
+        UserDefaults.standard.bool(forKey: "historyEnabled") && UserDefaults.standard.bool(forKey: "historySync")
+    }) { UserDefaults.standard.bool(forKey: "historyEnabled") }
     /// The request whose vocabulary offer is showing; resolved as accepted or declined.
     private var pendingOffer: UUID?
 

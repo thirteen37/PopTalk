@@ -88,25 +88,88 @@ extension LastInsert {
 
 /// Append-only JSONL history in Application Support, written on a background queue. Writes are
 /// dropped on error, and nothing is written while `enabled` returns false.
+///
+/// With `sync` on (#76), each line also goes to this Mac's own file in an iCloud Drive folder, and reads merge
+/// every Mac's file. Audio side files stay local. Nothing touches the folder while sync is off, except
+/// `deleteSyncedCopy`.
 public final class HistoryStore: Sendable {
     public static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Poptalk/history")
     }
 
+    /// Where the Macs' history files meet: a folder in iCloud Drive, so no entitlement is needed.
+    public static var iCloudDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/PopTalk/history")
+    }
+
+    /// This Mac's id for its synced file, made on first use.
+    public static func deviceID(_ defaults: UserDefaults) -> String {
+        if let id = defaults.string(forKey: "historyDeviceID") { return id }
+        let id = UUID().uuidString
+        defaults.set(id, forKey: "historyDeviceID")
+        return id
+    }
+
+    public struct Sync: Sendable {
+        public let root: URL
+        public let deviceID: String
+        /// Read per write and per read, so toggling takes effect at once.
+        public let enabled: @Sendable () -> Bool
+        nonisolated(unsafe) let defaults: UserDefaults  // thread-safe; also keeps the newest wipe honored
+        /// This Mac's file: only this Mac writes it, so iCloud never sees conflicting edits.
+        public var file: URL { root.appendingPathComponent("history-\(deviceID).jsonl") }
+
+        public init(root: URL = HistoryStore.iCloudDirectory, defaults: UserDefaults, enabled: @escaping @Sendable () -> Bool) {
+            (self.root, self.deviceID, self.enabled, self.defaults) = (root, HistoryStore.deviceID(defaults), enabled, defaults)
+        }
+
+        /// Milliseconds since 1970 of the newest wipe this Mac has honored, made, or started syncing after.
+        var wipeSeen: Int {
+            get { defaults.integer(forKey: "historyWipeSeen") }
+            nonmutating set { defaults.set(newValue, forKey: "historyWipeSeen") }
+        }
+    }
+
     public struct Stats: Equatable, Sendable {
+        /// Requests across every Mac when syncing; bytes of this Mac's history directory.
         public var requests: Int
         public var bytes: Int
+        /// Macs with a synced file (this one included once it has written), and when this Mac's last changed.
+        public var devices = 0
+        public var lastSync: Date?
+
+        public init(requests: Int, bytes: Int, devices: Int = 0, lastSync: Date? = nil) {
+            (self.requests, self.bytes, self.devices, self.lastSync) = (requests, bytes, devices, lastSync)
+        }
     }
 
     public let directory: URL
     public var file: URL { directory.appendingPathComponent("history.jsonl") }
+    public let sync: Sync?
     private let enabled: @Sendable () -> Bool
     private let queue = DispatchQueue(label: "io.lyx.poptalk.history", qos: .utility)
 
-    public init(directory: URL = HistoryStore.defaultDirectory, enabled: @escaping @Sendable () -> Bool) {
+    public init(directory: URL = HistoryStore.defaultDirectory, sync: Sync? = nil, enabled: @escaping @Sendable () -> Bool) {
         self.directory = directory
+        self.sync = sync
         self.enabled = enabled
+    }
+
+    /// `sync` when it's on.
+    private var syncing: Sync? { sync.flatMap { $0.enabled() ? $0 : nil } }
+
+    private static func append(_ line: Data, to file: URL) {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: file.path) {
+            fm.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600])
+        }
+        guard let h = try? FileHandle(forWritingTo: file) else { return }
+        defer { try? h.close() }
+        _ = try? h.seekToEnd()
+        try? h.write(contentsOf: line)
     }
 
     public var isEnabled: Bool { enabled() }
@@ -128,14 +191,8 @@ public final class HistoryStore: Sendable {
         queue.async { [self] in
             guard enabled(), var line = try? Self.encoder.encode(record) else { return }
             line.append(0x0A)
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            if !FileManager.default.fileExists(atPath: file.path) {
-                FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600])
-            }
-            guard let h = try? FileHandle(forWritingTo: file) else { return }
-            defer { try? h.close() }
-            _ = try? h.seekToEnd()
-            try? h.write(contentsOf: line)
+            Self.append(line, to: file)
+            if let syncing { Self.append(line, to: syncing.file) }
         }
     }
 
@@ -148,20 +205,108 @@ public final class HistoryStore: Sendable {
         }
     }
 
-    /// Deletes the whole history directory, after any pending writes.
-    public func wipe() {
-        queue.async { [self] in try? FileManager.default.removeItem(at: directory) }
+    /// Deletes the whole history directory, after any pending writes, and when syncing this Mac's synced file.
+    /// `allMacs` (syncing only) deletes the synced folder instead and leaves a `wiped-<ms>` tombstone that the
+    /// other Macs honor at their next `checkSync`.
+    public func wipe(allMacs: Bool = false, now: Date = Date()) {
+        queue.async { [self] in
+            let fm = FileManager.default
+            try? fm.removeItem(at: directory)
+            guard let syncing else { return }
+            guard allMacs else { try? fm.removeItem(at: syncing.file); return }
+            let t = Int(now.timeIntervalSince1970 * 1000)
+            try? fm.removeItem(at: syncing.root)
+            try? fm.createDirectory(at: syncing.root, withIntermediateDirectories: true)
+            fm.createFile(atPath: syncing.root.appendingPathComponent("wiped-\(t)").path, contents: nil)
+            syncing.wipeSeen = t
+        }
     }
 
-    /// Request count and total size on disk, after any pending writes. Reads the whole file: call it off the hotkey path.
+    /// Call when the user turns sync on: wipes made before `now` are not this Mac's to honor, and
+    /// `copyExisting` (after the user confirms) replaces this Mac's synced file with all of its local history.
+    public func startSync(copyExisting: Bool, now: Date = Date()) {
+        queue.async { [self] in
+            guard let sync else { return }
+            sync.wipeSeen = max(sync.wipeSeen, Int(now.timeIntervalSince1970 * 1000))
+            guard copyExisting, let data = try? Data(contentsOf: file) else { return }
+            try? FileManager.default.removeItem(at: sync.file)
+            Self.append(data, to: sync.file)
+        }
+    }
+
+    /// Deletes this Mac's synced file, e.g. after the user turns sync off. Other Macs' files stay.
+    public func deleteSyncedCopy() {
+        queue.async { [self] in if let sync { try? FileManager.default.removeItem(at: sync.file) } }
+    }
+
+    /// Honors another Mac's "wipe all Macs" (at launch, and before each stats read).
+    public func checkSync() { queue.async { [self] in honorWipe() } }
+
+    private func honorWipe() {
+        guard let syncing, let names = try? FileManager.default.contentsOfDirectory(atPath: syncing.root.path),
+              let t = names.compactMap({ $0.hasPrefix("wiped-") ? Int($0.dropFirst(6)) : nil }).max(),
+              t > syncing.wipeSeen else { return }
+        try? FileManager.default.removeItem(at: directory)
+        try? FileManager.default.removeItem(at: syncing.file)
+        syncing.wipeSeen = t
+    }
+
+    /// The files to merge: this Mac's, then when syncing every downloaded Mac's synced file (including this
+    /// Mac's own, whose lines repeat local ones), and how many Macs have one. Evicted files are asked to
+    /// download and skipped until they have.
+    private func sources() -> (files: [URL], devices: Int) {
+        guard let syncing, let names = try? FileManager.default.contentsOfDirectory(atPath: syncing.root.path) else { return ([file], 0) }
+        var files = [file], devices = 0
+        for name in names where name.hasSuffix(".jsonl") || name.hasSuffix(".jsonl.icloud") {
+            // An evicted file shows as ".history-<id>.jsonl.icloud" (or dataless, with its own name, on newer macOS).
+            let real = name.hasPrefix(".") && name.hasSuffix(".icloud") ? String(name.dropFirst().dropLast(7)) : name
+            guard real.hasPrefix("history-"), real.hasSuffix(".jsonl") else { continue }
+            devices += 1
+            let url = syncing.root.appendingPathComponent(real)
+            let status = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus
+            if real != name || status == .notDownloaded {
+                try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+            } else {
+                files.append(url)
+            }
+        }
+        return (files, devices)
+    }
+
+    private struct Key: Decodable { var type: String; var id: UUID; var at: Date }
+
+    private func merged(_ files: [URL]) -> [(key: Key, line: Data)] {
+        var seen = Set<String>(), out: [(key: Key, line: Data)] = []
+        for f in files {
+            guard let text = try? String(contentsOf: f, encoding: .utf8) else { continue }
+            for l in text.split(separator: "\n") {
+                let line = Data(l.utf8)
+                guard let k = try? Self.decoder.decode(Key.self, from: line),  // a malformed line is skipped
+                      seen.insert(k.type == "request" ? k.id.uuidString : String(l)).inserted else { continue }
+                out.append((k, line))
+            }
+        }
+        return out.sorted { $0.key.at < $1.key.at }  // stable: same-time lines keep file order
+    }
+
+    /// Every JSONL line in time order: this Mac's, plus when syncing every Mac's, with each request once.
+    /// Reads every file: call it off the hotkey path.
+    public func records() -> [Data] {
+        queue.sync { honorWipe(); return merged(sources().files).map(\.line) }
+    }
+
+    /// Request count (merged as in `records`), size on disk and sync status, after any pending writes.
+    /// Reads every file: call it off the hotkey path.
     public func stats() -> Stats {
         queue.sync {
+            honorWipe()
             let fm = FileManager.default
-            let requests = (try? String(contentsOf: file, encoding: .utf8))
-                .map { $0.components(separatedBy: #""type":"request""#).count - 1 } ?? 0
+            let (files, devices) = sources()
+            let requests = merged(files).count { $0.key.type == "request" }
             let bytes = ((try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? [])
                 .reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
-            return Stats(requests: requests, bytes: bytes)
+            let last = syncing.flatMap { try? $0.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate }
+            return Stats(requests: requests, bytes: bytes, devices: devices, lastSync: last)
         }
     }
 
