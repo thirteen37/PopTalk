@@ -15,15 +15,30 @@ public struct PrefixPlan: Equatable, Sendable {
 /// Picks the entry sharing the longest prefix with `prompt` that can be cut back to that prefix exactly (`maxTrim`:
 /// how many trailing tokens it can drop), and a snapshot point: the longest prefix shared with a `recent` prompt,
 /// i.e. the part that repeats (a kind's system prompt, unchanged screen context), when that's `minGain` tokens
-/// past what's reused. The last token is never reused: the model must run it for the first logits.
-public func prefixPlan(_ prompt: [Int], entries: [(tokens: [Int], maxTrim: Int)], recent: [[Int]], minGain: Int = 32) -> PrefixPlan {
+/// past what's reused. Prefixes under `minReuse` tokens are neither reused nor stored. The last token is never
+/// reused: the model must run it for the first logits.
+public func prefixPlan(_ prompt: [Int], entries: [(tokens: [Int], maxTrim: Int)], recent: [[Int]],
+                       minReuse: Int = 0, minGain: Int = 32) -> PrefixPlan {
     let limit = max(prompt.count - 1, 0)
     var plan = PrefixPlan(entry: nil, keep: 0)
     for (i, e) in entries.enumerated() {
         let keep = min(sharedPrefix(e.tokens, prompt), limit)
-        if keep > plan.keep, e.tokens.count - keep <= e.maxTrim { plan = PrefixPlan(entry: i, keep: keep) }
+        if keep >= minReuse, keep > plan.keep, e.tokens.count - keep <= e.maxTrim { plan = PrefixPlan(entry: i, keep: keep) }
     }
     let boundary = min(recent.map { sharedPrefix($0, prompt) }.max() ?? 0, limit)
-    if boundary >= plan.keep + minGain { plan.snapshot = boundary }
+    if boundary >= max(minReuse, plan.keep + minGain) { plan.snapshot = boundary }
     return plan
+}
+
+/// Least-recently-used entries under a byte budget (#42): `entries` (most recent first) with `new` in front, then
+/// the least recent dropped until the total fits. An entry bigger than the whole budget is never stored.
+public func lruInsert<T>(_ new: T, bytes: Int, into entries: [(item: T, bytes: Int)], budget: Int) -> [(item: T, bytes: Int)] {
+    guard bytes <= budget else { return lruFit(entries, budget: budget) }
+    return lruFit([(new, bytes)] + entries, budget: budget)
+}
+
+/// The most recent `entries` whose total fits `budget`.
+public func lruFit<T>(_ entries: [(item: T, bytes: Int)], budget: Int) -> [(item: T, bytes: Int)] {
+    var total = 0
+    return Array(entries.prefix { total += $0.bytes; return total <= budget })
 }

@@ -126,7 +126,9 @@ public enum MLXProvider {
         let start = Date()
         for id in Set(preload) { try await prepare(id) { _ in } }
         let meta = ["loadSeconds": String(format: "%.2f", Date().timeIntervalSince(start)),
-                    "footprintMB": "\(footprintMB())"]
+                    "footprintMB": "\(footprintMB())",
+                    "promptCache": PrefixCache.enabled ? "on" : "off", "promptCacheMinReuse": "\(PrefixCache.minReuse)",
+                    "promptCacheBudgetMB": "\(PrefixCache.budgetBytes >> 20)"]
         return (complete, meta)
     }
 
@@ -140,11 +142,12 @@ public enum MLXProvider {
                                       additionalContext: ["enable_thinking": false])
                 let lm = try await container.prepare(input: input)
                 let tokens = lm.text.tokens.asArray(Int.self)
-                let (plan, entry, shared) = prefixes.plan(tokens)
+                let enabled = PrefixCache.enabled
+                let (plan, entry, shared) = prefixes.plan(tokens, enabled: enabled)
                 ModelCallRecorder.current?.prompt(tokens: tokens.count, shared: shared)
                 timing.info("llm \(name, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
                 let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0)
-                let stream = if PrefixCache.enabled {
+                let stream = if enabled {
                     try await container.perform(nonSendable: lm) { context, lm in
                         try MLXProvider.generate(lm, tokens, plan, entry, prefixes, parameters, context, name)
                     }
@@ -191,9 +194,10 @@ public enum MLXProvider {
             }
             let copy = cache.map { $0.copy() }
             eval(copy)
-            let mb = copy.flatMap(\.state).reduce(0) { $0 + $1.nbytes } / 1_048_576
-            prefixes.insert(.init(tokens: Array(tokens[..<end]), cache: copy, maxTrim: copy.map(\.maxTrimCount).min() ?? 0))
-            timing.info("llm \(name, privacy: .public) prefix-cache stored \(end) tok \(mb) MB")
+            let bytes = copy.flatMap(\.state).reduce(0) { $0 + $1.nbytes }
+            let total = prefixes.insert(.init(tokens: Array(tokens[..<end]), cache: copy, maxTrim: copy.map(\.maxTrimCount).min() ?? 0),
+                                        bytes: bytes)
+            timing.info("llm \(name, privacy: .public) prefix-cache stored \(end) tok \(bytes >> 20) MB, total \(total) MB")
             start = end
         }
         timing.info("llm \(name, privacy: .public) prefix-reused \(plan.keep)/\(tokens.count) tok")
@@ -211,10 +215,9 @@ public enum MLXProvider {
     }
 }
 
-/// Prompt-prefix KV snapshots for one loaded model (#42): a few caches, each holding exactly a token prefix that
-/// recent prompts repeat (a kind's system prompt, unchanged screen context), so a prompt starting with it skips
-/// that much prefill. One per load: unloading or reloading the model drops them.
-// ponytail: a fixed entry count, not a byte budget (per-entry MB is in the timing log); add one if prompts grow a lot.
+/// Prompt-prefix KV snapshots for one loaded model (#42): caches each holding exactly a token prefix that recent
+/// prompts repeat (a kind's system prompt, unchanged screen context), so a prompt starting with it skips that much
+/// prefill. One per load: unloading or reloading the model drops them.
 final class PrefixCache: @unchecked Sendable {
     /// `maxTrim`: how many trailing tokens every layer can drop exactly (a sliding window that has wrapped can't).
     struct Entry: @unchecked Sendable { let tokens: [Int]; let cache: [KVCache]; let maxTrim: Int }
@@ -224,27 +227,39 @@ final class PrefixCache: @unchecked Sendable {
         ProcessInfo.processInfo.environment["POPTALK_PROMPT_CACHE"] != "0"
             && (UserDefaults.standard.object(forKey: "mlxPromptCache") as? Bool ?? true)
     }
-    /// Room for each prompt kind's system prompt plus a screen-context prefix or two.
-    static let maxEntries = 4, maxRecent = 8
+    /// Shorter prefixes are prefilled as usual: one prefill step (512 tokens) is where reuse starts to pay off.
+    /// `POPTALK_PROMPT_CACHE_MIN` overrides it for bench sweeps.
+    static let minReuse = ProcessInfo.processInfo.environment["POPTALK_PROMPT_CACHE_MIN"].flatMap(Int.init) ?? 512
+    /// Per model. Holds E4B with the long GEPA prompts' dictation (~30 MB) and edit (~80 MB) system-prompt entries plus
+    /// a screen-context one; v3's entries are 5–20 MB.
+    static let budgetBytes = 200 << 20
+    /// Prompts the next one is compared with for a snapshot point: both kinds, a few presses back.
+    static let maxRecent = 8
 
     private let lock = NSLock()
-    private var entries: [Entry] = []  // most recently used first
+    private var entries: [(item: Entry, bytes: Int)] = []  // most recently used first
     private var recent: [[Int]] = []  // prompts, newest first
 
     /// Plans `tokens` against the entries (marking the one it uses as most recent) and records it as the newest
-    /// prompt. `shared`: tokens shared with the previous prompt, for history.
-    func plan(_ tokens: [Int]) -> (plan: PrefixPlan, entry: Entry?, shared: Int) {
+    /// prompt. `shared`: tokens shared with the previous prompt, for history. Disabled: drops the entries, plans none.
+    func plan(_ tokens: [Int], enabled: Bool) -> (plan: PrefixPlan, entry: Entry?, shared: Int) {
         lock.withLock {
-            let plan = prefixPlan(tokens, entries: entries.map { ($0.tokens, $0.maxTrim) }, recent: recent)
+            if !enabled { entries = [] }
+            let plan = enabled ? prefixPlan(tokens, entries: entries.map { ($0.item.tokens, $0.item.maxTrim) }, recent: recent,
+                                            minReuse: Self.minReuse) : PrefixPlan(entry: nil, keep: 0)
             let entry = plan.entry.map { entries.remove(at: $0) }
             if let entry { entries.insert(entry, at: 0) }
             let shared = recent.first.map { sharedPrefix($0, tokens) } ?? 0
             recent = Array(([tokens] + recent).prefix(Self.maxRecent))
-            return (plan, entry, shared)
+            return (plan, entry?.item, shared)
         }
     }
 
-    func insert(_ entry: Entry) {
-        lock.withLock { entries = Array(([entry] + entries).prefix(Self.maxEntries)) }
+    /// Stores `entry` unless it alone exceeds the budget, evicting the least recently used to fit. Returns the total MB.
+    func insert(_ entry: Entry, bytes: Int) -> Int {
+        lock.withLock {
+            entries = lruInsert(entry, bytes: bytes, into: entries, budget: Self.budgetBytes)
+            return entries.reduce(0) { $0 + $1.bytes } >> 20
+        }
     }
 }
