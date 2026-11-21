@@ -75,9 +75,9 @@ private func dictate(_ transcript: String, reply: @escaping @Sendable ([ChatMess
         m.last!.content.components(separatedBy: "<transcript>")[1].components(separatedBy: "</transcript>")[0]
     }
     #expect(echo == .insert(formatted, label: "Dictated"))
-    // Straight quotes from the model are fine too.
+    // Straight quotes from the model pass the guards and get the curly ones back (#75).
     let straight = "I said \"replace this with\" and it was just put verbatim.\n\nThanks."
-    #expect(await dictate(said) { _ in straight } == .insert(straight, label: "Dictated"))
+    #expect(await dictate(said) { _ in straight } == .insert("I said “replace this with” and it was just put verbatim.\n\nThanks.", label: "Dictated"))
     // The raw fallback is formatted as well.
     #expect(await dictate(said) { _ in "" } == .insert(formatted, label: "Dictated (raw)"))
 }
