@@ -126,3 +126,136 @@ private func lines(_ store: HistoryStore) throws -> [Data] {
     #expect(!String(decoding: line, as: UTF8.self).contains("speechModel"))
     #expect(try HistoryStore.decoder.decode(HistoryRequest.self, from: line).speechModel == nil)
 }
+
+// MARK: iCloud sync (#76). A temp directory stands in for iCloud Drive.
+
+private func defaults(_ name: String = "poptalk-test-\(UUID())") -> UserDefaults { UserDefaults(suiteName: name)! }
+
+/// A Mac with its own local history and defaults, syncing via `root` while its defaults' "sync" is true.
+private func mac(_ root: URL, sync on: Bool = true) -> (HistoryStore, UserDefaults) {
+    let name = "poptalk-test-\(UUID())"
+    let d = defaults(name)
+    d.set(on, forKey: "sync")
+    let sync = HistoryStore.Sync(root: root, defaults: d) { defaults(name).bool(forKey: "sync") }
+    return (HistoryStore(directory: tempDir(), sync: sync) { true }, d)
+}
+
+private func request(at: Date) -> HistoryRequest {
+    var r = sample()
+    r.at = at
+    return r
+}
+
+private func encoded(_ r: some Encodable) throws -> String { String(decoding: try HistoryStore.encoder.encode(r), as: UTF8.self) }
+
+private func contents(_ url: URL) -> String? { try? String(contentsOf: url, encoding: .utf8) }
+
+private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
+
+@Test func deviceIDIsAStableUUIDAndNamesTheDeviceFile() {
+    let d = defaults()
+    let id = HistoryStore.deviceID(d)
+    #expect(UUID(uuidString: id) != nil && HistoryStore.deviceID(d) == id)
+    #expect(HistoryStore.deviceID(defaults()) != id)
+    let root = tempDir()
+    let sync = HistoryStore.Sync(root: root, defaults: d) { true }
+    #expect(sync.deviceID == id && sync.file == root.appendingPathComponent("history-\(id).jsonl"))
+}
+
+@Test func syncOffWritesNothingToICloud() {
+    let root = tempDir()
+    let (store, _) = mac(root, sync: false)
+    store.append(sample())
+    store.saveFile("a.m4a") { try Data("audio".utf8).write(to: $0) }
+    store.checkSync()
+    #expect(store.stats().requests == 1)
+    #expect(!exists(root))
+}
+
+@Test func syncOnMirrorsNewLinesPerWriteAndCopiesOldOnesOnlyWhenAsked() throws {
+    let root = tempDir()
+    let (store, d) = mac(root, sync: false)
+    let (r1, r2) = (request(at: t0), request(at: t0 + 1))
+    store.append(r1)
+    store.flush()
+    d.set(true, forKey: "sync")  // read per write: takes effect at once
+    store.startSync(copyExisting: false)
+    store.append(r2)
+    store.saveFile("a.m4a") { try Data("audio".utf8).write(to: $0) }
+    store.flush()
+    let synced = try #require(store.sync?.file)
+    #expect(try contents(synced) == encoded(r2) + "\n")  // no copy without the confirmation, and no audio
+    #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == [synced.lastPathComponent])
+    store.startSync(copyExisting: true)
+    store.flush()
+    #expect(try contents(synced) == encoded(r1) + "\n" + encoded(r2) + "\n")
+    #expect(try FileManager.default.attributesOfItem(atPath: synced.path)[.posixPermissions] as? Int == 0o600)
+    d.set(false, forKey: "sync")
+    store.append(request(at: t0 + 2))
+    store.flush()
+    #expect(try contents(synced) == encoded(r1) + "\n" + encoded(r2) + "\n")  // off: stops writing, leaves the file
+    store.deleteSyncedCopy()
+    store.flush()
+    #expect(!exists(synced))
+}
+
+@Test func mergedRecordsAreOrderedDeduplicatedAndSkipMalformedAndEvictedFiles() throws {
+    let root = tempDir()
+    let (store, _) = mac(root)
+    let (early, mid, late) = (request(at: t0), request(at: t0 + 10), request(at: t0 + 20))
+    let undo = HistoryEvent(.undo, id: late.id, at: t0 + 30)
+    store.append(late)
+    store.append(mid)
+    store.flush()
+    let other = [try encoded(mid), "{not json", try encoded(early), try encoded(undo), ""].joined(separator: "\n")
+    try other.write(to: root.appendingPathComponent("history-B.jsonl"), atomically: true, encoding: .utf8)
+    try "evicted".write(to: root.appendingPathComponent(".history-C.jsonl.icloud"), atomically: true, encoding: .utf8)
+    try "x".write(to: root.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
+    struct ID: Decodable { var id: UUID }
+    let ids = try store.records().map { try HistoryStore.decoder.decode(ID.self, from: $0).id }
+    #expect(ids == [early.id, mid.id, late.id, late.id])  // the last is the undo
+    let s = store.stats()
+    #expect(s.requests == 3 && s.devices == 3 && s.lastSync != nil)
+}
+
+@Test func wipingAllMacsLeavesATombstoneOtherMacsHonorOnce() throws {
+    let root = tempDir()
+    let (a, _) = mac(root)
+    let (b, _) = mac(root)
+    for m in [a, b] {
+        m.startSync(copyExisting: false, now: t0)
+        m.append(request(at: t0))
+    }
+    a.wipe(allMacs: true, now: t0 + 60)
+    a.flush()
+    #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == ["wiped-\(Int((t0 + 60).timeIntervalSince1970 * 1000))"])
+    #expect(!exists(a.directory))
+    // C turns sync on after the wipe: the tombstone is older, so C keeps its history.
+    let (c, cd) = mac(root, sync: false)
+    c.append(request(at: t0))
+    c.flush()
+    cd.set(true, forKey: "sync")
+    c.startSync(copyExisting: true, now: t0 + 120)
+    b.checkSync()
+    c.checkSync()
+    b.flush()
+    #expect(!exists(b.directory) && !exists(b.sync!.file))
+    #expect(b.stats().requests == 1)  // both see only C's request
+    #expect(c.stats().requests == 1)
+    b.append(request(at: t0 + 200))
+    b.checkSync()
+    b.flush()
+    #expect(exists(b.file))  // honored once
+}
+
+@Test func wipingThisMacKeepsOtherMacsCopies() {
+    let root = tempDir()
+    let (a, _) = mac(root)
+    let (b, _) = mac(root)
+    a.append(request(at: t0))
+    b.append(request(at: t0))
+    a.wipe()
+    a.flush()
+    #expect(!exists(a.directory) && !exists(a.sync!.file) && exists(b.sync!.file))
+    #expect(a.stats().requests == 1)  // B's, merged
+}
