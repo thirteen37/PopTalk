@@ -73,6 +73,7 @@ struct SettingsView: View {
     @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = true
     @AppStorage(DictationFeatures.Key.recaseTerms) private var recaseTerms = true
     @AppStorage(DictationFeatures.Key.skipGate) private var skipGate = false
+    @AppStorage(LivePreview.key) private var liveCleanup = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var terms: [VocabTerm] = []
     @State private var vocabMessage: String?
@@ -120,6 +121,9 @@ struct SettingsView: View {
             Section {
                 Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
                     .help("How long the result stays up, with Esc to undo and Return to add a suggested word.")
+                Toggle("Live cleanup preview", isOn: $liveCleanup)
+                Text("Shows the cleanup or edit while you talk, so release can insert it at once. Uses the GPU at each pause.")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()

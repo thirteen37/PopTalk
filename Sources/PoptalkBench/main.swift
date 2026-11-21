@@ -13,6 +13,7 @@ import PoptalkSpeech
 //     [--oracle-terms]   (#75: recase on-screen mustContain terms in the transcript before the LLM; a ceiling)
 //     [--recase-terms on|off]   (#75: force the label-free screen-term recaser on or off; default: per model)
 //     [--skip-gate on]   (#75: skip the cleanup LLM for clean, Parakeet-cased dictations; runs record skippedLLM)
+//     [--hold]   (#43, audio cases: simulate holding the key with live cleanup; prints preview latency and reuse at release)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
@@ -177,6 +178,10 @@ let probe = Date().timeIntervalSince(probeStart)
 // ponytail: a fixed 2 s threshold; LM Studio exposes no "busy" endpoint to ask directly.
 if probe > 2 { print(String(format: "warning: idle probe took %.1fs; the server may be busy, timings will be noisy", probe)) }
 
+let hold = args.contains("--hold")
+/// --hold: speculative runs per dictation, preview seconds (tick → cleaned result), and per release whether the
+/// last speculative result was reused, the pipeline seconds that saves, and whether it equals the fresh result.
+var holdStats = (runs: [Int](), preview: [Double](), release: [(hit: Bool, seconds: Double, same: Bool?)]())
 var results: [BenchCaseResult] = []
 for c in cases {
     var caseRuns: [BenchRun] = []
@@ -191,9 +196,38 @@ for c in cases {
             request = Request(transcript: heard!.text, selection: request.selection, context: request.context)
         }
         if oracleTerms, c.kind == .dictation { request.transcript = c.oracleRecase(request.transcript) }
+        // --hold (#43): first the hold, as the app runs it: growing prefixes at 500 ms ticks, then 0.6 s of
+        // silence before release; a speculative run at each pause. Release (`request`) hears the audio plus the silence.
+        var held: (request: Request, result: PipelineResult)?
+        if hold, let transcriber, let audio = samples[c.id] {
+            let full = audio + [Float](repeating: 0, count: 9_600)
+            var previous: String?
+            for end in stride(from: 8_000, through: full.count, by: 8_000) {
+                let prefix = Array(full[..<end])
+                guard AudioGate.hasSpeech(prefix) else { continue }
+                let tick = Date()
+                guard let text = try? await transcriber.transcribeDetailed(prefix, boost: boost).text else { continue }
+                defer { previous = text }
+                guard LivePreview.shouldRun(text, lastRun: held?.request.transcript, previous: previous,
+                                            paused: LivePreview.paused(prefix), edit: request.selection != nil) else { continue }
+                var p = pipeline(nil)
+                p.remembers = false
+                let spec = Request(transcript: text, selection: request.selection, context: request.context)
+                held = (spec, await LivePreview.$speculative.withValue(true) { await p.run(spec) })
+                holdStats.preview.append(Date().timeIntervalSince(tick))
+            }
+            holdStats.runs.append(holdStats.preview.count - holdStats.runs.reduce(0, +))
+            do { heard = try await transcriber.transcribeDetailed(full, boost: boost, cbw: cbw, minSimilarity: minSimilarity) }
+            catch { fail("\(c.id): \(error)") }
+            request.transcript = heard!.text
+        }
         let start = Date()
         let calls = ModelCallRecorder()
         let r = await pipeline(calls).run(request)
+        if hold, samples[c.id] != nil {
+            let reused = held.flatMap { LivePreview.sameInput($0.request, request) ? LivePreview.reusable($0.result) : nil }
+            holdStats.release.append((reused != nil, Date().timeIntervalSince(start), reused.map { $0 == r }))
+        }
         var run = c.score(r, seconds: Date().timeIntervalSince(start))
         // A dictation reply the code changed or rejected (restoreMarks, fidelity guards), to see why.
         if c.kind == .dictation, let reply = calls.call?.reply?.trimmingCharacters(in: .whitespacesAndNewlines), reply != run.output {
@@ -209,6 +243,16 @@ for c in cases {
     print("\(caseRuns.allSatisfy(\.passed) ? "✓" : "✗") \(c.id)  \(caseRuns.filter(\.passed).count)/\(runs)"
         + (caseRuns[0].speech.map { "  heard \"\($0.raw)\"" + ($0.boosted == $0.raw ? "" : " → boosted \"\($0.boosted)\"") } ?? ""))
     results.append(BenchCaseResult(id: c.id, kind: c.kind, runs: caseRuns))
+}
+
+if hold, !holdStats.release.isEmpty {
+    func median(_ xs: [Double]) -> Double { xs.isEmpty ? 0 : xs.sorted()[xs.count / 2] }
+    let hits = holdStats.release.filter(\.hit)
+    print(String(format: "\nhold: %.1f speculative runs per dictation; preview median %.2fs, max %.2fs; reuse %d/%d; "
+                 + "release pipeline median %.2fs (saved on a hit); reused = fresh result %d/%d",
+                 Double(holdStats.runs.reduce(0, +)) / Double(holdStats.runs.count), median(holdStats.preview),
+                 holdStats.preview.max() ?? 0, hits.count, holdStats.release.count, median(holdStats.release.map(\.seconds)),
+                 hits.filter { $0.same == true }.count, hits.count))
 }
 
 let day = DateFormatter()

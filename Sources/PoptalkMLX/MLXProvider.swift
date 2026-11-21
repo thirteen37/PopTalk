@@ -143,7 +143,7 @@ public enum MLXProvider {
                 let lm = try await container.prepare(input: input)
                 let tokens = lm.text.tokens.asArray(Int.self)
                 let enabled = PrefixCache.enabled
-                let (plan, entry, shared) = prefixes.plan(tokens, enabled: enabled)
+                let (plan, entry, shared) = prefixes.plan(tokens, enabled: enabled, speculative: LivePreview.speculative)
                 ModelCallRecorder.current?.prompt(tokens: tokens.count, shared: shared)
                 timing.info("llm \(name, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
                 let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0)
@@ -243,15 +243,20 @@ final class PrefixCache: @unchecked Sendable {
 
     /// Plans `tokens` against the entries (marking the one it uses as most recent) and records it as the newest
     /// prompt. `shared`: tokens shared with the previous prompt, for history. Disabled: drops the entries, plans none.
-    func plan(_ tokens: [Int], enabled: Bool) -> (plan: PrefixPlan, entry: Entry?, shared: Int) {
+    /// `speculative` (#43, a live preview's growing transcript): reuses entries only, with no snapshot and no recent
+    /// prompt, so the cache ends as if it never ran. It still starts from the stored system prompt (and screen, when a
+    /// press in the same window stored it). ponytail: an unstored screen is prefilled per run; store one snapshot per
+    /// press at the prompt's fixed part if previews in new windows get slow.
+    func plan(_ tokens: [Int], enabled: Bool, speculative: Bool = false) -> (plan: PrefixPlan, entry: Entry?, shared: Int) {
         lock.withLock {
             if !enabled { entries = [] }
-            let plan = enabled ? prefixPlan(tokens, entries: entries.map { ($0.item.tokens, $0.item.maxTrim) }, recent: recent,
+            var plan = enabled ? prefixPlan(tokens, entries: entries.map { ($0.item.tokens, $0.item.maxTrim) }, recent: recent,
                                             minReuse: Self.minReuse) : PrefixPlan(entry: nil, keep: 0)
+            if speculative { plan.snapshot = nil }
             let entry = plan.entry.map { entries.remove(at: $0) }
             if let entry { entries.insert(entry, at: 0) }
             let shared = recent.first.map { sharedPrefix($0, tokens) } ?? 0
-            recent = Array(([tokens] + recent).prefix(Self.maxRecent))
+            if !speculative { recent = Array(([tokens] + recent).prefix(Self.maxRecent)) }
             return (plan, entry?.item, shared)
         }
     }

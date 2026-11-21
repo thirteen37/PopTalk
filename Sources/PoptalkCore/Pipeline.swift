@@ -56,6 +56,8 @@ public struct Pipeline: Sendable {
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
     /// Term recasing and the skip gate (#75); the app reads them from Settings on each press.
     let features: DictationFeatures
+    /// False for speculative runs (#43): a "remember" edit reports `remembered` without saving it.
+    public var remembers = true
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
                 cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, features: DictationFeatures = DictationFeatures()) {
@@ -162,6 +164,7 @@ public struct Pipeline: Sendable {
               edit.text.localizedCaseInsensitiveContains(term.text),
               term.text.caseInsensitiveCompare(selection) != .orderedSame
         else { return PipelineResult(outcome: outcome, modelAction: edit.action.rawValue) }
+        if edit.remember, !remembers { return PipelineResult(outcome: outcome, remembered: term, modelAction: edit.action.rawValue) }
         if edit.remember, (try? vocabulary.add(term)) != nil {
             return PipelineResult(outcome: outcome, remembered: term, modelAction: edit.action.rawValue)
         }
