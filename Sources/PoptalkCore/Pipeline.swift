@@ -272,9 +272,16 @@ extension Pipeline {
     ///   goes back out (`"replace this with,"` → `“replace this with”,`);
     /// - a line break the model flattened goes back between the same two words, when the reply has them
     ///   next to each other. A break with no such place stays lost, so `dropsProtected` still falls back.
+    /// - a list marker the model added to a single item goes (#77: v3 adds `- ` to some to-do-like sentences), unless the
+    ///   transcript is a list: it says "bullet" or "first … second", has a line break, or starts with a marker.
     static func restoreMarks(_ output: String, transcript: String) -> String {
         func words(_ s: some StringProtocol) -> [String] { SpeechMetrics.words(String(s)) }
         var out = output
+        if out.split(separator: "\n").filter({ $0.firstMatch(of: listMarker) != nil }).count == 1, let m = out.firstMatch(of: listMarker),
+           !transcript.contains("\n"), transcript.firstMatch(of: listMarker) == nil,
+           transcript.firstMatch(of: /(?i)\bbullet|\bfirst\b[\s\S]*\bsecond\b/) == nil {
+            out.removeSubrange(m.range)
+        }
         for m in transcript.matches(of: /“([^“”]*)”/) {
             let span = words(m.1)
             guard !span.isEmpty, let q = out.matches(of: /"([^"]*)"/).first(where: { words($0.1) == span }) else { continue }
@@ -297,6 +304,9 @@ extension Pipeline {
         }
         return out
     }
+
+    /// `- `, `* `, `• `, `– ` or `1. ` / `1) ` at the start of a line.
+    nonisolated(unsafe) private static let listMarker = /^\h*(?:[-*•–]|\d{1,2}[.)])\h+/
 
     /// A word, then a line break (and anything but words around it), then the next word (looked ahead, so it
     /// can also start the next break).
