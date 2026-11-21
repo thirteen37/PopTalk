@@ -262,6 +262,12 @@ public struct BenchReport: Codable, Sendable {
             lines.append("\(rb < ra ? "regressed" : "improved ") \(ca.id): \(ca.runs.filter(\.passed).count)/\(ca.runs.count) → \(cb.runs.filter(\.passed).count)/\(cb.runs.count)")
         }
         lines += b.cases.filter { !aIDs.contains($0.id) }.map { "only in b: \($0.id)" }
+        // Run by run: at temperature 0 a change that shouldn't affect outputs (e.g. the prompt cache, #42) must match.
+        let pairs = a.cases.compactMap { ca in bByID[ca.id].map { (ca.id, zip(ca.runs, $0.runs)) } }
+            .flatMap { id, runs in runs.enumerated().map { ("\(id)#\($0.offset + 1)", $0.element.0, $0.element.1) } }
+        let differ = pairs.filter { $0.1.output != $0.2.output || $0.1.action != $0.2.action }.map(\.0)
+        lines.append(differ.isEmpty ? "outputs identical in \(pairs.count)/\(pairs.count) runs"
+                     : "outputs differ in \(differ.count)/\(pairs.count) runs: " + differ.joined(separator: " "))
         if let sa = a.summaries().first(where: { $0.kind == .edit }), let sb = b.summaries().first(where: { $0.kind == .edit }) {
             let (ma, mb) = ("\(sa.modelActionPassed)/\(sa.modelActionRuns)", "\(sb.modelActionPassed)/\(sb.modelActionRuns)")
             if ma != mb { lines.append("edit model action \(ma) → \(mb)") }

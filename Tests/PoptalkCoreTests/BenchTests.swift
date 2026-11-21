@@ -149,6 +149,15 @@ private func editReport(_ runs: [(String?, String, Bool?)]) -> BenchReport {
     #expect(lines.contains("edit guard overrides 1 → 0"))
 }
 
+// #42: at temperature 0, cached and uncached runs must match output for output.
+@Test func compareCountsChangedOutputs() {
+    let a = report(["d1": [true, true], "e1": [true]])
+    var b = a
+    #expect(BenchReport.compare(a, b).contains("outputs identical in 3/3 runs"))
+    b.cases[0].runs[1].output = "changed"
+    #expect(BenchReport.compare(a, b).contains("outputs differ in 1/3 runs: d1#2"))
+}
+
 @Test func oldResultsWithoutModelActionDecode() throws {
     let json = #"{"date":"d","provider":{},"cases":[{"id":"e","kind":"edit","runs":[{"output":"o","action":"replace","seconds":1,"failures":[]}]}]}"#
     let r = try JSONDecoder().decode(BenchReport.self, from: Data(json.utf8))
