@@ -11,6 +11,8 @@ import PoptalkSpeech
 //     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
 //     [--dictation-prompt-file F] [--edit-prompt-file F]   (#74: replace the system prompts for this run)
 //     [--oracle-terms]   (#75: recase on-screen mustContain terms in the transcript before the LLM; a ceiling)
+//     [--recase-terms on|off]   (#75: force the label-free screen-term recaser on or off; default: per model)
+//     [--skip-gate on]   (#75: skip the cleanup LLM for clean, Parakeet-cased dictations; runs record skippedLLM)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
@@ -110,6 +112,12 @@ meta["runs"] = "\(runs)"
 meta.merge(promptFiles) { $1 }
 let oracleTerms = args.contains("--oracle-terms")
 if oracleTerms { meta["oracleTerms"] = "on" }
+if let v = opt("--recase-terms") { Pipeline.recaseOverride = v != "off" }
+meta["recaseTerms"] = Pipeline.recaseOverride ?? Pipeline.recasesTerms(cleanupModel) ? "on" : "off"
+let skipGate = opt("--skip-gate") == "on"
+var features = DictationFeatures()
+features.skipGate = skipGate
+if skipGate { meta["skipGate"] = "on" }
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)
@@ -154,13 +162,15 @@ if !audioCases.isEmpty {
     } catch { fail(error) }
 }
 
-let pipeline = { Pipeline(complete: complete,
-                          vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json")),
-                          cleanupModel: cleanupModel, editModel: editModel) }
+let pipeline = { (calls: ModelCallRecorder?) in
+    Pipeline(complete: calls?.wrap(complete) ?? complete,
+             vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json")),
+             cleanupModel: cleanupModel, editModel: editModel, features: features)
+}
 
 // Warm up (model load, caches), then time a trivial request: a slow one means the server is busy,
 // e.g. with orphaned generations from an earlier timed-out client (#4), and timings would be skewed.
-_ = await pipeline().run(cases[0].request)
+_ = await pipeline(nil).run(cases[0].request)
 let probeStart = Date()
 _ = try? await complete(cleanupModel, [ChatMessage(role: "user", content: "Reply with: ok")], false, 30)
 let probe = Date().timeIntervalSince(probeStart)
@@ -182,8 +192,13 @@ for c in cases {
         }
         if oracleTerms, c.kind == .dictation { request.transcript = c.oracleRecase(request.transcript) }
         let start = Date()
-        let r = await pipeline().run(request)
+        let calls = ModelCallRecorder()
+        let r = await pipeline(calls).run(request)
         var run = c.score(r, seconds: Date().timeIntervalSince(start))
+        // A dictation reply the code changed or rejected (restoreMarks, fidelity guards), to see why.
+        if c.kind == .dictation, let reply = calls.call?.reply?.trimmingCharacters(in: .whitespacesAndNewlines), reply != run.output {
+            run.modelReply = reply
+        }
         if provider == "raw" { run.failures.removeAll { $0 == "raw fallback" } }
         if let heard {
             run.speech = SpeechRun(reference: c.transcript, terms: c.mustContain, raw: heard.raw, boosted: heard.text, final: run.output,
@@ -203,6 +218,11 @@ if provider == "mlx" { meta.merge(["cleanupModel": cleanupModel, "editModel": ed
 let report = BenchReport(date: date, provider: meta, cases: results)
 let details = report.failureDetails(cases)
 print((details.isEmpty ? "\n" : "\n\(details)\n\n") + report.table())
+if skipGate {
+    let skipped = results.filter { $0.runs.contains { $0.skippedLLM == true } }
+    print("\nskip gate: \(skipped.count)/\(results.filter { $0.kind == .dictation }.count) dictation cases skipped the LLM: "
+        + skipped.map { "\($0.id)\($0.runs.allSatisfy(\.passed) ? "" : " ✗")" }.joined(separator: ", "))
+}
 
 let model = (provider == "lmstudio" || provider == "mlx" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : "-audio")
 let dir = URL(fileURLWithPath: opt("--out") ?? "bench/results")

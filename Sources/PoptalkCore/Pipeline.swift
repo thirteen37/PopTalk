@@ -29,10 +29,13 @@ public struct PipelineResult: Equatable, Sendable {
     public var degraded: Bool
     /// The edit model's parsed action (`EditAction` raw value) before code guards; nil without an edit model reply (#54).
     public var modelAction: String?
+    /// The skip gate inserted the dictation without the cleanup model (#75).
+    public var skippedLLM: Bool
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
-                modelAction: String? = nil) {
+                modelAction: String? = nil, skippedLLM: Bool = false) {
         self.outcome = outcome
+        self.skippedLLM = skippedLLM
         self.vocabularyOffer = vocabularyOffer
         self.remembered = remembered
         self.degraded = degraded
@@ -51,9 +54,12 @@ public struct Pipeline: Sendable {
     let vocabulary: VocabularyStore
     let cleanupModel: String, editModel: String
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
+    /// Term recasing and the skip gate (#75); the app reads them from Settings on each press.
+    let features: DictationFeatures
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
-                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20) {
+                cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, features: DictationFeatures = DictationFeatures()) {
+        self.features = features
         self.complete = complete
         self.vocabulary = vocabulary
         self.cleanupModel = cleanupModel
@@ -75,9 +81,17 @@ public struct Pipeline: Sendable {
         guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
 
         guard let selection = r.selection, !selection.isEmpty else {
-            let transcript = Self.dictationPrepass(transcript)
-            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
+            let screen = r.context.windowTitle + "\n" + Prompts.trimmedContext(r.context)
+            let terms = Self.boostTerms(saved: vocabulary.terms, context: r.context).map(\.text)
+            let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
+            let transcript = Self.dictationPrepass(!recase ? transcript : Self.recaseTerms(
+                transcript, terms: features.screenTerms ? terms : vocabulary.terms.map(\.text), screen: screen))
             let space = Self.leadingSpace(r.context)
+            // Near misses count screen terms either way: the model still sees the screen.
+            if features.skipGate, Self.skipsLLM(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)) {
+                return PipelineResult(outcome: .insert(space + transcript, label: "Dictated"), skippedLLM: true)
+            }
+            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
@@ -87,7 +101,7 @@ public struct Pipeline: Sendable {
                 return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw) · model loading"), degraded: true)
             }
             catch { reply = nil }
-            if let reply, case let cleaned = Self.stripChatter(reply), !cleaned.isEmpty,
+            if let reply, case let cleaned = Self.restoreMarks(Self.stripChatter(reply), transcript: transcript), !cleaned.isEmpty,
                Double(cleaned.count) <= Double(transcript.count) * 1.5 + 40,
                !Self.dropsContent(cleaned, transcript: transcript),
                !Self.dropsProtected(cleaned, transcript: transcript),
@@ -249,6 +263,41 @@ extension Pipeline {
             return span != "  " && !out.contains(span)
         }
     }
+
+    /// Puts back marks the pre-pass made that the model changed (#75), before the fidelity guards:
+    /// - straight quotes around a “ … ” span's words become curly again, and a , or . the model moved inside
+    ///   goes back out (`"replace this with,"` → `“replace this with”,`);
+    /// - a line break the model flattened goes back between the same two words, when the reply has them
+    ///   next to each other. A break with no such place stays lost, so `dropsProtected` still falls back.
+    static func restoreMarks(_ output: String, transcript: String) -> String {
+        func words(_ s: some StringProtocol) -> [String] { SpeechMetrics.words(String(s)) }
+        var out = output
+        for m in transcript.matches(of: /“([^“”]*)”/) {
+            let span = words(m.1)
+            guard !span.isEmpty, let q = out.matches(of: /"([^"]*)"/).first(where: { words($0.1) == span }) else { continue }
+            let inner = String(q.1).replacing(/[,.]+$/, with: "")
+            out.replaceSubrange(q.range, with: "“\(inner)”" + q.1.dropFirst(inner.count))
+        }
+        guard out.filter({ $0 == "\n" }).count < transcript.filter({ $0 == "\n" }).count else { return out }
+        let ns = transcript as NSString
+        var from = 0  // UTF-16 offset into `out`: each break goes after the previous one
+        for m in lineBreak.matches(in: transcript, range: NSRange(location: 0, length: ns.length)) {
+            let (before, br, after) = (ns.substring(with: m.range(at: 1)), ns.substring(with: m.range(at: 2)), ns.substring(with: m.range(at: 3)))
+            let o = out as NSString
+            guard let gap = try? NSRegularExpression(
+                pattern: #"(?<![\p{L}\p{N}])"# + NSRegularExpression.escapedPattern(for: before) + #"[^\p{L}\p{N}\s]*(\h+)"#
+                    + NSRegularExpression.escapedPattern(for: after) + #"(?![\p{L}\p{N}])"#, options: .caseInsensitive),
+                let g = gap.firstMatch(in: out, range: NSRange(location: from, length: o.length - from))
+            else { continue }
+            out = o.replacingCharacters(in: g.range(at: 1), with: br)
+            from = g.range(at: 1).location + (br as NSString).length
+        }
+        return out
+    }
+
+    /// A word, then a line break (and anything but words around it), then the next word (looked ahead, so it
+    /// can also start the next break).
+    private static let lineBreak = try! NSRegularExpression(pattern: #"([\p{L}\p{N}]+)[^\p{L}\p{N}\n]*(\n+)[^\p{L}\p{N}\n]*(?=([\p{L}\p{N}]+))"#)
 
     /// Removes reasoning blocks and echoed tags from a model reply.
     static func stripChatter(_ s: String) -> String {
