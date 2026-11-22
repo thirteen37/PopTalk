@@ -208,7 +208,7 @@ On first launch, grant **Microphone**, **Accessibility** (to read and insert tex
 - **Context:** which context sources are read. Below that, opt-in local usage history, for training better models: off by default, audio optional, wiped with one button. History can also sync through iCloud Drive (`PopTalk/history`, audio excluded) to merge your Macs' history; turning it off offers to delete this Mac's synced copy, and the wipe can cover this Mac or all of them.
 - **Models:** the speech model (Parakeet TDT v2, v3, Ultra, Bark 3.0 Clean, Phonon-2); the language-model provider (MLX, LM Studio, Apple) and the model for each role (cleanup and edit), including a custom Hugging Face id or local folder; "Fix screen-term casing before cleanup" (on; applies to the PopTalk fine-tunes); "Skip cleanup for clean dictations" (experimental, off: inserts a dictation with no fillers or corrections as heard, without the model); load status.
 - **Permissions:** live status of each permission.
-- **Vocabulary:** saved terms. PopTalk offers to remember a correction; it never saves one silently. Imports from FluidVoice.
+- **Vocabulary:** saved terms. Add, edit (double-click or the pencil) or delete them, each with optional "heard as" forms the recognizer should map to it. PopTalk offers to remember a correction; it never saves one silently. Imports from FluidVoice.
 
 ## Development
 
