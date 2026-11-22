@@ -225,8 +225,8 @@ final class Overlay {
         HUD(glyph: .symbol("sparkle"), tint: .systemGreen, act: "Model ready", keys: [("⏎", "clean up now")], timer: seconds)
     }
 
-    /// A dictation (result, not `edit`), an edit (`edit`: "Corrected Todoist") or a voice command (no result:
-    /// "Scratched", "Changed → Wednesday", shown as "Changed Wednesday").
+    /// A dictation (result, not `edit`), an edit (`edit`: "Corrected Todoist") or a raw insert's cleanup (no result:
+    /// "Cleaned up").
     static func outcomeHUD(_ text: String, heard: String?, result: String?, edit: Bool, undo: Bool,
                            vocabulary: String?, strip: [StatusBadge], seconds: TimeInterval) -> HUD {
         let lines = OutcomeText.lines(heard: heard, result: result, label: text, edit: false)
@@ -236,9 +236,7 @@ final class Overlay {
         } else if let r = lines.result {
             (h.main, h.label) = (r, text)
         } else {
-            let parts = text.components(separatedBy: " → ")
-            (h.glyph, h.tint, h.act, h.main) = (.symbol("arrow.uturn.backward"), .systemTeal, parts[0],
-                                                parts.dropFirst().joined(separator: " → "))
+            (h.glyph, h.tint, h.act) = (.symbol("arrow.uturn.backward"), .systemTeal, text)
         }
         if undo { h.keys.append(("esc", "undo")) }
         if let v = vocabulary { h.keys.append(("⏎", "add “\(v)” to vocabulary")) }

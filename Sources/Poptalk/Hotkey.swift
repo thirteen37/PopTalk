@@ -1,22 +1,19 @@
 import AppKit
 import CoreGraphics
-import PoptalkCore
 
 /// Hold-to-talk on Right Option (keycode 61) via a CGEventTap. Events always pass through.
-/// A hold under 150 ms, or one where another key is pressed (⌥+e etc.), is cancelled. A press soon after such a
-/// tap is an "edit last dictation" press (`TapHold`, #80): `onPress(true)`.
+/// A hold under 150 ms, or one where another key is pressed (⌥+e etc.), is cancelled.
 @MainActor
 final class Hotkey {
     private static let rightOption: Int64 = 61
-    private let onPress: (_ editLast: Bool) -> Void, onRelease: () -> Void, onCancel: () -> Void
+    private let onPress: () -> Void, onRelease: () -> Void, onCancel: () -> Void
     private var tap: CFMachPort?
     private var pressedAt: Date?
     private var cancelled = false
-    private var tapHold = TapHold()
     /// Key-downs seen from other processes: an insert in a terminal is only taken back if none came since (#79).
     private(set) var keyDowns = 0
 
-    init(onPress: @escaping (_ editLast: Bool) -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void) {
+    init(onPress: @escaping () -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.onPress = onPress
         self.onRelease = onRelease
         self.onCancel = onCancel
@@ -57,14 +54,13 @@ final class Hotkey {
             // NX_DEVICERALTKEYMASK: right ⌥ specifically, so a held left ⌥ can't mask the release.
             let rightDown = event.flags.rawValue & 0x40 != 0
             if rightDown, pressedAt == nil {
-                let now = Date()
-                pressedAt = now
+                pressedAt = Date()
                 cancelled = false
-                onPress(tapHold.press(at: now))
+                onPress()
             } else if !rightDown, let start = pressedAt {
                 pressedAt = nil
                 if cancelled { return }
-                if tapHold.release(from: start, at: Date()) { onCancel() } else { onRelease() }
+                if Date().timeIntervalSince(start) < 0.15 { onCancel() } else { onRelease() }
             }
         default:
             break
