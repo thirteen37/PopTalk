@@ -10,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
     let store = VocabularyStore()
+    /// Screen terms that fixed a dictation (#87); recorded and used only with the setting on.
+    let learned = LearnedTerms()
+    private var learnedTerms: [VocabTerm] { ContextSources(.standard).rememberScreenTerms ? learned.vocabTerms() : [] }
     private let recorder = AudioRecorder()
     let status = StatusModel()
     private var transcriber: Transcriber? { didSet { syncSpeech() } }
@@ -283,7 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.mark("release: selection awaited", since: t0)
             await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
             Timing.mark("release: preview drained", since: t0)
-            let boost = Pipeline.boostTerms(saved: store.terms, context: snapshot,
+            let boost = Pipeline.boostTerms(saved: store.terms, learned: learnedTerms, context: snapshot,
                                             fromScreen: ContextSources(.standard).screenVocabulary)
             let heard: Transcription
             do { heard = try await transcriber.transcribe(samples, boost: boost) } catch {
@@ -320,7 +323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
         let models = Settings.selection
         let calls = reused?.calls ?? ModelCallRecorder()
-        let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store,
+        let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store, learned: learnedTerms,
                                 cleanupModel: models.cleanupModel, editModel: models.editModel, features: DictationFeatures(.standard))
         let id = UUID()
         // Before apply, which moves lastInsert to this request.
@@ -441,6 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         typing?.end(flush: false)
         typing = nil
         lastInsert = nil
+        learned.forget(request: id)
         history.append(HistoryEvent(.undo, id: id))
         return true
     }
@@ -479,7 +483,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// What every speculative run of a press shares (#43): the context and selection captured at key-down, the boost
     /// terms the final pass will use, and the model settings.
     private struct LiveInput {
-        let context: ScreenSnapshot, selection: String?, boost: [VocabTerm]
+        let context: ScreenSnapshot, selection: String?, boost: [VocabTerm], learned: [VocabTerm]
         let complete: Pipeline.Complete, models: ModelSettings.Selection, features: DictationFeatures
     }
 
@@ -488,9 +492,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let selection = await sel?.value
         let complete: Pipeline.Complete
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
+        let learned = learnedTerms
         return LiveInput(context: context, selection: selection,
-                         boost: Pipeline.boostTerms(saved: store.terms, context: context,
-                                                    fromScreen: ContextSources(.standard).screenVocabulary),
+                         boost: Pipeline.boostTerms(saved: store.terms, learned: learned, context: context,
+                                                    fromScreen: ContextSources(.standard).screenVocabulary), learned: learned,
                          complete: complete, models: Settings.selection, features: DictationFeatures(.standard))
     }
 
@@ -506,7 +511,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func speculate(_ request: Request, _ fixed: LiveInput, since tick: ContinuousClock.Instant) {
         speculativeRuns += 1
         let calls = ModelCallRecorder()
-        var pipeline = Pipeline(complete: calls.wrap(fixed.complete), vocabulary: store, cleanupModel: fixed.models.cleanupModel,
+        var pipeline = Pipeline(complete: calls.wrap(fixed.complete), vocabulary: store, learned: fixed.learned, cleanupModel: fixed.models.cleanupModel,
                                 editModel: fixed.models.editModel, features: fixed.features)
         pipeline.remembers = false
         let task = Task { [weak self] () -> PipelineResult? in
@@ -570,6 +575,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
     }
 
+    /// #87: with the setting on, remembers the screen terms a boost (raw → boosted transcript) or the casing fix wrote
+    /// into dictation `id`, if still in the text inserted. Undo forgets them again.
+    private func learn(_ raw: RawInsert, _ result: PipelineResult, inserted: String, id: UUID) {
+        guard ContextSources(.standard).rememberScreenTerms else { return }
+        let boosted = Pipeline.termsWritten(from: raw.rawTranscript, to: raw.request.transcript, terms: raw.boost,
+                                            saved: store.terms.map(\.text))
+        learned.record((boosted + result.recased).filter { inserted.contains($0) }, request: id)
+    }
+
     /// Applies the outcome and returns the label shown, for history.
     /// `raw`: kept on `lastInsert` for a later cleanup when the result was a raw insert while the model loaded.
     private func apply(_ result: PipelineResult, cursorKnown: Bool, id: UUID, raw: RawInsert) async -> String {
@@ -615,6 +629,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if case .insert = result.outcome, let field, let last = lastInsert {
             watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID)
         }
+        if case .insert = result.outcome, pasted { learn(raw, result, inserted: text, id: id) }
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
         // A newer outcome replaced the old offer unanswered.
@@ -661,7 +676,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let tabs = NSTabViewController()
             tabs.tabStyle = .toolbar
             for t in SettingsTab.allCases {
-                let view = SettingsView(tab: t, status: status, store: store, history: history) { [weak self] in
+                let view = SettingsView(tab: t, status: status, store: store, learned: learned, history: history) { [weak self] in
                     self?.loadTranscriber()  // each only retries what failed
                     self?.prepareModels()
                 }

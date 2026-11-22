@@ -31,6 +31,8 @@ public struct PipelineResult: Equatable, Sendable {
     public var modelAction: String?
     /// The skip gate inserted the dictation without the cleanup model (#75).
     public var skippedLLM: Bool
+    /// Screen or learned terms (not saved vocabulary) whose spelling the casing fix wrote (#87).
+    public var recased: [String] = []
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
                 modelAction: String? = nil, skippedLLM: Bool = false) {
@@ -52,6 +54,8 @@ public struct Pipeline: Sendable {
 
     let complete: Complete
     let vocabulary: VocabularyStore
+    /// Learned screen terms (#87), boosted and recased like saved vocabulary; empty with the setting off.
+    let learned: [VocabTerm]
     let cleanupModel: String, editModel: String
     let cleanupTimeout: TimeInterval, editTimeout: TimeInterval
     /// Term recasing and the skip gate (#75); the app reads them from Settings on each press.
@@ -59,11 +63,12 @@ public struct Pipeline: Sendable {
     /// False for speculative runs (#43): a "remember" edit reports `remembered` without saving it.
     public var remembers = true
 
-    public init(complete: @escaping Complete, vocabulary: VocabularyStore, cleanupModel: String, editModel: String,
+    public init(complete: @escaping Complete, vocabulary: VocabularyStore, learned: [VocabTerm] = [], cleanupModel: String, editModel: String,
                 cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, features: DictationFeatures = DictationFeatures()) {
         self.features = features
         self.complete = complete
         self.vocabulary = vocabulary
+        self.learned = learned
         self.cleanupModel = cleanupModel
         self.editModel = editModel
         self.cleanupTimeout = cleanupTimeout
@@ -84,14 +89,23 @@ public struct Pipeline: Sendable {
 
         guard let selection = r.selection, !selection.isEmpty else {
             let screen = r.context.windowTitle + "\n" + Prompts.trimmedContext(r.context)
-            let terms = Self.boostTerms(saved: vocabulary.terms, context: r.context).map(\.text)
+            let saved = vocabulary.terms.map(\.text)
+            let terms = Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context).map(\.text)
             let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
-            let transcript = Self.dictationPrepass(!recase ? transcript : Self.recaseTerms(
-                transcript, terms: features.screenTerms ? terms : vocabulary.terms.map(\.text), screen: screen))
+            let recaseWith = features.screenTerms ? terms : saved + learned.map(\.text)
+            let recased = !recase ? transcript : Self.recaseTerms(transcript, terms: recaseWith, screen: screen)
+            let fixed = !recase ? [] : Self.termsWritten(from: transcript, to: recased, terms: Self.recaseCandidates(recaseWith),
+                                                         saved: saved + Self.recaseCandidates(saved))
+            let transcript = Self.dictationPrepass(recased)
             let space = Self.leadingSpace(r.context)
+            func result(_ outcome: Outcome, degraded: Bool = false, skippedLLM: Bool = false) -> PipelineResult {
+                var res = PipelineResult(outcome: outcome, degraded: degraded, skippedLLM: skippedLLM)
+                res.recased = fixed
+                return res
+            }
             // Near misses count screen terms either way: the model still sees the screen.
             if features.skipGate, Self.skipsLLM(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)) {
-                return PipelineResult(outcome: .insert(space + transcript, label: "Dictated"), skippedLLM: true)
+                return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true)
             }
             let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             // Base covers cold starts; 20 ms per word covers long dictations.
@@ -100,7 +114,7 @@ public struct Pipeline: Sendable {
             let reply: String?
             do { reply = try await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words)) }
             catch is ModelLoading {
-                return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw) · model loading"), degraded: true)
+                return result(.insert(space + transcript, label: "Dictated (raw) · model loading"), degraded: true)
             }
             catch { reply = nil }
             if let reply, case let cleaned = Self.restoreMarks(Self.stripChatter(reply), transcript: transcript), !cleaned.isEmpty,
@@ -109,9 +123,9 @@ public struct Pipeline: Sendable {
                !Self.dropsProtected(cleaned, transcript: transcript),
                !Self.echoesContext(cleaned, transcript: transcript,
                                    context: r.context.windowTitle + " " + Prompts.trimmedContext(r.context)) {
-                return PipelineResult(outcome: .insert(space + cleaned, label: "Dictated"))
+                return result(.insert(space + cleaned, label: "Dictated"))
             }
-            return PipelineResult(outcome: .insert(space + transcript, label: "Dictated (raw)"))
+            return result(.insert(space + transcript, label: "Dictated (raw)"))
         }
 
         let ns = transcript as NSString
@@ -173,14 +187,15 @@ public struct Pipeline: Sendable {
 }
 
 extension Pipeline {
-    /// Saved vocabulary, then up to 60 screen terms ranked by closeness to the cursor in the
-    /// window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
-    /// `fromScreen` false (#40): saved terms only.
-    public static func boostTerms(saved: [VocabTerm], context: ScreenSnapshot, fromScreen: Bool = true) -> [VocabTerm] {
-        let known = Set(saved.map { $0.text.lowercased() })
+    /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
+    /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
+    /// `fromScreen` false (#40): saved and learned terms only.
+    public static func boostTerms(saved: [VocabTerm], learned: [VocabTerm] = [], context: ScreenSnapshot,
+                                  fromScreen: Bool = true) -> [VocabTerm] {
+        var known = Set<String>()
         let w = Prompts.window(context)
         let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.windowTitle) : []
-        return (saved + screen.filter { !known.contains($0.text.lowercased()) })
+        return (saved + learned + screen).filter { known.insert($0.text.lowercased()).inserted }
             .map { t in
                 var t = t
                 t.aliases += boostAliases(t.text).filter { a in !t.aliases.contains { $0.lowercased() == a } }
