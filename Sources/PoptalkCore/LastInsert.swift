@@ -12,21 +12,19 @@ public struct LastInsert<Target: Equatable> {
     public let requestID: UUID?
     /// Set when it was inserted raw while the language model loaded (#39).
     public let reprocess: RawInsert?
-    /// Spacing pasted before `text`, and the field's text right after the paste; nil fieldValue: no voice commands on it (#49).
+    /// Spacing pasted before `text`.
     public let prefix: String
-    public let fieldValue: String?
     /// Set when pasted into a terminal (#79), where it's taken back by backspaces instead.
     public let terminal: TerminalStamp?
 
     public init(target: Target, text: String, at: Date = Date(), requestID: UUID? = nil, reprocess: RawInsert? = nil,
-                prefix: String = "", fieldValue: String? = nil, terminal: TerminalStamp? = nil) {
+                prefix: String = "", terminal: TerminalStamp? = nil) {
         self.target = target
         self.text = text
         self.at = at
         self.requestID = requestID
         self.reprocess = reprocess
         self.prefix = prefix
-        self.fieldValue = fieldValue
         self.terminal = terminal
     }
 
