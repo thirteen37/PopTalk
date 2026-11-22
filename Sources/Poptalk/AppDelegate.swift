@@ -555,6 +555,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard terminalStamp() == nil, !ScreenContext.isSensitive() else { return }
         let store = store
         typing = TypingWatch(field: field, pasted: pasted, transcript: transcript, known: { store.terms },
+            typed: { [weak self] in
+                guard let self, !busy, !recording else { return }
+                overlay.releaseKeys()  // this dictation's Esc/Return would land on the user's typing
+            },
             offer: { [weak self] term in
                 guard let self, !busy, !recording else { return }
                 overlay.showTypedOffer(term) { [weak self] in

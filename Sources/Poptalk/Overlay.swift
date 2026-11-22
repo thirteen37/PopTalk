@@ -134,6 +134,12 @@ final class Overlay {
         return tapAccept
     }
 
+    /// The user started typing in the field (#86): hides a state that catches Esc/Return, which would otherwise take
+    /// keys meant for the field (or ⌘Z their typing). Hidden rather than redrawn without its keycaps, which would lie.
+    func releaseKeys() {
+        if keys != nil { hide() }
+    }
+
     /// How long an outcome (and its undo/accept keys) stays up: the "Undo window" setting, read per show.
     static var outcomeSeconds: TimeInterval { OutcomeKeys.undoWindow(.standard) }
 

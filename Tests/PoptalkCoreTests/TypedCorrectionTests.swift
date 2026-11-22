@@ -114,9 +114,16 @@ private func notAWord(_ w: String) -> Bool { !["todoist", "kubectl"].contains(w.
     #expect(caps.offer(known: [], isWord: { _ in true })?.text == "MacBook")
 }
 
+@Test func savedTermIsOfferedAgainOnlyForANewHeardForm() throws {
+    let c = try #require(fix(" Send it to todo list.", " Send it to Todoist.", said: "send it to todo list"))
+    // `VocabularyStore.add` merges the new alias into the saved term.
+    #expect(c.offer(known: [VocabTerm(text: "todoist", aliases: ["today's"])], isWord: notAWord)
+        == VocabTerm(text: "Todoist", aliases: ["todo list"]))
+}
+
 @Test func noOfferForSavedTermsCleanupMistakesOrLongRewrites() throws {
     let c = try #require(fix(" Send it to todo list.", " Send it to Todoist.", said: "send it to todo list"))
-    #expect(c.offer(known: [VocabTerm(text: "todoist")], isWord: notAWord) == nil)
+    #expect(c.offer(known: [VocabTerm(text: "todoist", aliases: ["Todo List"])], isWord: notAWord) == nil)
     let cleanup = try #require(fix("I use github.", "I use GitHub.", said: "i use github"))
     #expect(cleanup.offer(known: [], isWord: { _ in false }) == nil)
     let long = try #require(fix("Ask about the todo list thing.", "Ask about Todoist Pro Max Ultra.", said: "ask about the todo list thing"))

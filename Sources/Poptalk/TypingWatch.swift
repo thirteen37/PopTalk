@@ -15,11 +15,14 @@ final class TypingWatch {
     /// The last check's result: what `done` gets.
     private var latest: TypedCorrection?
     private var offered: Set<String> = []
+    /// Called once, at the first change that leaves the dictation different from the paste.
+    private var typed: (() -> Void)?
 
     /// Nil when the field's text can't be read, the paste can't be found in it, or the app sends no notifications.
-    /// `offer`: a misheard term to offer, once per term. `done`: the last correction found, when the watch ends.
+    /// `typed`: the user has started changing the field. `offer`: a misheard term to offer, once per term. `done`: the
+    /// last correction found, when the watch ends.
     init?(field: AXUIElement, pasted: String, transcript: String, pause: TimeInterval = 2, lifetime: TimeInterval = 180,
-          known: @escaping () -> [VocabTerm], offer: @escaping (VocabTerm) -> Void,
+          known: @escaping () -> [VocabTerm], typed: @escaping () -> Void, offer: @escaping (VocabTerm) -> Void,
           done: @escaping (TypedCorrection) -> Void) {
         var pid: pid_t = 0, obs: AXObserver?
         guard let value = TextIO.value(of: field),
@@ -32,7 +35,7 @@ final class TypingWatch {
               }, &obs) == .success, let obs
         else { return nil }
         (self.field, self.anchors, self.pasted, self.transcript, self.pause) = (field, anchors, pasted, transcript, pause)
-        (self.known, self.offer, self.done) = (known, offer, done)
+        (self.known, self.typed, self.offer, self.done) = (known, typed, offer, done)
         // Unretained: `end()` removes the notification, and the owner calls it before letting go.
         guard AXObserverAddNotification(obs, field, kAXValueChangedNotification as CFString,
                                         Unmanaged.passUnretained(self).toOpaque()) == .success else { return nil }
@@ -54,6 +57,11 @@ final class TypingWatch {
     }
 
     private func changed() {
+        // Read back, so a late or spurious notification (the paste's own, an app's re-render) doesn't count as typing.
+        if let t = typed, TextIO.value(of: field).flatMap(anchors.span(in:)) != pasted {
+            typed = nil
+            t()
+        }
         pending?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.check(final: false) }
         pending = work

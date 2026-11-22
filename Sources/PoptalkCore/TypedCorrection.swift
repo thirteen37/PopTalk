@@ -111,14 +111,16 @@ public struct TypedCorrection: Equatable, Sendable {
     }
 
     /// A vocabulary term to offer: the first misheard change of up to three words each way whose new text looks like
-    /// a term (a word `isWord` doesn't know, a capital inside a word, or a digit) and isn't saved in `known` already.
-    /// The heard words, lowercased and without punctuation, are its alias.
+    /// a term (a word `isWord` doesn't know, a capital inside a word, or a digit). The heard words, lowercased and
+    /// without punctuation, are its alias. A term saved in `known` is offered again only for a heard form it doesn't
+    /// have as an alias yet (`VocabularyStore.add` merges it in).
     public func offer(known: [VocabTerm], isWord: (String) -> Bool) -> VocabTerm? {
         for c in changes where c.cause == .misheard && c.old.count <= 3 && c.new.count <= 3 {
             let words = c.new.map(Self.trimmed).filter { !$0.isEmpty }
             let text = words.joined(separator: " ")
             let heard = c.old.map(Self.normalized).joined(separator: " ")
-            guard !text.isEmpty, !known.contains(where: { $0.text.lowercased() == text.lowercased() }),
+            let saved = known.first { $0.text.lowercased() == text.lowercased() }
+            guard !text.isEmpty, saved?.aliases.contains(where: { $0.lowercased() == heard }) != true,
                   words.contains(where: { w in !isWord(w) || w.contains(where: \.isNumber) || w.dropFirst().contains(where: \.isUppercase) })
             else { continue }
             return VocabTerm(text: text, aliases: [heard])
