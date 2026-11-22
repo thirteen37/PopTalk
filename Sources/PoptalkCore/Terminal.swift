@@ -10,6 +10,36 @@ public enum Terminal {
     ]
 
     public static func contains(_ bundleID: String?) -> Bool { bundleID.map(bundleIDs.contains) ?? false }
+
+    /// Whether the app at `url` is a terminal (#92): a listed bundle ID, an Info.plist that opens Unix executables as
+    /// a shell (`declaresShell`), or an executable that exports libghostty symbols (`exportsGhostty`). Reads the
+    /// executable, which can be hundreds of MB (~1 s for 500 MB): call off the main thread, and cache the answer.
+    public static func detect(bundleID: String?, at url: URL) -> Bool {
+        if contains(bundleID) { return true }
+        guard let bundle = Bundle(url: url) else { return false }
+        if declaresShell(bundle.infoDictionary ?? [:]) { return true }
+        guard let exe = bundle.executableURL, let data = try? Data(contentsOf: exe, options: .alwaysMapped) else { return false }
+        return exportsGhostty(data)
+    }
+
+    /// An Info.plist `CFBundleDocumentTypes` entry with the Shell role for `public.unix-executable` (Ghostty, Terminal).
+    public static func declaresShell(_ info: [String: Any]) -> Bool {
+        (info["CFBundleDocumentTypes"] as? [[String: Any]] ?? []).contains {
+            $0["CFBundleTypeRole"] as? String == "Shell"
+                && ($0["LSItemContentTypes"] as? [String] ?? []).contains("public.unix-executable")
+        }
+    }
+
+    /// Whether an executable's bytes contain a `_ghostty_` symbol name: Ghostty and apps built on libghostty(-vt),
+    /// such as Herdr.
+    /// ponytail: a byte search, so any binary merely containing the string "_ghostty_" counts as a terminal; parse the
+    /// Mach-O export trie if that ever misfires.
+    public static func exportsGhostty(_ data: Data) -> Bool {
+        let needle = Array("_ghostty_".utf8)
+        return data.withUnsafeBytes { hay in
+            needle.withUnsafeBytes { memmem(hay.baseAddress, hay.count, $0.baseAddress, $0.count) != nil }
+        }
+    }
 }
 
 /// A paste into a terminal: its app's pid, and the hotkey tap's count of key-downs right before the paste.

@@ -62,6 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
             }
         }
+        // Learn whether each app is a terminal as it comes to the front, before a dictation needs to know (#92).
+        if let app = NSWorkspace.shared.frontmostApplication { isTerminal(app) }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if let app = NSWorkspace.shared.frontmostApplication { self?.isTerminal(app) }
+            }
+        }
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() },
@@ -405,8 +413,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The frontmost app's pid and the key-down count, when it's a terminal (#79). Taken right before a paste, for
     /// the `LastInsert` made after it.
     private func terminalStamp() -> TerminalStamp? {
-        guard let app = NSWorkspace.shared.frontmostApplication, Terminal.contains(app.bundleIdentifier) else { return nil }
+        guard let app = NSWorkspace.shared.frontmostApplication, isTerminal(app) else { return nil }
         return TerminalStamp(app: app.processIdentifier, keyDowns: hotkey.keyDowns)
+    }
+
+    /// Bundle ID → `Terminal.detect` (#92).
+    private var terminalApps: [String: Bool] = [:]
+
+    /// Whether `app` is a terminal, as far as known: the bundle-ID list until `Terminal.detect`, started off the main
+    /// thread the first time an app is seen (on activation, see launch), answers.
+    @discardableResult private func isTerminal(_ app: NSRunningApplication) -> Bool {
+        guard let id = app.bundleIdentifier else { return false }
+        if let known = terminalApps[id] { return known }
+        let listed = Terminal.contains(id)
+        terminalApps[id] = listed
+        if !listed, let url = app.bundleURL {
+            Task { @MainActor in terminalApps[id] = await Task.detached { Terminal.detect(bundleID: id, at: url) }.value }
+        }
+        return listed
     }
 
     private func backspaces(_ last: LastInsert<AXUIElement>) -> Int? {
