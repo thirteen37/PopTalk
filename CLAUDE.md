@@ -7,7 +7,7 @@ macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). T
 - `swift test > .build/t.log 2>&1 && ! rg -q 'Test run with .* failed' .build/t.log` - gate commits on this. Don't gate on a `passed` match: `swift test` also prints a separate 3-test run that passes even when the main run fails.
 - `scripts/install.zsh` - release build, sign, install to /Applications, relaunch. Waits (up to 120 s, then aborts) while PopTalk records or processes: `scripts/wait-idle.zsh` polls the busy marker `~/Library/Caches/io.lyx.poptalk/busy` (`BusyMarker`). Commit first: a dirty tree stamps `PoptalkCommit` with `-dirty`. If `open` fails with -600, run `open /Applications/PopTalk.app` again.
 - `zsh training/bench.zsh <model id|dir>` - d/e/s bench + held-out set; compare back-to-back runs only (`PoptalkBench --compare a.json b.json`).
-- `/usr/bin/log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'` - stage timings (category `timing`, counts only, no text). In zsh, `log` is a builtin, so use the full path.
+- `/usr/bin/log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'` - stage timings (category `timing`: counts and the frontmost app's bundle ID, no text). In zsh, `log` is a builtin, so use the full path.
 
 ## Gotchas
 - Default MLX model is `adapters/gemma-4-e2b-poptalk-v3`: a LoRA adapter fused in memory onto base E2B at load. Its `adapter_config.json` names the base.

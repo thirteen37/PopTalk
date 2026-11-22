@@ -32,10 +32,11 @@ public final class LearnedTerms: @unchecked Sendable {
     public func terms(at now: Date = Date()) -> [LearnedTerm] { lock.withLock { Self.pruned(_terms, now: now) } }
     public func vocabTerms(at now: Date = Date()) -> [VocabTerm] { terms(at: now).map { VocabTerm(text: $0.text) } }
 
-    /// Bumps each of `texts` (case-insensitive; the newest spelling wins), adding the new ones.
-    public func record(_ texts: [String], request: UUID, at now: Date = Date()) {
-        guard !texts.isEmpty else { return }
-        lock.withLock {
+    /// Bumps each of `texts` (case-insensitive; the newest spelling wins), adding the new ones. Returns the list's size.
+    @discardableResult
+    public func record(_ texts: [String], request: UUID, at now: Date = Date()) -> Int {
+        guard !texts.isEmpty else { return lock.withLock { _terms.count } }
+        return lock.withLock {
             var terms = _terms
             var prior: [String: LearnedTerm?] = [:]
             for text in texts {
@@ -48,17 +49,20 @@ public final class LearnedTerms: @unchecked Sendable {
             }
             last = (request, prior)
             save(Self.pruned(terms, now: now))
+            return _terms.count
         }
     }
 
-    /// Esc undo: puts back what `request` changed, if it was the latest `record`.
-    public func forget(request: UUID) {
+    /// Esc undo: puts back what `request` changed, if it was the latest `record`. Returns how many terms that was.
+    @discardableResult
+    public func forget(request: UUID) -> Int {
         lock.withLock {
-            guard let last, last.request == request else { return }
+            guard let last, last.request == request else { return 0 }
             self.last = nil
             var terms = _terms.filter { last.prior[$0.text.lowercased()] == nil }
             terms += last.prior.values.compactMap { $0 }
             save(terms.sorted { $0.lastUsed > $1.lastUsed })
+            return last.prior.count
         }
     }
 

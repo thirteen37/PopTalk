@@ -35,20 +35,24 @@ enum ScreenContext {
             }
         }
 
-        Timing.mark("context focused field", since: start)
         let fieldChars = snap.text.count
+        Timing.mark("context focused field \(fieldChars) chars", since: start)
         let nearby = isPrivate() || !sources.nearbyText ? [] : focused.map(nearbyText) ?? []
         for t in nearby { snap.text += (snap.text.isEmpty ? "" : "\n") + t }
-        Timing.mark("context nearby", since: start)
-        let wantsOCR = sources.ocr && NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: snap.text.count - fieldChars)
+        let nearbyChars = snap.text.count - fieldChars
+        Timing.mark("context nearby \(nearbyChars) chars", since: start)
+        let wantsOCR = sources.ocr && NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: nearbyChars)
+        // Counts only (#88): not wanted, not warm, not run (no permission, private window or failed), ran.
+        var ocrState = wantsOCR ? "not run" : "not wanted"
         // A cold Vision load (~14 s) would stall the request: go without OCR until the prewarm finishes (#39).
         // OCR may have been off at launch, so start the prewarm now if it never ran.
-        if wantsOCR, !ocrWarm.withLock({ $0 }) { prewarmOCR(); Timing.mark("ocr skipped (not warm)", since: start) }
+        if wantsOCR, !ocrWarm.withLock({ $0 }) { prewarmOCR(); ocrState = "not warm" }
         else if wantsOCR, CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
             pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle, field: focused.flatMap(frame)) {
             snap.ocrText = ocr  // own budget in Prompts.window (#25)
+            ocrState = "ran"
         }
-        Timing.mark("context ocr done", since: start)
+        Timing.mark("context ocr done: \(ocrState), \(snap.ocrText.count) chars", since: start)
         // ponytail: domain rides in the window title until ScreenSnapshot/<screen> grow a domain field.
         if sources.windowTitle, !isPrivate(), let domain = focused.flatMap(webDomain) {
             snap.windowTitle += snap.windowTitle.isEmpty ? domain : " (\(domain))"
