@@ -53,6 +53,7 @@ struct SettingsView: View {
     let tab: SettingsTab
     let status: StatusModel
     let store: VocabularyStore
+    let learned: LearnedTerms
     let history: HistoryStore
     /// Retries whatever failed to load (speech model and/or LLM models).
     let retry: () -> Void
@@ -71,6 +72,9 @@ struct SettingsView: View {
     @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
     @AppStorage(ContextSources.Key.windowTitle) private var ctxWindowTitle = true
     @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = true
+    @AppStorage(ContextSources.Key.rememberScreenTerms) private var rememberScreenTerms = false
+    @State private var confirmForget = false
+    @State private var learnedTerms: [LearnedTerm] = []
     @AppStorage(DictationFeatures.Key.recaseTerms) private var recaseTerms = true
     @AppStorage(DictationFeatures.Key.skipGate) private var skipGate = false
     @AppStorage(LivePreview.key) private var liveCleanup = true
@@ -103,6 +107,8 @@ struct SettingsView: View {
                 status.refreshPermissions()
                 let t = store.terms  // the overlay can save terms too
                 if t != terms { terms = t }
+                let l = learned.terms()
+                if l != learnedTerms { learnedTerms = l }
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -150,6 +156,13 @@ struct SettingsView: View {
                 Toggle("Screen text (OCR)", isOn: $ctxOCR)
                 Toggle("App & window title, web domain", isOn: $ctxWindowTitle)
                 Toggle("Boost recognition with words on screen", isOn: $ctxScreenVocabulary)
+                // Off offers to forget what was learned.
+                Toggle("Remember screen terms that fix dictations", isOn: Binding(get: { rememberScreenTerms }, set: { on in
+                    rememberScreenTerms = on
+                    if !on, !learned.terms().isEmpty { confirmForget = true }
+                })).disabled(!ctxScreenVocabulary)
+                Text("A term on screen that corrected a dictation boosts later ones too. Stored on this Mac only; see Vocabulary.")
+                    .font(.footnote).foregroundStyle(.secondary)
             } header: {
                 Text("Context sources")
             } footer: {
@@ -160,6 +173,12 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .fitted()
+        .confirmationDialog("Forget the terms learned from screen?", isPresented: $confirmForget, titleVisibility: .visible) {
+            Button("Forget Learned Terms", role: .destructive) { learned.forgetAll(); learnedTerms = [] }
+            Button("Keep", role: .cancel) {}
+        } message: {
+            Text("They're no longer used while this is off. Kept, they're used again if you turn it back on.")
+        }
     }
 
     private var models: some View {
@@ -272,10 +291,48 @@ struct SettingsView: View {
                 Button("Import FluidVoice Vocabulary", action: importFluidVoice)
                 if let vocabMessage { Text(vocabMessage).font(.footnote).foregroundStyle(.secondary) }
             }
+            if !learnedTerms.isEmpty { learnedSection }
         }
         .padding()
-        .frame(width: SettingsView.width, height: 400)
+        .frame(width: SettingsView.width, height: learnedTerms.isEmpty ? 400 : 560)
         .sheet(item: $editing) { TermSheet(draft: $0, save: save) }
+    }
+
+    /// #87: screen terms remembered with "Remember screen terms that fix dictations", newest first.
+    private var learnedSection: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                Text("Learned from screen").font(.headline)
+                Spacer()
+                Button("Forget All") { learned.forgetAll(); learnedTerms = [] }
+            }
+            .padding(.top, 8)
+            List(learnedTerms, id: \.text) { t in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(t.text)
+                        Text("Fixed \(t.count)× · last \(t.lastUsed.formatted(.relative(presentation: .named)))")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { promote(t) } label: { Image(systemName: "plus.circle") }.buttonStyle(.borderless)
+                        .help("Move to Vocabulary")
+                    Button { learned.forget(t.text); learnedTerms = learned.terms() } label: { Image(systemName: "trash") }
+                        .buttonStyle(.borderless).help("Delete")
+                }
+            }
+            .frame(height: 140)
+            if !rememberScreenTerms {
+                Text("Not used: \"Remember screen terms that fix dictations\" is off in Context.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func promote(_ t: LearnedTerm) {
+        save(TermDraft(text: t.text))
+        if store.terms.contains(where: { $0.text.lowercased() == t.text.lowercased() }) { learned.forget(t.text) }
+        learnedTerms = learned.terms()
     }
 
     private func save(_ d: TermDraft) {
@@ -315,7 +372,7 @@ private struct TermDraft: Identifiable {
     var text = ""
     var aliases = ""
 
-    init() {}
+    init(text: String = "") { self.text = text }
     init(_ t: VocabTerm) { old = t.text; text = t.text; aliases = t.aliases.joined(separator: ", ") }
 }
 

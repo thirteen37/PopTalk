@@ -50,16 +50,20 @@ public struct ContextSources: Sendable, Equatable {
     public enum Key {
         public static let focusedText = "contextFocusedText", nearbyText = "contextNearbyText", ocr = "contextOCR"
         public static let windowTitle = "contextWindowTitle", screenVocabulary = "contextScreenVocabulary"
+        public static let rememberScreenTerms = "contextRememberScreenTerms"
     }
     public var focusedText = true, nearbyText = true, ocr = true, windowTitle = true, screenVocabulary = true
+    /// #87 "Remember screen terms that fix dictations": off by default, and only with `screenVocabulary` on.
+    public var rememberScreenTerms = false
 
     public init() {}
 
-    /// Unset keys are on.
+    /// Unset keys are on, but `rememberScreenTerms`.
     public init(_ d: UserDefaults) {
         func on(_ k: String) -> Bool { d.object(forKey: k) as? Bool ?? true }
         (focusedText, nearbyText, ocr) = (on(Key.focusedText), on(Key.nearbyText), on(Key.ocr))
         (windowTitle, screenVocabulary) = (on(Key.windowTitle), on(Key.screenVocabulary))
+        rememberScreenTerms = screenVocabulary && d.bool(forKey: Key.rememberScreenTerms)
     }
 
     /// The title is still read during capture (private-window check, OCR window match); it's dropped here.
