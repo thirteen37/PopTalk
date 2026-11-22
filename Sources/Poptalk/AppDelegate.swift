@@ -219,7 +219,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Hotkey cancels holds under 150 ms; only then read the selection (may post ⌘C), OCR and show the HUD.
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            Timing.log.info("press: capture start")
+            let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-"
+            Timing.log.info("press: capture start, app \(app, privacy: .public)")
             contextTask = Task { await ScreenContext.capture() }
             selectionTask = Task { await TextIO.selectedText() }
             overlay.showRecording(note: { if case .raw(let note) = mode { note } else { nil } }())
@@ -286,8 +287,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.mark("release: selection awaited", since: t0)
             await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
             Timing.mark("release: preview drained", since: t0)
-            let boost = Pipeline.boostTerms(saved: store.terms, learned: learnedTerms, context: snapshot,
+            let (saved, learned) = (store.terms, learnedTerms)
+            let boost = Pipeline.boostTerms(saved: saved, learned: learned, context: snapshot,
                                             fromScreen: ContextSources(.standard).screenVocabulary)
+            let split = Pipeline.boostSources(boost, saved: saved, learned: learned)
+            Timing.log.info("release: boost \(split.saved) saved, \(split.learned) learned, \(split.screen) screen")
             let heard: Transcription
             do { heard = try await transcriber.transcribe(samples, boost: boost) } catch {
                 overlay.showError("Transcription failed"); return
@@ -423,7 +427,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// over it. A raw insert's cleanup, and every undo in a terminal, goes through here.
     private func replaceLast(_ last: LastInsert<AXUIElement>, with new: String, raw: Bool = false) async -> Bool {
         guard canEdit(last, raw: raw) else { return false }
-        if let n = backspaces(last) { await TextIO.retype(deleting: n, then: new); return true }
+        if let n = backspaces(last) {
+            let typed = last.prefix + last.text  // #89: graphemes vs UTF-16 of what the backspaces delete
+            Timing.log.info("""
+                retype: \(n) backspaces for \(typed.count) graphemes / \(typed.utf16.count) utf16, \
+                paste \(new.count) graphemes / \(new.utf16.count) utf16
+                """)
+            await TextIO.retype(deleting: n, then: new)
+            return true
+        }
         guard let field = TextIO.focusedElement(), TextIO.selectLast(last.prefix + last.text, in: field) else { return false }
         await TextIO.replaceSelection(new)
         return true
@@ -444,7 +456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         typing?.end(flush: false)
         typing = nil
         lastInsert = nil
-        learned.forget(request: id)
+        Timing.log.info("undo: forgot \(self.learned.forget(request: id)) learned terms")
         history.append(HistoryEvent(.undo, id: id))
         return true
     }
@@ -581,7 +593,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard ContextSources(.standard).rememberScreenTerms else { return }
         let boosted = Pipeline.termsWritten(from: raw.rawTranscript, to: raw.request.transcript, terms: raw.boost,
                                             saved: store.terms.map(\.text))
-        learned.record((boosted + result.recased).filter { inserted.contains($0) }, request: id)
+        let (fromBoost, fromCasing) = (boosted.filter { inserted.contains($0) }, result.recased.filter { inserted.contains($0) })
+        let size = learned.record(fromBoost + fromCasing, request: id)
+        Timing.log.info("learned: \(fromBoost.count) from boost, \(fromCasing.count) from casing, list \(size)")
     }
 
     /// Applies the outcome and returns the label shown, for history.

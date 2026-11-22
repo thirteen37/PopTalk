@@ -36,11 +36,19 @@ private let day: TimeInterval = 86_400
     #expect(boost == ["PopTalk", "Quillmate"])
 }
 
+@Test func boostSourcesSplitsTheBoostBySavedLearnedAndScreen() {
+    let saved = [VocabTerm(text: "PopTalk")], learned = [VocabTerm(text: "poptalk"), VocabTerm(text: "Quillmate")]
+    let boost = Pipeline.boostTerms(saved: saved, learned: learned, context: ScreenSnapshot(text: "Ask Priya Raman about Kubernetes."))
+    let split = Pipeline.boostSources(boost, saved: saved, learned: learned)
+    #expect(split.saved == 1 && split.learned == 1 && split.screen == boost.count - 2 && split.screen > 0)
+}
+
 @Test func learnedTermsCountPersistAndMergeCaseInsensitively() {
     let url = tempURL(), t0 = Date(timeIntervalSince1970: 1_000_000)
     let learned = LearnedTerms(url: url)
-    learned.record(["Priya", "PopTalk"], request: UUID(), at: t0)
-    learned.record(["priya", "Priya"], request: UUID(), at: t0 + 60)  // once per request
+    #expect(learned.record(["Priya", "PopTalk"], request: UUID(), at: t0) == 2)  // the list's size after
+    #expect(learned.record(["priya", "Priya"], request: UUID(), at: t0 + 60) == 2)  // once per request
+    #expect(learned.record([], request: UUID(), at: t0 + 60) == 2)
     #expect(LearnedTerms(url: url).terms(at: t0 + 120) == [LearnedTerm(text: "priya", lastUsed: t0 + 60, count: 2),
                                                            LearnedTerm(text: "PopTalk", lastUsed: t0, count: 1)])
     learned.forget("PRIYA")
@@ -55,10 +63,10 @@ private let day: TimeInterval = 86_400
     let first = UUID(), second = UUID()
     learned.record(["Priya"], request: first, at: t0)
     learned.record(["Priya", "PopTalk"], request: second, at: t0 + 60)
-    learned.forget(request: first)  // not the latest: nothing to undo
-    learned.forget(request: second)
+    #expect(learned.forget(request: first) == 0)  // not the latest: nothing to undo
+    #expect(learned.forget(request: second) == 2)  // the terms it put back or dropped
     #expect(learned.terms(at: t0 + 120) == [LearnedTerm(text: "Priya", lastUsed: t0, count: 1)])
-    learned.forget(request: second)  // once only
+    #expect(learned.forget(request: second) == 0)  // once only
     #expect(learned.terms(at: t0 + 120).count == 1)
 }
 

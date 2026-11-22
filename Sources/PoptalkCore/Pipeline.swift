@@ -203,6 +203,14 @@ extension Pipeline {
             }
     }
 
+    /// How many of `boost` (from `boostTerms`) came from saved vocabulary, learned terms and the screen, for the log (#88).
+    public static func boostSources(_ boost: [VocabTerm], saved: [VocabTerm], learned: [VocabTerm]) -> (saved: Int, learned: Int, screen: Int) {
+        let s = Set(saved.map { $0.text.lowercased() }), l = Set(learned.map { $0.text.lowercased() })
+        let fromSaved = boost.filter { s.contains($0.text.lowercased()) }.count
+        let fromLearned = boost.filter { !s.contains($0.text.lowercased()) && l.contains($0.text.lowercased()) }.count
+        return (fromSaved, fromLearned, boost.count - fromSaved - fromLearned)
+    }
+
     private static let think = try! NSRegularExpression(pattern: #"<think>[\s\S]*?</think>|</?transcript>"#)
 
     private static let hesitation = try! NSRegularExpression(

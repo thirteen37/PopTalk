@@ -1,7 +1,7 @@
 import os
 import PoptalkCore
 
-/// Stage timings only (no text): `log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'`.
+/// Stage timings, counts and the frontmost app's bundle ID only (no text):`log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'`.
 enum Timing {
     static let log = Logger(subsystem: "io.lyx.poptalk", category: "timing")
     /// The latest `start()` and PopTalk's CPU time then, so marks since it also log CPU ms (#58).
