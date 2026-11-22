@@ -52,3 +52,56 @@ private func tempURL() -> URL {
     #expect(try VocabularyStore.importFluidVoice(from: url)
         == [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"], weight: 10)])
 }
+
+@Test func updateRenamesInPlaceKeepingPositionAndWeight() throws {
+    let url = tempURL()
+    let store = VocabularyStore(url: url)
+    try store.add(VocabTerm(text: "Todo", aliases: ["to do"], weight: 5))
+    try store.add(VocabTerm(text: "Poptalk"))
+    try store.update("todo", to: VocabTerm(text: "Todoist", aliases: ["todo list"]))
+    let want = [VocabTerm(text: "Todoist", aliases: ["todo list"], weight: 5), VocabTerm(text: "Poptalk")]
+    #expect(store.terms == want)
+    #expect(VocabularyStore(url: url).terms == want)
+}
+
+@Test func updateChangesCaseOfTheSameTerm() throws {
+    let store = VocabularyStore(url: tempURL())
+    try store.add(VocabTerm(text: "todoist", aliases: ["todo list"]))
+    try store.update("todoist", to: VocabTerm(text: "Todoist", aliases: []))
+    #expect(store.terms == [VocabTerm(text: "Todoist")])
+}
+
+@Test func updateOntoAnotherTermMergesIntoIt() throws {
+    let store = VocabularyStore(url: tempURL())
+    try store.add(VocabTerm(text: "Todoist", aliases: ["todo list"]))
+    try store.add(VocabTerm(text: "Todo", aliases: ["to do"]))
+    try store.update("Todo", to: VocabTerm(text: "todoist", aliases: ["to do", "Todo List"]))
+    #expect(store.terms == [VocabTerm(text: "Todoist", aliases: ["todo list", "to do"])])
+}
+
+@Test func updateTrimsAndDedupesAliases() throws {
+    let store = VocabularyStore(url: tempURL())
+    try store.add(VocabTerm(text: "Todo"))
+    try store.update("Todo", to: VocabTerm(text: "  Todoist ", aliases: [" todo list ", "", "Todo List", "TODOIST", "to do"]))
+    #expect(store.terms == [VocabTerm(text: "Todoist", aliases: ["todo list", "to do"])])
+}
+
+@Test func updateOfAMissingTermAddsIt() throws {
+    let store = VocabularyStore(url: tempURL())
+    try store.update("gone", to: VocabTerm(text: "Todoist"))
+    #expect(store.terms == [VocabTerm(text: "Todoist")])
+}
+
+@Test func emptyTermIsRejected() throws {
+    let store = VocabularyStore(url: tempURL())
+    try store.add(VocabTerm(text: "Todoist"))
+    #expect(throws: VocabularyError.emptyTerm) { try store.update("Todoist", to: VocabTerm(text: "  ")) }
+    #expect(throws: VocabularyError.emptyTerm) { try store.add(VocabTerm(text: "", aliases: ["x"])) }
+    #expect(store.terms == [VocabTerm(text: "Todoist")])
+}
+
+@Test func addNormalizesLikeUpdate() throws {
+    let store = VocabularyStore(url: tempURL())
+    try store.add(VocabTerm(text: " Todoist", aliases: ["todo list ", "todo list", "todoist"]))
+    #expect(store.terms == [VocabTerm(text: "Todoist", aliases: ["todo list"])])
+}

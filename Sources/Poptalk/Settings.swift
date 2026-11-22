@@ -77,6 +77,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var terms: [VocabTerm] = []
     @State private var vocabMessage: String?
+    @State private var editing: TermDraft?
 
     private let devices = AVCaptureDevice.DiscoverySession(
         deviceTypes: [.microphone], mediaType: .audio, position: .unspecified).devices
@@ -256,18 +257,36 @@ struct SettingsView: View {
                             }
                         }
                         Spacer()
+                        Button { editing = TermDraft(t) } label: { Image(systemName: "pencil") }.buttonStyle(.borderless)
+                            .help("Edit")
                         Button { delete(t) } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+                            .help("Delete")
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { editing = TermDraft(t) }
                 }
             }
             .overlay { if terms.isEmpty { Text("No saved terms").foregroundStyle(.secondary) } }
             HStack {
+                Button("Add Term…") { editing = TermDraft() }
                 Button("Import FluidVoice Vocabulary", action: importFluidVoice)
                 if let vocabMessage { Text(vocabMessage).font(.footnote).foregroundStyle(.secondary) }
             }
         }
         .padding()
         .frame(width: SettingsView.width, height: 400)
+        .sheet(item: $editing) { TermSheet(draft: $0, save: save) }
+    }
+
+    private func save(_ d: TermDraft) {
+        let term = VocabTerm(text: d.text, aliases: d.aliases.split(separator: ",").map(String.init))
+        do {
+            if let old = d.old { try store.update(old, to: term) } else { try store.add(term) }
+            vocabMessage = nil
+        } catch {
+            vocabMessage = "Couldn't save: \(error.localizedDescription)"
+        }
+        terms = store.terms
     }
 
     private func delete(_ t: VocabTerm) {
@@ -286,6 +305,44 @@ struct SettingsView: View {
             vocabMessage = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
         }
         terms = store.terms
+    }
+}
+
+/// A vocabulary term being added (`old` nil) or edited; aliases comma-separated.
+private struct TermDraft: Identifiable {
+    let id = UUID()
+    var old: String?
+    var text = ""
+    var aliases = ""
+
+    init() {}
+    init(_ t: VocabTerm) { old = t.text; text = t.text; aliases = t.aliases.joined(separator: ", ") }
+}
+
+private struct TermSheet: View {
+    @State var draft: TermDraft
+    let save: (TermDraft) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .trailing) {
+            Form {
+                TextField("Term", text: $draft.text, prompt: Text("Todoist"))
+                TextField("Heard as", text: $draft.aliases, prompt: Text("todo list, to do list"))
+                Text("Optional, comma-separated: how speech recognition mishears the term. Recognition listens for these and writes the term. Spoken forms like “fluid audio” for FluidAudio are added automatically.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            .formStyle(.grouped)
+            HStack {
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(draft.old == nil ? "Add" : "Save") { save(draft); dismiss() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draft.text.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding([.horizontal, .bottom])
+        }
+        .frame(width: 400)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

@@ -19,6 +19,11 @@ public struct VocabTerm: Codable, Hashable, Sendable {
     }
 }
 
+public enum VocabularyError: Error, LocalizedError {
+    case emptyTerm
+    public var errorDescription: String? { "A term can't be empty." }
+}
+
 /// Saved vocabulary, a JSON array of `VocabTerm`. Only grows when the user opts in.
 public final class VocabularyStore: @unchecked Sendable {
     public static var defaultURL: URL {
@@ -36,19 +41,53 @@ public final class VocabularyStore: @unchecked Sendable {
         _terms = (try? JSONDecoder().decode([VocabTerm].self, from: Data(contentsOf: url))) ?? []
     }
 
+    /// Adds `term`, or merges its aliases into the saved term with the same text (case-insensitive).
     /// Locks across the file write too, so concurrent saves can't interleave.
     public func add(_ term: VocabTerm) throws {
+        let term = try Self.normalized(term)
+        lock.lock()
+        defer { lock.unlock() }
+        try save(Self.merging(term, into: _terms, at: _terms.endIndex))
+    }
+
+    /// Replaces the term with text `old` (case-insensitive) by `term`, in place and keeping its weight.
+    /// Renamed onto another saved term, it merges into that one like `add`; a missing `old` just adds.
+    public func update(_ old: String, to term: VocabTerm) throws {
+        var term = try Self.normalized(term)
         lock.lock()
         defer { lock.unlock() }
         var terms = _terms
+        var at = terms.endIndex
+        if let i = terms.firstIndex(where: { $0.text.lowercased() == old.lowercased() }) {
+            term.weight = terms[i].weight
+            terms.remove(at: i)
+            at = i
+        }
+        try save(Self.merging(term, into: terms, at: at))
+    }
+
+    /// `term` inserted at `index`, or its new aliases appended to the term with the same text.
+    private static func merging(_ term: VocabTerm, into terms: [VocabTerm], at index: Int) -> [VocabTerm] {
+        var terms = terms
         if let i = terms.firstIndex(where: { $0.text.lowercased() == term.text.lowercased() }) {
             for alias in term.aliases where !terms[i].aliases.contains(where: { $0.lowercased() == alias.lowercased() }) {
                 terms[i].aliases.append(alias)
             }
         } else {
-            terms.append(term)
+            terms.insert(term, at: index)
         }
-        try save(terms)
+        return terms
+    }
+
+    /// Text and aliases trimmed; aliases without empties, case-insensitive repeats or the text itself.
+    static func normalized(_ term: VocabTerm) throws -> VocabTerm {
+        var t = term
+        t.text = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.text.isEmpty else { throw VocabularyError.emptyTerm }
+        var seen: Set<String> = [t.text.lowercased()]
+        t.aliases = t.aliases.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+        return t
     }
 
     /// Removes the term with this text (case-insensitive).
