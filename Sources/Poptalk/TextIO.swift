@@ -97,7 +97,12 @@ enum TextIO {
     static func selectLast(_ s: String, in field: AXUIElement) -> Bool {
         guard let v = value(of: field), let r = v.range(of: s, options: .backwards) else { return false }
         let ns = NSRange(r, in: v)  // AX ranges count UTF-16 units
-        var cf = CFRange(location: ns.location, length: ns.length)
+        return select(location: ns.location, length: ns.length, expecting: s, in: field)
+    }
+
+    /// Selects the UTF-16 range in `field`; true only if the selection then reads back as exactly `s`.
+    static func select(location: Int, length: Int, expecting s: String, in field: AXUIElement) -> Bool {
+        var cf = CFRange(location: location, length: length)
         guard let range = AXValueCreate(.cfRange, &cf),
               AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, range) == .success
         else { return false }
