@@ -15,6 +15,7 @@ macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). T
 - Gemma 4's per-layer embeddings (1.26 GB) are read per token from the mmap'd safetensors file, not GPU memory (`MappedPLE`, #52). Disable for A/B with `POPTALK_PLE_MMAP=0` or the `mlxMappedPLE` default. The gather runs on MLX's CPU stream (#62): a GPU op over the mapping wires all of it (check `vm_stat` wired memory, not just `footprintMB`).
 - The first Vision OCR per process takes ~15 s; `ScreenContext.prewarmOCR()` runs at launch and capture skips OCR until it is warm.
 - Fine-tune prompts must match `Prompts.swift` exactly; changing the prompt text or order needs a bench re-run (and possibly a retrain).
+- Never log or persist transcripts, screen text or replies outside the opt-in history (`HistoryStore`). One exception: screen terms that changed a dictation, in `LearnedTerms` (opt-in, local only, never synced).
 - Training, retrains and long bench sweeps hog the GPU for hours: ask the user first.
 - FluidAudio is built with `traits: []` (no NeMo ITN, TTS, Diarizer; #66); after changing its traits, `rm -rf .build/out` or linking fails on undefined `_nemo_*` symbols.
 - Agent worktrees are ~5 GB each (their own `.build`); remove them as soon as the work merges.
