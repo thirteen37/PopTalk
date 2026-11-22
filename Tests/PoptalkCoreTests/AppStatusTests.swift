@@ -6,6 +6,9 @@ import Testing
         == "PopTalk 0.1 (412 · 9b4cc05-dirty)")
     #expect(versionLabel(["CFBundleShortVersionString": "0.1"]) == "PopTalk 0.1")
     #expect(versionLabel(nil) == "PopTalk (development build)")
+    // PoptalkVersion (may carry -dev) wins over the numeric CFBundleShortVersionString.
+    #expect(versionLabel(["PoptalkVersion": "0.1.0-dev", "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "243",
+                          "PoptalkCommit": "1b2c3d4"]) == "PopTalk 0.1.0-dev (243 · 1b2c3d4)")
 }
 
 private func ok() -> AppStatus {

@@ -63,7 +63,10 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build/PopTalk-*.dmg --verify-tag --generate-notes --title "PopTalk ${GITHUB_REF_NAME#v}"
+        run: | # the title is what the app shows (versionLabel), read from the built Info.plist
+          get() { /usr/libexec/PlistBuddy -c "Print $1" build/PopTalk.app/Contents/Info.plist; }
+          title="PopTalk $(get PoptalkVersion) ($(get CFBundleVersion) · $(get PoptalkCommit))"
+          gh release create "$GITHUB_REF_NAME" build/PopTalk-*.dmg --verify-tag --generate-notes --title "$title"
 
       - name: Upload the DMG
         if: github.ref_type != 'tag'

@@ -7,7 +7,7 @@ cd "${0:A:h}/.."
 
 app=build/PopTalk.app
 [[ -d $app ]] || { print -u2 "No $app: run scripts/build-app.zsh first."; exit 1 }
-version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' $app/Contents/Info.plist)
+version=$(/usr/libexec/PlistBuddy -c 'Print PoptalkVersion' $app/Contents/Info.plist)
 dmg=build/PopTalk-$version.dmg
 # Sign the DMG with whatever signed the app; an ad-hoc app has no Authority, so its DMG stays unsigned.
 identity=$(codesign -dvv $app 2>&1 | sed -n 's/^Authority=//p' | head -1)

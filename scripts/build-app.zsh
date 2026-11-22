@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # Build PopTalk, bundle it into build/PopTalk.app and sign it with your Apple Developer certificate.
-# Version: POPTALK_VERSION, else the latest v* tag (v0.2.0 -> 0.2.0), else 0.1.
+# Version (PoptalkVersion, shown in the app): POPTALK_VERSION, else the v* tag on HEAD (v0.2.0 -> 0.2.0), else the
+# latest reachable v* tag plus -dev (0.2.0-dev), else 0.0.0-dev. CFBundleShortVersionString drops the -dev suffix.
 set -euo pipefail
 cd "${0:A:h}/.."
 
@@ -41,7 +42,10 @@ cp assets/icon/AppIcon.icns assets/icon/Assets.car assets/icon/MenuBar*.png $app
 cp -R adapters $app/Contents/Resources/
 version=${POPTALK_VERSION:-}
 if [[ -z $version ]]; then
-  version=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null) && version=${version#v} || version=0.1
+  if tag=$(git describe --tags --match 'v*' --exact-match 2>/dev/null); then version=${tag#v}
+  elif tag=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null); then version=${tag#v}-dev
+  else version=0.0.0-dev
+  fi
 fi
 # Build number: commit count (monotonic, as macOS expects); commit: short hash, -dirty with uncommitted changes.
 build=$(git rev-list --count HEAD)
@@ -59,7 +63,8 @@ cat > $app/Contents/Info.plist <<PLIST
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>$version</string>
+    <key>CFBundleShortVersionString</key><string>${version%%-*}</string>
+    <key>PoptalkVersion</key><string>$version</string>
     <key>CFBundleVersion</key><string>$build</string>
     <key>PoptalkCommit</key><string>$commit</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>

@@ -8,7 +8,7 @@ Pushing a `v*` tag runs `.github/workflows/release.yml` (#90): it builds and sig
 git tag v0.2.0 && git push --tags
 ```
 
-The tag (without the `v`) becomes `CFBundleShortVersionString`; the commit count is `CFBundleVersion`. Running the workflow by hand on a tag releases that tag; on a branch it only uploads the DMG as a workflow artifact.
+The tag (without the `v`) is the version; the commit count is `CFBundleVersion`. A build not on a `v*` tag gets the latest reachable tag plus `-dev` (`0.1.0-dev`, or `0.0.0-dev` with no tag); `POPTALK_VERSION` overrides. That display version goes in the `PoptalkVersion` Info.plist key and the DMG name; `CFBundleShortVersionString` gets it without `-dev`, as Apple wants plain `X.Y.Z`. The release title is what the app shows in Settings → General, read from the built Info.plist: `PopTalk 0.1.0 (238 · a55171a)`. Running the workflow by hand on a tag releases that tag; on a branch it only uploads the DMG as a workflow artifact.
 
 Locally, `scripts/build-app.zsh && scripts/make-dmg.zsh` makes `build/PopTalk-<version>.dmg`. It is notarized only if the `NOTARY_*` variables below are set.
 

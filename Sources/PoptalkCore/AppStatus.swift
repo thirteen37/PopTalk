@@ -15,9 +15,12 @@ public enum Permission: String, CaseIterable, Sendable {
 
 public enum SettingsTab: String, CaseIterable, Sendable { case general, context, models, permissions, vocabulary }
 
-/// "PopTalk 0.1 (412 · 9b4cc05)" from an Info.plist dictionary; install.zsh stamps the build and commit keys.
+/// "PopTalk 0.1.0-dev (412 · 9b4cc05)" from an Info.plist dictionary; build-app.zsh stamps PoptalkVersion (the
+/// display version, -dev off a release tag), the build and the commit. The release workflow titles releases the same way.
 public func versionLabel(_ info: [String: Any]?) -> String {
-    guard let version = info?["CFBundleShortVersionString"] as? String else { return "PopTalk (development build)" }
+    guard let version = (info?["PoptalkVersion"] ?? info?["CFBundleShortVersionString"]) as? String else {
+        return "PopTalk (development build)"
+    }
     let build = ["CFBundleVersion", "PoptalkCommit"].compactMap { info?[$0] as? String }
     return build.isEmpty ? "PopTalk \(version)" : "PopTalk \(version) (\(build.joined(separator: " · ")))"
 }
