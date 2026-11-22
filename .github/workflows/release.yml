@@ -1,0 +1,77 @@
+# Build a Developer ID-signed, notarized DMG and attach it to a GitHub release (#90). See docs/releasing.md.
+# Tag pushes (v*) release; a manual run on a tag releases too, on a branch it only uploads the DMG as an artifact.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26 # arm64
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the commit count is CFBundleVersion
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          swift --version
+
+      - name: Download the Metal toolchain # mlx-swift compiles its Metal shaders
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      - name: Import the Developer ID certificate
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          : "${P12:?secret DEVELOPER_ID_P12_BASE64 is not set}"
+          kc=$RUNNER_TEMP/signing.keychain-db
+          pw=$(uuidgen)
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+
+      - name: Build and sign the app
+        run: |
+          if [[ $GITHUB_REF_TYPE == tag ]]; then export POPTALK_VERSION=${GITHUB_REF_NAME#v}; fi
+          scripts/build-app.zsh
+
+      - name: Make, notarize and staple the DMG
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+        run: |
+          : "${NOTARY_KEY_ID:?}" "${NOTARY_ISSUER_ID:?}" "${NOTARY_KEY:?notary secrets are not set}"
+          scripts/make-dmg.zsh
+
+      - name: Create the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" build/PopTalk-*.dmg --verify-tag --generate-notes --title "PopTalk ${GITHUB_REF_NAME#v}"
+
+      - name: Upload the DMG
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: PopTalk-dmg
+          path: build/PopTalk-*.dmg
+
+      - name: Delete the keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
