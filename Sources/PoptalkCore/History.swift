@@ -60,15 +60,19 @@ public struct HistoryRequest: Codable, Equatable, Sendable {
 
 /// A later signal about request `id`.
 public struct HistoryEvent: Codable, Equatable, Sendable {
-    public enum Kind: String, Codable, Sendable { case undo, correction, vocabularyAccepted, vocabularyDeclined }
+    /// `typedCorrection` (#86): the user fixed the dictation by typing. `HistoryStore` merges lines by their `type` string,
+    /// so an older version (another Mac) keeps the line without decoding it.
+    public enum Kind: String, Codable, Sendable { case undo, correction, vocabularyAccepted, vocabularyDeclined, typedCorrection }
     public var type: Kind
     public var id: UUID
     public var at: Date
     /// For a correction: the request that corrected it.
     public var by: UUID?
+    /// For a typed correction: the user's version of the dictated text (`TypedCorrection.text`).
+    public var text: String?
 
-    public init(_ type: Kind, id: UUID, at: Date = Date(), by: UUID? = nil) {
-        (self.type, self.id, self.at, self.by) = (type, id, at, by)
+    public init(_ type: Kind, id: UUID, at: Date = Date(), by: UUID? = nil, text: String? = nil) {
+        (self.type, self.id, self.at, self.by, self.text) = (type, id, at, by, text)
     }
 }
 

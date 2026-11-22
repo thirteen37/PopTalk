@@ -61,7 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
-                        onCancel: { [weak self] in self?.cancelled() })
+                        onCancel: { [weak self] in self?.cancelled() },
+                        onTap: { [weak self] in self?.tapped() })
         installHotkeyWhenTrusted()  // also checks permissions
         if let tab = status.value.launchTab { openSettings(at: tab) }
     }
@@ -240,6 +241,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlay.hide()
     }
 
+    /// A right-⌥ tap: cancels, and accepts a showing typed-correction offer (#86), taken before `cancelled` hides it.
+    private func tapped() {
+        let accept = overlay.takeTapAccept()
+        cancelled()
+        accept?()
+    }
+
     private func released() {
         guard recording else { return }
         recording = false
@@ -304,6 +312,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                          app: NSRunningApplication?, cleanup: RawInsert? = nil,
                          reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
                          system: SystemSample = .now()) async {
+        typing?.end()  // before this request pastes: a fix typed in the last seconds is still checked
+        typing = nil
         // Built per press, so settings changes apply to the next one. A provider that can't start (e.g.
         // Apple Intelligence off) still dictates raw.
         let complete: Pipeline.Complete
@@ -376,6 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let now = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
                              prefix: raw.prefix, terminal: terminal)
         lastInsert = now
+        watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID)
         overlay.showOutcome("Cleaned up", undo: undoable(now) ? { [weak self] in
             await self?.undo(now, previous: raw.prefix + last.text, id: id) ?? false
         } : nil, vocabularyOffer: nil) {}
@@ -427,6 +438,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let inserted, inserted.terminal != nil {
             guard await replaceLast(inserted, with: previous) else { overlay.showError(Self.editFailed); return false }
         } else { TextIO.undo() }
+        typing?.end(flush: false)
+        typing = nil
         lastInsert = nil
         history.append(HistoryEvent(.undo, id: id))
         return true
@@ -531,6 +544,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         history.append(HistoryEvent(kind, id: id))
     }
 
+    /// Watches the last dictation's field for a fix typed over it (#86).
+    private var typing: TypingWatch?
+
+    /// Starts `typing` on a dictation just pasted as `pasted` into `field`, except in a terminal or a secure field. A
+    /// misheard term is offered (accepted by a right-⌥ tap); the user's version goes to history, linked to request `id`.
+    private func watchTyping(_ field: AXUIElement, pasted: String, transcript: String, id: UUID?) {
+        typing?.end()
+        typing = nil
+        guard terminalStamp() == nil, !ScreenContext.isSensitive() else { return }
+        let store = store
+        typing = TypingWatch(field: field, pasted: pasted, transcript: transcript, known: { store.terms },
+            typed: { [weak self] in
+                guard let self, !busy, !recording else { return }
+                overlay.releaseKeys()  // this dictation's Esc/Return would land on the user's typing
+            },
+            offer: { [weak self] term in
+                guard let self, !busy, !recording else { return }
+                overlay.showTypedOffer(term) { [weak self] in
+                    do { try store.add(term) } catch { self?.overlay.showError("Couldn't save vocabulary") }
+                }
+            },
+            done: { [weak self] fix in
+                if let id { self?.history.append(HistoryEvent(.typedCorrection, id: id, text: fix.text)) }
+            })
+    }
+
     /// Applies the outcome and returns the label shown, for history.
     /// `raw`: kept on `lastInsert` for a later cleanup when the result was a raw insert while the model loaded.
     private func apply(_ result: PipelineResult, cursorKnown: Bool, id: UUID, raw: RawInsert) async -> String {
@@ -573,6 +612,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
                        prefix: space, terminal: terminal)
         } : nil
+        if case .insert = result.outcome, let field, let last = lastInsert {
+            watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID)
+        }
         let shown = result.remembered.map { "\(label) · saved “\($0.text)”" } ?? label
         let store = store
         // A newer outcome replaced the old offer unanswered.
