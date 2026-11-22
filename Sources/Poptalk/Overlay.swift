@@ -117,6 +117,23 @@ final class Overlay {
         }
     }
 
+    /// What a right-⌥ tap does while a typed-correction offer shows (#86); cleared by every other show and hide.
+    private var tapAccept: (() -> Void)?
+
+    /// A term learned from the user's typed fix (#86). Catches no keys, since the user is typing: a right-⌥ tap
+    /// (`takeTapAccept`) runs `onAccept`; otherwise it times out.
+    func showTypedOffer(_ term: VocabTerm, onAccept: @escaping () -> Void) {
+        let seconds = max(Self.outcomeSeconds, 6)
+        show(Self.typedOfferHUD(term, seconds: seconds), for: seconds)
+        tapAccept = { [weak self] in onAccept(); self?.show(Self.confirmHUD("Added “\(term.text)”"), for: 1.5) }
+    }
+
+    /// The showing typed-correction offer's accept, once; nil when none is up.
+    func takeTapAccept() -> (() -> Void)? {
+        defer { tapAccept = nil }
+        return tapAccept
+    }
+
     /// How long an outcome (and its undo/accept keys) stays up: the "Undo window" setting, read per show.
     static var outcomeSeconds: TimeInterval { OutcomeKeys.undoWindow(.standard) }
 
@@ -145,6 +162,7 @@ final class Overlay {
     func hide() {
         hideWork?.cancel()
         keys = nil
+        tapAccept = nil
         preview = nil
         fieldRead = false
         generation += 1
@@ -225,6 +243,11 @@ final class Overlay {
         HUD(glyph: .symbol("sparkle"), tint: .systemGreen, act: "Model ready", keys: [("⏎", "clean up now")], timer: seconds)
     }
 
+    static func typedOfferHUD(_ term: VocabTerm, seconds: TimeInterval) -> HUD {
+        HUD(glyph: .symbol("text.badge.plus"), tint: .systemGreen, heard: term.aliases.first.map { "Heard “\($0)”" },
+            act: "Typed", main: term.text, keys: [("right ⌥", "tap to add to vocabulary")], timer: seconds)
+    }
+
     /// A dictation (result, not `edit`), an edit (`edit`: "Corrected Todoist") or a raw insert's cleanup (no result:
     /// "Cleaned up").
     static func outcomeHUD(_ text: String, heard: String?, result: String?, edit: Bool, undo: Bool,
@@ -249,6 +272,7 @@ final class Overlay {
     private func show(_ hud: HUD, for seconds: TimeInterval?) {
         hideWork?.cancel()
         keys = nil
+        tapAccept = nil
         generation += 1
         let view = Capsule.view(hud)
         let size = view.frame.size

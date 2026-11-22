@@ -43,6 +43,17 @@ private func lines(_ store: HistoryStore) throws -> [Data] {
     #expect(String(decoding: ls[1], as: UTF8.self).contains(#""type":"correction""#))
 }
 
+@Test func typedCorrectionEventCarriesTheTextAndOlderEventsStillDecode() throws {
+    let ev = HistoryEvent(.typedCorrection, id: UUID(), at: t0, text: "Send it to Todoist.")
+    let line = try HistoryStore.encoder.encode(ev)
+    #expect(String(decoding: line, as: UTF8.self).contains(#""type":"typedCorrection""#))
+    #expect(try HistoryStore.decoder.decode(HistoryEvent.self, from: line) == ev)
+    let old = Data(#"{"at":"2023-11-14T22:13:20Z","id":"\#(ev.id)","type":"undo"}"#.utf8)
+    #expect(try HistoryStore.decoder.decode(HistoryEvent.self, from: old) == HistoryEvent(.undo, id: ev.id, at: t0))
+    // No text key when there's none, so other events' lines are unchanged.
+    #expect(!String(decoding: try HistoryStore.encoder.encode(HistoryEvent(.undo, id: ev.id, at: t0)), as: UTF8.self).contains("text"))
+}
+
 @Test func statsCountRequestsAndBytesAndWipeRemovesEverything() throws {
     let store = HistoryStore(directory: tempDir()) { true }
     let r = sample()

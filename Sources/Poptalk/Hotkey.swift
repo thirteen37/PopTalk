@@ -2,21 +2,24 @@ import AppKit
 import CoreGraphics
 
 /// Hold-to-talk on Right Option (keycode 61) via a CGEventTap. Events always pass through.
-/// A hold under 150 ms, or one where another key is pressed (⌥+e etc.), is cancelled.
+/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap under 150 ms calls `onTap`, which cancels too
+/// (and accepts a typed-correction offer, #86).
 @MainActor
 final class Hotkey {
     private static let rightOption: Int64 = 61
-    private let onPress: () -> Void, onRelease: () -> Void, onCancel: () -> Void
+    private let onPress: () -> Void, onRelease: () -> Void, onCancel: () -> Void, onTap: () -> Void
     private var tap: CFMachPort?
     private var pressedAt: Date?
     private var cancelled = false
     /// Key-downs seen from other processes: an insert in a terminal is only taken back if none came since (#79).
     private(set) var keyDowns = 0
 
-    init(onPress: @escaping () -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void) {
+    init(onPress: @escaping () -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void,
+         onTap: @escaping () -> Void) {
         self.onPress = onPress
         self.onRelease = onRelease
         self.onCancel = onCancel
+        self.onTap = onTap
     }
 
     /// Returns false until Accessibility is granted.
@@ -60,7 +63,7 @@ final class Hotkey {
             } else if !rightDown, let start = pressedAt {
                 pressedAt = nil
                 if cancelled { return }
-                if Date().timeIntervalSince(start) < 0.15 { onCancel() } else { onRelease() }
+                if Date().timeIntervalSince(start) < 0.15 { onTap() } else { onRelease() }
             }
         default:
             break

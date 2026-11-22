@@ -85,6 +85,14 @@ enum TextIO {
         return v as? String
     }
 
+    /// The end of the field's selection (the caret, after a paste), in UTF-16 units like AX ranges.
+    static func caret(in el: AXUIElement) -> Int? {
+        var v: CFTypeRef?, r = CFRange()
+        guard AXUIElementCopyAttributeValue(el, kAXSelectedTextRangeAttribute as CFString, &v) == .success, let v,
+              CFGetTypeID(v) == AXValueGetTypeID(), AXValueGetValue(v as! AXValue, .cfRange, &r) else { return nil }
+        return r.location + r.length
+    }
+
     /// Selects the last occurrence of `s` in `field`; true only if the selection then reads back as exactly `s`.
     static func selectLast(_ s: String, in field: AXUIElement) -> Bool {
         guard let v = value(of: field), let r = v.range(of: s, options: .backwards) else { return false }

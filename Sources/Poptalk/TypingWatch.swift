@@ -1,0 +1,81 @@
+import AppKit
+import ApplicationServices
+import PoptalkCore
+
+/// Watches a dictation's field for the user fixing it by typing (#86): AX value-changed notifications on the field,
+/// checked `pause` seconds after the last one. Stops at `end()` (the next dictation, an undo), at a check that finds
+/// focus gone from the field or the text around the dictation changed, or after `lifetime`. The field's text is read
+/// only in memory, for the diff.
+@MainActor
+final class TypingWatch {
+    private let field: AXUIElement, anchors: InsertAnchors, pasted: String, transcript: String, pause: TimeInterval
+    private let known: () -> [VocabTerm], offer: (VocabTerm) -> Void, done: (TypedCorrection) -> Void
+    private var observer: AXObserver?
+    private var pending: DispatchWorkItem?
+    /// The last check's result: what `done` gets.
+    private var latest: TypedCorrection?
+    private var offered: Set<String> = []
+
+    /// Nil when the field's text can't be read, the paste can't be found in it, or the app sends no notifications.
+    /// `offer`: a misheard term to offer, once per term. `done`: the last correction found, when the watch ends.
+    init?(field: AXUIElement, pasted: String, transcript: String, pause: TimeInterval = 2, lifetime: TimeInterval = 180,
+          known: @escaping () -> [VocabTerm], offer: @escaping (VocabTerm) -> Void,
+          done: @escaping (TypedCorrection) -> Void) {
+        var pid: pid_t = 0, obs: AXObserver?
+        guard let value = TextIO.value(of: field),
+              let anchors = InsertAnchors(value: value, inserted: pasted, caret: TextIO.caret(in: field)),
+              AXUIElementGetPid(field, &pid) == .success,
+              AXObserverCreate(pid, { _, _, _, ctx in
+                  guard let ctx else { return }
+                  let me = Unmanaged<TypingWatch>.fromOpaque(ctx).takeUnretainedValue()
+                  MainActor.assumeIsolated { me.changed() }
+              }, &obs) == .success, let obs
+        else { return nil }
+        (self.field, self.anchors, self.pasted, self.transcript, self.pause) = (field, anchors, pasted, transcript, pause)
+        (self.known, self.offer, self.done) = (known, offer, done)
+        // Unretained: `end()` removes the notification, and the owner calls it before letting go.
+        guard AXObserverAddNotification(obs, field, kAXValueChangedNotification as CFString,
+                                        Unmanaged.passUnretained(self).toOpaque()) == .success else { return nil }
+        observer = obs
+        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
+        DispatchQueue.main.asyncAfter(deadline: .now() + lifetime) { [weak self] in self?.end() }
+    }
+
+    /// Stops watching; idempotent. `flush`: first run a check still pending, then hand `done` the last correction.
+    func end(flush: Bool = true) {
+        guard let observer else { return }
+        if flush, pending != nil { check(final: true) }
+        pending?.cancel()
+        pending = nil
+        AXObserverRemoveNotification(observer, field, kAXValueChangedNotification as CFString)
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+        self.observer = nil
+        if flush, let latest { done(latest) }
+    }
+
+    private func changed() {
+        pending?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.check(final: false) }
+        pending = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + pause, execute: work)
+    }
+
+    /// `final`: run by `end`, so no offer (a dictation is starting) and no ending from here.
+    private func check(final: Bool) {
+        pending = nil
+        guard let span = TextIO.value(of: field).flatMap(anchors.span(in:)) else {
+            if !final { end() }  // the text around it changed: keep what was found, nothing more to learn
+            return
+        }
+        latest = TypedCorrection(inserted: pasted, span: span, transcript: transcript)
+        let term = final ? nil : latest?.offer(known: known(), isWord: Self.isWord)
+        Timing.log.info("typed fix: \(self.latest?.changes.count ?? 0) changes, offer \(term != nil ? "yes" : "no", privacy: .public)")
+        if let term, offered.insert(term.text.lowercased()).inserted { offer(term) }
+        if !final, TextIO.focusedElement() != field { end() }
+    }
+
+    /// Whether the system spell checker knows `w`.
+    static func isWord(_ w: String) -> Bool {
+        NSSpellChecker.shared.checkSpelling(of: w, startingAt: 0).location == NSNotFound
+    }
+}
