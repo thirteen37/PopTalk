@@ -393,13 +393,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Replaces the raw text with the cleaned text (`replaceLast`); a failure leaves the user's text as it was.
     private func replaceRaw(_ raw: RawInsert, with result: PipelineResult, id: UUID) async -> String {
         let failed = "Couldn't clean up"
-        let terminal = terminalStamp()
+        let (terminal, axUndo) = (terminalStamp(), axUndoStamp())
         guard !result.degraded, case .insert(let s, _) = result.outcome, let last = lastInsert,
               await replaceLast(last, with: raw.prefix + s, raw: true)
         else { overlay.showError(failed); return failed }
         let field = TextIO.focusedElement() ?? last.target
         let now = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
-                             prefix: raw.prefix, terminal: terminal)
+                             prefix: raw.prefix, terminal: terminal, axUndo: axUndo)
         lastInsert = now
         watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID)
         overlay.showOutcome("Cleaned up", undo: undoable(now) ? { [weak self] in
@@ -431,6 +431,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { @MainActor in terminalApps[id] = await Task.detached { Terminal.detect(bundleID: id, at: url) }.value }
         }
         return listed
+    }
+
+    /// Like `terminalStamp`, for an app whose ⌘Z ignores PopTalk's paste (#93): it's then deleted directly (`takeBack`).
+    private func axUndoStamp() -> TerminalStamp? {
+        guard let app = NSWorkspace.shared.frontmostApplication, AXUndo.contains(app.bundleIdentifier) else { return nil }
+        return TerminalStamp(app: app.processIdentifier, keyDowns: hotkey.keyDowns)
     }
 
     private func backspaces(_ last: LastInsert<AXUIElement>) -> Int? {
@@ -466,16 +472,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Whether Esc may take `inserted` back: in a terminal only by backspaces, since ⌘Z there is window undo (#79).
+    /// In an `AXUndo` app (#93) not without a field to delete it from.
     private func undoable(_ inserted: LastInsert<AXUIElement>?) -> Bool {
-        inserted.map { $0.terminal == nil || backspaces($0) != nil } ?? (terminalStamp() == nil)
+        inserted.map { $0.terminal == nil || backspaces($0) != nil } ?? (terminalStamp() == nil && axUndoStamp() == nil)
     }
 
     /// Esc on an outcome: takes `inserted` back out, putting back `previous` (what it replaced, "" for a dictation).
-    /// ⌘Z, except in a terminal (#79): `replaceLast`, and false (having said so, nothing changed) once that isn't
-    /// safe. Every undo goes through here.
+    /// ⌘Z, except in a terminal (#79): `replaceLast`, and in an `AXUndo` app (#93): `takeBack`; either returns false
+    /// (having said so, nothing changed) once that isn't safe. Every undo goes through here.
     private func undo(_ inserted: LastInsert<AXUIElement>?, previous: String = "", id: UUID) async -> Bool {
         if let inserted, inserted.terminal != nil {
             guard await replaceLast(inserted, with: previous) else { overlay.showError(Self.editFailed); return false }
+        } else if let inserted, inserted.axUndo != nil {
+            guard await takeBack(inserted, putting: previous) else { overlay.showError(Self.editFailed); return false }
         } else { TextIO.undo() }
         typing?.end(flush: false)
         typing = nil
@@ -483,6 +492,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Timing.log.info("undo: forgot \(self.learned.forget(request: id)) learned terms")
         history.append(HistoryEvent(.undo, id: id))
         return true
+    }
+
+    /// #93: deletes `last` from its field without ⌘Z (`axUndoSteps`), putting `previous` back; false, nothing
+    /// changed, when no step applies.
+    private func takeBack(_ last: LastInsert<AXUIElement>, putting previous: String) async -> Bool {
+        let field = TextIO.focusedElement()
+        let steps = last.axUndoSteps(focused: field, value: field.flatMap(TextIO.value(of:)),
+                                     caret: field.flatMap(TextIO.caret(in:)),
+                                     frontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                                     keyDowns: hotkey.keyDowns)
+        for step in steps {
+            switch step {
+            case .select(let location, let length):
+                guard let field, TextIO.select(location: location, length: length, expecting: last.prefix + last.text,
+                                               in: field) else { continue }
+                typing?.end(flush: false)  // the edit isn't the user's typing
+                // A paste of "" leaves the selection in some editors (ProseMirror): a Backspace deletes it.
+                await TextIO.retype(deleting: previous.isEmpty ? 1 : 0, then: previous)
+                Timing.log.info("undo: deleted over AX")
+            case .backspaces(let n):
+                typing?.end(flush: false)
+                await TextIO.retype(deleting: n, then: previous)
+                Timing.log.info("undo: \(n) backspaces")
+            }
+            return true
+        }
+        return false
     }
 
     /// While held, re-transcribes the growing recording for the overlay only.
@@ -642,7 +678,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var pasted = true
         var space = ""
         let field = TextIO.focusedElement()
-        let terminal = terminalStamp()
+        let (terminal, axUndo) = (terminalStamp(), axUndoStamp())
         switch result.outcome {
         case .insert(let s, let l):
             // With a known cursor the pipeline already spaced it.
@@ -662,7 +698,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         lastInsert = pasted ? field.map {
             LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
-                       prefix: space, terminal: terminal)
+                       prefix: space, terminal: terminal, axUndo: axUndo)
         } : nil
         if case .insert = result.outcome, let field, let last = lastInsert {
             watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID)
@@ -680,8 +716,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
         let inserted = lastInsert
-        let undo: (() async -> Bool)? = pasted && undoable(inserted) ? { [weak self] in
-            await self?.undo(inserted, id: id) ?? false
+        // What a deleting undo (#93) puts back: the selection an edit replaced. ⌘Z restores it by itself.
+        var replaced = ""
+        if case .replaceSelection = result.outcome, inserted?.axUndo != nil { replaced = raw.request.selection ?? "" }
+        let undo: (() async -> Bool)? = pasted && undoable(inserted) ? { [weak self, replaced] in
+            await self?.undo(inserted, previous: replaced, id: id) ?? false
         } : nil
         overlay.showOutcome(shown, heard: raw.request.transcript, result: text,
                             edit: { if case .insert = result.outcome { false } else { true } }(),
