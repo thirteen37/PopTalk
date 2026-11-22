@@ -299,7 +299,7 @@ struct SettingsView: View {
             .appendingPathComponent("FluidVoice/parakeet_custom_vocabulary.json")
         do {
             let imported = try VocabularyStore.importFluidVoice(from: url)
-            for t in imported { try store.add(t) }
+            for t in imported where !t.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { try store.add(t) }
             vocabMessage = "Imported \(imported.count) term(s) from FluidVoice."
         } catch {
             vocabMessage = "Couldn't import FluidVoice vocabulary: \(error.localizedDescription)"
