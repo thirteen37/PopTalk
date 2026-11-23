@@ -368,6 +368,10 @@ enum Capsule {
     static let maxWidth: CGFloat = 640
     /// Insets: 10 left, 28 glyph, 10 gap, body, 14 right.
     private static let bodyX: CGFloat = 48, maxBody = maxWidth - bodyX - 14
+    /// Corrected words' text: the accent, 30% darker in light mode so it reads on the glass.
+    private static let corrected = NSColor(name: nil) { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .aqua ? NSColor.controlAccentColor.blended(withFraction: 0.3, of: .black)! : .controlAccentColor
+    }
 
     static func view(_ hud: HUD) -> NSView {
         let root = Flipped()
@@ -403,7 +407,7 @@ enum Capsule {
             main.append(attr((hud.act == nil ? "" : " ") + body, 13, .medium, hud.mainColor))
             for r in body == hud.main ? hud.mainMarks : [] {
                 main.addAttributes([.underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: NSColor.controlAccentColor,
-                                    .foregroundColor: hud.mainColor == .labelColor ? NSColor.controlAccentColor : hud.mainColor],
+                                    .foregroundColor: hud.mainColor == .labelColor ? corrected : hud.mainColor],
                                    range: NSRange(location: r.location + at, length: r.length))
             }
             return main
@@ -668,7 +672,7 @@ private final class Glint: NSView {
         let all = NSRange(location: 0, length: g.length)
         g.removeAttribute(.underlineStyle, range: all)
         g.addAttribute(.foregroundColor, value: NSColor.clear, range: all)
-        g.addAttribute(.foregroundColor, value: NSColor.white.withAlphaComponent(0.9), range: range)
+        g.addAttribute(.foregroundColor, value: NSColor.white.withAlphaComponent(0.5), range: range)
         (glyphs, textRect, self.start) = (g, text, start)
         super.init(frame: frame)
     }
@@ -680,7 +684,7 @@ private final class Glint: NSView {
         guard window != nil else { return }
         wantsLayer = true
         // Full height and moved only along x, so the mask needs no flip.
-        let band = CAGradientLayer(), w = max(20, bounds.width * 0.6)
+        let band = CAGradientLayer(), w = max(14, bounds.width * 0.35)
         band.colors = [NSColor.clear, .white, .clear].map(\.cgColor)
         (band.startPoint, band.endPoint) = (CGPoint(x: 0, y: 0.5), CGPoint(x: 1, y: 0.5))
         band.frame = CGRect(x: bounds.width, y: 0, width: w, height: bounds.height)  // at rest: past the word
