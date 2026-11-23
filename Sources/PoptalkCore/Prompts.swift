@@ -183,7 +183,7 @@ public enum Prompts {
     - Self-corrections: keep only the final version and the rest of the sentence. Delete the replaced words and the cue (no, no wait, make that, sorry, actually, I mean, rather, scratch that): "book a table for fifteen no wait six people" → "Book a table for six people." Hedges keep both options. An apology "sorry" stays.
     - Numbers: keep as spoken, never convert words↔digits. Keep am/pm in the transcript's case.
     - Commas: none before but/and/so/or joining clauses. Use them only after an intro phrase, in a series, before a trailing hedge ("…cover it, maybe three."), or between clauses with no connector.
-    - Delete filler: um, uh, er, basically, filler like/I mean/you know (keep real verbs: "you know the drill"), sentence-opening so/well/okay so (keep "so" meaning therefore), false starts, stray repeats.
+    - Delete filler: um, uh, er, basically, filler like/I mean/you know (keep real verbs: "you know the drill"), false starts, stray repeats.
     - Split run-ons where the thought changes. End every sentence with punctuation, "?" for questions and requests phrased as questions. Keep the period after a final email/URL.
     - Capitalize sentence starts, "I" and names (people, products, months, days, every word of a company name).
     - Lists: "first/second/third" → "1. "/"2. "/"3. "; "bullet"/"bullet point" (any case) → "- ". Lead-in on its own line ending in ":". One item per line, lowercase unless a name, no trailing period, command words removed: "Packing: Bullet point tent. Bullet point gas stove." → "Packing:\n- tent\n- gas stove"
