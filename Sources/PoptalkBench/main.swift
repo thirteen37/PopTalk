@@ -76,6 +76,50 @@ if args.contains("--warmup-probe") {
     exit(0)
 }
 
+// History replay: runs dictation requests through Pipeline with an MLX cleanup model, as the app would.
+//   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID
+// in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, seconds}.
+// Prints counts only: the inputs and outputs are history content and stay in the files.
+if let i = args.firstIndex(of: "--replay") {
+    struct In: Decodable { var id, transcript, app, window, ax, ocr: String; var vocabulary: [String] }
+    struct Out: Encodable { var id, label, output: String; var reply, user: String?; var seconds: Double }
+    guard i + 2 < args.count, let model = opt("--cleanup-model") else { fail("usage: PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID") }
+    do {
+        let lines = try String(contentsOfFile: args[i + 1], encoding: .utf8).split(separator: "\n")
+        let complete = try await MLXProvider.make(preload: [model]).0
+        for w in Prompts.warmup { _ = try? await complete(model, w, false, 60) }
+        FileManager.default.createFile(atPath: args[i + 2], contents: nil, attributes: [.posixPermissions: 0o600])
+        let out = try FileHandle(forWritingTo: URL(fileURLWithPath: args[i + 2]))
+        let start = Date(), saved = VocabularyStore()
+        for (n, line) in lines.enumerated() {
+            let r = try JSONDecoder().decode(In.self, from: Data(line.utf8))
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-replay-\(UUID())")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let store = VocabularyStore(url: dir.appendingPathComponent("v.json"))
+            // The prompt lists term texts only; aliases come from today's saved vocabulary.
+            for t in r.vocabulary { try store.add(saved.terms.first { $0.text == t } ?? VocabTerm(text: t)) }
+            let calls = ModelCallRecorder()
+            let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model)
+            let t = Date()
+            let res = await p.run(Request(transcript: r.transcript, selection: nil,
+                                          context: ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)))
+            try? FileManager.default.removeItem(at: dir)
+            let (label, output): (String, String) = switch res.outcome {
+            case let .insert(s, l): (l, s)
+            case .nothing: ("Nothing", "")
+            default: ("other", "")
+            }
+            let o = Out(id: r.id, label: label, output: output, reply: calls.call?.reply,
+                        user: calls.call?.messages.last?.content, seconds: Date().timeIntervalSince(t))
+            try out.write(contentsOf: JSONEncoder().encode(o) + Data([0x0A]))
+            if (n + 1) % 25 == 0 { print("\(n + 1)/\(lines.count) \(Int(Date().timeIntervalSince(start)))s footprint \(MLXProvider.footprintMB()) MB") }
+        }
+        try out.close()
+        print(String(format: "done %d in %.0fs; footprint %d MB", lines.count, Date().timeIntervalSince(start), MLXProvider.footprintMB()))
+    } catch { fail(error) }
+    exit(0)
+}
+
 let provider = opt("--provider") ?? "lmstudio"
 let baseURL = URL(string: opt("--base-url") ?? "http://localhost:1234/v1")!
 let cleanupModel = opt("--cleanup-model") ?? "google/gemma-4-e4b"
