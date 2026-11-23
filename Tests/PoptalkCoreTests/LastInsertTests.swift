@@ -16,4 +16,7 @@ private let t0 = Date(timeIntervalSince1970: 1000)
     #expect(last.space(before: " Hi", into: "slack", now: t0 + 5) == "")
     #expect(LastInsert(target: "slack", text: "Dear (", at: t0).space(before: "Hi", into: "slack", now: t0 + 5) == "")
     #expect(LastInsert(target: "slack", text: "Line\n", at: t0).space(before: "Hi", into: "slack", now: t0 + 5) == "")
+    var deleted = last
+    deleted.deletedAt = t0 + 3  // deleted (or sent, #95): nothing left to space after
+    #expect(deleted.space(before: "Hi", into: "slack", now: t0 + 5) == "")
 }

@@ -38,7 +38,7 @@ public struct LastInsert<Target: Equatable> {
 
     /// The space to put before `s` being dictated into `target`.
     public func space(before s: String, into target: Target, now: Date = Date(), window: TimeInterval = 20) -> String {
-        guard target == self.target, now.timeIntervalSince(at) < window, s.first?.isWhitespace == false
+        guard target == self.target, deletedAt == nil, now.timeIntervalSince(at) < window, s.first?.isWhitespace == false
         else { return "" }
         return Pipeline.leadingSpace(after: text.last)
     }
