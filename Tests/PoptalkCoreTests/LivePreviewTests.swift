@@ -113,3 +113,22 @@ private func words(_ s: String, _ ranges: [Range<String.Index>]) -> [String] { r
     d.set(false, forKey: LivePreview.key)
     #expect(!LivePreview.enabled(d))
 }
+
+@Test func sparklesSweepEachNewWordOncePerPress() {
+    func r(_ t: String, _ w: String) -> NSRange { NSRange(t.range(of: w)!, in: t) }
+    var s = LivePreview.Sparkles()
+    let a = "Meet at GitHub on Wednesday."
+    let first = s.sweeping([r(a, "GitHub"), r(a, "Wednesday.")], in: a, now: 10)
+    #expect(first.map(\.range) == [r(a, "GitHub"), r(a, "Wednesday.")])
+    #expect(first.map(\.start) == [10, 10 + LivePreview.Sparkles.stagger])  // staggered
+    // A later partial moves them: they carry on from their start rather than restart.
+    let b = "So meet at GitHub on Wednesday. And"
+    let mid = s.sweeping([r(b, "GitHub"), r(b, "Wednesday.")], in: b, now: 10.3)
+    #expect(mid.map(\.range) == [r(b, "GitHub"), r(b, "Wednesday.")])
+    #expect(mid.map(\.start) == first.map(\.start))
+    // Once swept, never again this press; a newly marked word starts now.
+    let c = b + " TestFlight"
+    let late = s.sweeping([r(c, "GitHub"), r(c, "TestFlight")], in: c, now: 11)
+    #expect(late.map(\.range) == [r(c, "TestFlight")])
+    #expect(late.map(\.start) == [11])
+}

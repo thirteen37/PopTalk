@@ -80,6 +80,27 @@ public enum LivePreview {
         case .error: return nil
         }
     }
+
+    /// The light sweeping across a newly corrected word (iOS 27's): once per press per word, keyed by its text since
+    /// every partial moves it. The overlay rebuilds on each partial, so a sweep carries on from when it started.
+    public struct Sparkles: Sendable {
+        public static let duration = 0.7, stagger = 0.08
+        private var started: [String: Double] = [:]
+        public init() {}
+
+        /// `marks` (ranges in `text`) whose sweep hasn't ended at `now`, with when it starts; words new at `now` start
+        /// then, `stagger` apart.
+        public mutating func sweeping(_ marks: [NSRange], in text: String, now: Double) -> [(range: NSRange, start: Double)] {
+            let ns = text as NSString
+            var fresh = 0.0
+            return marks.compactMap { r in
+                let word = ns.substring(with: r)
+                if started[word] == nil { started[word] = now + fresh * Self.stagger; fresh += 1 }
+                let start = started[word]!
+                return now < start + Self.duration ? (r, start) : nil
+            }
+        }
+    }
 }
 
 /// Word-level diff for the live preview (#43): what a cleanup changed, ignoring punctuation and a sentence's capital.

@@ -16,6 +16,8 @@ final class Overlay {
     /// The focused field or caret (AppKit coordinates), read once per press when the overlay first shows.
     private var field: CGRect?
     private var fieldRead = false
+    /// Which corrected words have had their shimmer this press.
+    private var sparkles = LivePreview.Sparkles()
 
     init() {
         panel = DragPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 48),
@@ -86,13 +88,16 @@ final class Overlay {
         self.note = note
         preview = nil
         fieldRead = false  // a new press
+        sparkles = .init()
         show(Self.recordingHUD(preview: nil, note: note, strip: statusStrip()), for: nil)
     }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible. `cleaned` (#43): the
     /// latest speculative result, run on `input`; stale (greyed) once the transcript has moved on from it.
     func showPreview(_ text: String, cleaned: LivePreview.Shown? = nil, input: String? = nil) {
         preview = text
-        show(Self.recordingHUD(preview: text, cleaned: cleaned, input: input, note: note, strip: statusStrip()), for: nil)
+        var h = Self.recordingHUD(preview: text, cleaned: cleaned, input: input, note: note, strip: statusStrip())
+        h.sparkles = sparkles.sweeping(h.mainMarks, in: h.main, now: CACurrentMediaTime())
+        show(h, for: nil)
     }
     /// `heard`: the final transcript; without it, the last preview (once) stays up above a small "Working…".
     func showWorking(heard: String? = nil) {
@@ -171,6 +176,7 @@ final class Overlay {
         tapAccept = nil
         preview = nil
         fieldRead = false
+        sparkles = .init()
         generation += 1
         let g = generation
         guard panel.isVisible else { return }
@@ -340,6 +346,8 @@ struct HUD {
     var main = ""
     /// Words of `main` the cleanup changed, underlined (#43).
     var mainMarks: [NSRange] = []
+    /// Of `mainMarks`, those whose shimmer is due, and when it starts (`CACurrentMediaTime`, `LivePreview.Sparkles`).
+    var sparkles: [(range: NSRange, start: Double)] = []
     var mainColor: NSColor = .labelColor
     /// Live preview: wrapped up to `Capsule.maxLines`, newest words at the bottom, the top fades (#82). Otherwise
     /// the text is cut in the middle to the same cap (`OutcomeText.fit`).
@@ -400,7 +408,34 @@ enum Capsule {
             }
             return main
         }
-        place(hud.tail ? block(main(hud.main)) : fitted(hud.main, main))
+        let full = main(hud.main)
+        let text = hud.tail ? block(full) : fitted(hud.main, main)
+        place(text)
+        // Only over the whole text: a cut one has no marks.
+        if !reduceMotion, !hud.sparkles.isEmpty,
+           ((text.0 as? TailText)?.text.string ?? (text.0 as? NSTextField)?.stringValue) == full.string {
+            // Both lay the text out 2 pt in, `TailText` bottom-anchored.
+            let w = text.1.width - 4
+            let h = ceil(full.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin).height)
+            let origin = CGPoint(x: text.0.frame.minX + 2, y: text.0.frame.minY + (hud.tail ? text.1.height - h : 0))
+            let at = full.length - hud.main.utf16.count
+            let storage = NSTextStorage(attributedString: full), layout = NSLayoutManager()
+            let box = NSTextContainer(size: CGSize(width: w, height: .greatestFiniteMagnitude))
+            box.lineFragmentPadding = 0
+            layout.addTextContainer(box)
+            storage.addLayoutManager(layout)
+            for (r, start) in hud.sparkles {
+                let r = NSRange(location: r.location + at, length: r.length)
+                layout.enumerateEnclosingRects(forGlyphRange: layout.glyphRange(forCharacterRange: r, actualCharacterRange: nil),
+                                               withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: box) { rect, _ in
+                    let frame = rect.offsetBy(dx: origin.x, dy: origin.y)
+                    // Clipped (faded) off the top of `TailText`.
+                    guard frame.minY >= text.0.frame.minY else { return }
+                    root.addSubview(Glint(full, r, frame: frame, text: NSRect(x: origin.x - frame.minX, y: origin.y - frame.minY,
+                                                                               width: w, height: h), start: start))
+                }
+            }
+        }
 
         // Footer: label (or note) on the left, a flexible space, then keycaps and the status strip.
         var right: [(NSView, CGSize)] = hud.keys.map(keycap)
@@ -619,6 +654,43 @@ private final class Box: NSView {
         guard window != nil, let animation else { return }
         wantsLayer = true
         layer?.add(animation, forKey: "motion")
+    }
+}
+
+/// A light band sweeping once across one corrected word (`LivePreview.Sparkles`): the word's glyphs drawn white,
+/// shown only through a moving gradient mask, so the light runs through the letters.
+private final class Glint: NSView {
+    let glyphs: NSAttributedString, textRect: NSRect, start: Double
+
+    /// `frame`: the word's line rect; `text`: where the whole of `s` is drawn, in the glint's coordinates.
+    init(_ s: NSAttributedString, _ range: NSRange, frame: NSRect, text: NSRect, start: Double) {
+        let g = NSMutableAttributedString(attributedString: s)
+        let all = NSRange(location: 0, length: g.length)
+        g.removeAttribute(.underlineStyle, range: all)
+        g.addAttribute(.foregroundColor, value: NSColor.clear, range: all)
+        g.addAttribute(.foregroundColor, value: NSColor.white.withAlphaComponent(0.9), range: range)
+        (glyphs, textRect, self.start) = (g, text, start)
+        super.init(frame: frame)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+    override func draw(_ dirtyRect: NSRect) { glyphs.draw(with: textRect, options: .usesLineFragmentOrigin) }
+    override func viewDidMoveToWindow() {
+        guard window != nil else { return }
+        wantsLayer = true
+        // Full height and moved only along x, so the mask needs no flip.
+        let band = CAGradientLayer(), w = max(20, bounds.width * 0.6)
+        band.colors = [NSColor.clear, .white, .clear].map(\.cgColor)
+        (band.startPoint, band.endPoint) = (CGPoint(x: 0, y: 0.5), CGPoint(x: 1, y: 0.5))
+        band.frame = CGRect(x: bounds.width, y: 0, width: w, height: bounds.height)  // at rest: past the word
+        layer?.mask = band
+        let a = CABasicAnimation(keyPath: "position.x")
+        (a.fromValue, a.toValue) = (-w / 2, bounds.width + w / 2)
+        a.duration = LivePreview.Sparkles.duration
+        a.beginTime = band.convertTime(start, from: nil)
+        a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        band.add(a, forKey: "sweep")
     }
 }
 
