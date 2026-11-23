@@ -9,7 +9,7 @@ import PoptalkCore
 @MainActor
 final class TypingWatch {
     private let field: AXUIElement, anchors: InsertAnchors, pasted: String, transcript: String, pause: TimeInterval
-    private let known: () -> [VocabTerm], offer: (VocabTerm) -> Void, done: (TypedCorrection) -> Void
+    private let known: () -> [VocabTerm], offer: (VocabTerm) -> Void, done: (TypedCorrection) -> Void, deleted: () -> Void
     private var observer: AXObserver?
     private var pending: DispatchWorkItem?
     /// The last check's result: what `done` gets.
@@ -20,10 +20,10 @@ final class TypingWatch {
 
     /// Nil when the field's text can't be read, the paste can't be found in it, or the app sends no notifications.
     /// `typed`: the user has started changing the field. `offer`: a misheard term to offer, once per term. `done`: the
-    /// last correction found, when the watch ends.
+    /// last correction found, when the watch ends. `deleted`: the dictation went blank (deleted or sent, #95).
     init?(field: AXUIElement, pasted: String, transcript: String, pause: TimeInterval = 2, lifetime: TimeInterval = 180,
           known: @escaping () -> [VocabTerm], typed: @escaping () -> Void, offer: @escaping (VocabTerm) -> Void,
-          done: @escaping (TypedCorrection) -> Void) {
+          done: @escaping (TypedCorrection) -> Void, deleted: @escaping () -> Void) {
         var pid: pid_t = 0, obs: AXObserver?
         guard let value = TextIO.value(of: field),
               let anchors = InsertAnchors(value: value, inserted: pasted, caret: TextIO.caret(in: field)),
@@ -35,7 +35,7 @@ final class TypingWatch {
               }, &obs) == .success, let obs
         else { return nil }
         (self.field, self.anchors, self.pasted, self.transcript, self.pause) = (field, anchors, pasted, transcript, pause)
-        (self.known, self.typed, self.offer, self.done) = (known, typed, offer, done)
+        (self.known, self.typed, self.offer, self.done, self.deleted) = (known, typed, offer, done, deleted)
         // Unretained: `end()` removes the notification, and the owner calls it before letting go.
         guard AXObserverAddNotification(obs, field, kAXValueChangedNotification as CFString,
                                         Unmanaged.passUnretained(self).toOpaque()) == .success else { return nil }
@@ -63,9 +63,12 @@ final class TypingWatch {
             typed = nil
             t()
         }
-        // Deleted, or sent from a field it filled: end now, before the user types on (#94). A deletion is also the
-        // signal #95 would record here, for a redictation.
-        if let span, span.allSatisfy(\.isWhitespace) { return end() }
+        // Deleted, or sent from a field it filled: end now, before the user types on (#94), and say so: the next take
+        // decides whether it was a redictation (#95).
+        if let span, span.allSatisfy(\.isWhitespace) {
+            deleted()
+            return end()
+        }
         pending?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.check(final: false) }
         pending = work

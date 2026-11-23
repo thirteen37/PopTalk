@@ -341,7 +341,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Before apply, which moves lastInsert to this request.
         let focused = history.isEnabled && cleanup == nil ? TextIO.focusedElement() : nil
         let corrects = focused.flatMap { lastInsert?.corrected(by: request.selection, in: $0) }
-        let repeats = focused.flatMap { lastInsert?.redictated(raw: raw, selection: request.selection, in: $0) }
+        // The previous take, or one undone since (#95): an undo clears lastInsert. Never both.
+        let repeats = focused.flatMap { f in (lastInsert ?? undone)?.redictated(raw: raw, selection: request.selection, in: f) }
+        undone = nil
         Timing.mark("release: provider ready", since: t0)
         let result = if let reused { reused.result } else { await pipeline.run(request) }
         Timing.mark("release: pipeline done", since: t0)
@@ -491,6 +493,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         typing?.end(flush: false)
         typing = nil
         lastInsert = nil
+        undone = inserted
+        undone?.deletedAt = Date()
         Timing.log.info("undo: forgot \(self.learned.forget(request: id)) learned terms")
         history.append(HistoryEvent(.undo, id: id))
         return true
@@ -608,6 +612,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Where PopTalk last pasted; spaces the next dictation when the cursor position is unknown.
     private var lastInsert: LastInsert<AXUIElement>?
+    /// The take last undone, until the next dictation: a repeat of it is a redictation (#95).
+    private var undone: LastInsert<AXUIElement>?
 
     /// Opt-in usage history (#38); writes nothing unless enabled in Settings.
     /// With "historySync" on too, also syncs through iCloud Drive (#76).
@@ -646,6 +652,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             done: { [weak self] fix in
                 if let id { self?.history.append(HistoryEvent(.typedCorrection, id: id, text: fix.text)) }
+            },
+            deleted: { [weak self] in
+                guard let self, let id, lastInsert?.requestID == id else { return }
+                lastInsert?.deletedAt = Date()
             })
     }
 

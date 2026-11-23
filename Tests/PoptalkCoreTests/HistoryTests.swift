@@ -114,6 +114,24 @@ private func lines(_ store: HistoryStore) throws -> [Data] {
         .redictated(raw: "hi there", selection: nil, in: "notes", now: t0 + 1) == nil)
 }
 
+@Test func redictationAfterAnObservedDeletionOrUndoGetsTheLongerWindowFromIt() {
+    let id = UUID()
+    var last = LastInsert(target: "notes", text: " Move the standup to Thursday.", at: t0, requestID: id,
+                          rawTranscript: "move the standup to thursday")
+    let near = "Move the stand up to Thursday."
+    #expect(last.redictated(raw: near, selection: nil, in: "notes", now: t0 + 40) == nil)  // no deletion: too late
+    // Deleted by hand (or undone) at 35 s: the window runs from then.
+    last.deletedAt = t0 + 35
+    #expect(last.redictated(raw: near, selection: nil, in: "notes", now: t0 + 40) == id)
+    #expect(last.redictated(raw: near, selection: nil, in: "notes", now: t0 + 35 + 119) == id)
+    #expect(last.redictated(raw: near, selection: nil, in: "notes", now: t0 + 35 + 121) == nil)  // outside both windows
+    // Emptied because it was sent: the next take is new, not a repeat.
+    #expect(last.redictated(raw: "order more coffee filters", selection: nil, in: "notes", now: t0 + 40) == nil)
+    #expect(last.redictated(raw: near, selection: nil, in: "mail", now: t0 + 40) == nil)  // other field
+    #expect(last.redictated(raw: near, selection: "standup", in: "notes", now: t0 + 40) == nil)  // a correction
+    #expect(Redictation.deletionWindow == 120)
+}
+
 @Test func redictationSimilarityIsATokenSequenceRatio() {
     #expect(Redictation.similarity("a b c d", "a b c d") == 1)
     #expect(Redictation.similarity("a b c d", "a x c d") == 0.75)  // 2 × 3 matches / 8 tokens

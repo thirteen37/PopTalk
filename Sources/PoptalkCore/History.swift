@@ -91,11 +91,14 @@ extension LastInsert {
     }
 
     /// The request a dictation of `raw` is saying again (#95): no selection (that's `corrected`), same field,
-    /// within `window` seconds, and `raw` at least `minSimilarity` like the previous take's raw transcript.
-    /// #95 phase 2 adds an observed deletion of the insert here, with a longer window from it.
+    /// within `window` seconds of the insert or `deletionWindow` of its `deletedAt`, and `raw` at least
+    /// `minSimilarity` like the previous take's raw transcript. A field emptied by a send sets `deletedAt` too:
+    /// the similarity tells a repeat from the next message.
     public func redictated(raw: String, selection: String?, in target: Target?, now: Date = Date(),
-                           window: TimeInterval = Redictation.window, minSimilarity: Double = Redictation.minSimilarity) -> UUID? {
-        guard let requestID, let rawTranscript, target == self.target, now.timeIntervalSince(at) < window,
+                           window: TimeInterval = Redictation.window, deletionWindow: TimeInterval = Redictation.deletionWindow,
+                           minSimilarity: Double = Redictation.minSimilarity) -> UUID? {
+        guard let requestID, let rawTranscript, target == self.target,
+              now.timeIntervalSince(at) < window || deletedAt.map({ now.timeIntervalSince($0) < deletionWindow }) == true,
               selection?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true,
               Redictation.similarity(raw, rawTranscript) >= minSimilarity else { return nil }
         return requestID
@@ -106,6 +109,8 @@ extension LastInsert {
 /// sensitive to the cutoff (19 pairs at ≥ 0.5, 4 at ≥ 0.9).
 public enum Redictation {
     public static let window: TimeInterval = 30
+    /// After a deletion or undo of the insert, which is strong evidence on its own.
+    public static let deletionWindow: TimeInterval = 120
     public static let minSimilarity = 0.6
 
     /// 2 × matched words / total words, matching in order (longest common subsequence via `difference`), over

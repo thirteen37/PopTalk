@@ -20,6 +20,8 @@ public struct LastInsert<Target: Equatable> {
     public let axUndo: TerminalStamp?
     /// Parakeet's unboosted text for this take, in memory only, for `redictated` (#95).
     public let rawTranscript: String?
+    /// When the insert was seen deleted (or the field sent, #94) or undone, for `redictated` (#95).
+    public var deletedAt: Date?
 
     public init(target: Target, text: String, at: Date = Date(), requestID: UUID? = nil, reprocess: RawInsert? = nil,
                 prefix: String = "", terminal: TerminalStamp? = nil, axUndo: TerminalStamp? = nil, rawTranscript: String? = nil) {
