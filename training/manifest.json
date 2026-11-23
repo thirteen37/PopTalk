@@ -1,21 +1,26 @@
 {
-  "items": 6714,
+  "items": 8452,
   "byCategory": {
+    "d-correction-audio": 85,
     "d-correction-text": 475,
     "d-email-url": 119,
+    "d-filler-audio": 55,
     "d-filler-text": 222,
+    "d-keep-audio": 62,
     "d-keep-marks": 149,
     "d-keep-opener": 60,
-    "d-keep-text": 125,
+    "d-keep-text": 124,
     "d-list": 119,
     "d-multi-screen": 147,
     "d-multi-text": 197,
+    "d-names-audio": 764,
     "d-names-text": 795,
     "d-names-vocab": 103,
     "d-no-echo": 249,
     "d-no-list": 150,
     "d-num": 160,
-    "d-question-text": 132,
+    "d-question-audio": 64,
+    "d-question-text": 129,
     "d-spelled": 76,
     "d-terminal": 300,
     "d-terminal-names": 120,
@@ -29,13 +34,18 @@
     "e-insert-after": 250,
     "e-insert-before": 150,
     "e-numbered": 82,
+    "e-rephrase": 131,
     "e-replace": 367,
     "e-replace-bare": 98,
     "e-replace-tense": 78,
     "e-shorter": 238,
-    "e-spelled-misheard": 94
+    "e-spelled-misheard": 94,
+    "e-tone": 327,
+    "e-translate": 254
   },
   "contaminationRejected": {
+    "d-names-audio": 1,
+    "d-keep-audio": 1,
     "d-names-text": 2,
     "d-correction-text": 3,
     "d-filler-text": 1,
@@ -48,10 +58,8 @@
     "d-multi-screen": 3,
     "d-email-url": 1,
     "d-spelled": 4,
-    "e-spelled-misheard": 1
-  },
-  "skipped": {
-    "audio": "no heard.jsonl (PoptalkDatagen transcribe not run)",
-    "teacher": "no teach_out.jsonl"
+    "e-spelled-misheard": 1,
+    "e-tone": 16,
+    "e-translate": 1
   }
 }
