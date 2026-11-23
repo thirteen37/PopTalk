@@ -294,6 +294,15 @@ def cap(s):
     return s[0].upper() + s[1:] if s else s
 
 
+PLAIN_STATEMENTS = [p for p in L.PLAIN if p.endswith(".")]
+
+
+def lc_sentence(s):
+    """A sentence as said after "add …": first letter lowercase (not "I"), no end punctuation."""
+    s = s.rstrip(".!?")
+    return s if re.match(r"I\b", s) else s[0].lower() + s[1:]
+
+
 def sentence(s):
     s = cap(s.strip())
     return s if s[-1:] in ".!?" else s + "."
@@ -385,7 +394,8 @@ def program_edits():
 
     for i in range(400):  # inserts
         before = i % 8 >= 5
-        x = r.choice(BEFORE if before else L.PHRASES)
+        # v4b: half the new text is a plain sentence said lowercase; 30-odd fixed phrases let v3/v4 copy new ones as said
+        x = r.choice(BEFORE if before else L.PHRASES) if r.random() < 0.5 else lc_sentence(r.choice(PLAIN_STATEMENTS))
         said = add_fillers(r, x, 1).lower() if r.random() < 0.2 else x
         sel = r.choice(L.PLAIN) if r.random() < 0.6 else fill(r, r.choice(L.NAMED))[0]
         if not before:
@@ -678,9 +688,9 @@ def agent_screen(r, extra=()):
 
 def heard(r, clean):
     """A clean sentence as it reaches the model: punctuated as Parakeet writes it (then the target is unchanged),
-    bare lowercase, or with a filler."""
+    bare lowercase, or with a filler. v4b: 45% unchanged taught v4 to copy lowercase imperatives too, so 25%."""
     x = r.random()
-    if x < 0.45:
+    if x < 0.25:
         return clean
     if x < 0.75:
         return lower_transcript(clean)
