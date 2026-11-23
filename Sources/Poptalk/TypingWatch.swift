@@ -3,9 +3,9 @@ import ApplicationServices
 import PoptalkCore
 
 /// Watches a dictation's field for the user fixing it by typing (#86): AX value-changed notifications on the field,
-/// checked `pause` seconds after the last one. Stops at `end()` (the next dictation, an undo), at a check that finds
-/// focus gone from the field or the text around the dictation changed, or after `lifetime`. The field's text is read
-/// only in memory, for the diff.
+/// checked `pause` seconds after the last one. Stops at `end()` (the next dictation, an undo), at a change that leaves
+/// the dictation deleted (or sent, #94), at a check that finds focus gone from the field or the dictation no longer
+/// there (`InsertAnchors.span`), or after `lifetime`. The field's text is read only in memory, for the diff.
 @MainActor
 final class TypingWatch {
     private let field: AXUIElement, anchors: InsertAnchors, pasted: String, transcript: String, pause: TimeInterval
@@ -58,10 +58,14 @@ final class TypingWatch {
 
     private func changed() {
         // Read back, so a late or spurious notification (the paste's own, an app's re-render) doesn't count as typing.
-        if let t = typed, TextIO.value(of: field).flatMap(anchors.span(in:)) != pasted {
+        let span = TextIO.value(of: field).flatMap(anchors.span(in:))
+        if let t = typed, span != pasted {
             typed = nil
             t()
         }
+        // Deleted, or sent from a field it filled: end now, before the user types on (#94). A deletion is also the
+        // signal #95 would record here, for a redictation.
+        if let span, span.allSatisfy(\.isWhitespace) { return end() }
         pending?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.check(final: false) }
         pending = work
@@ -71,8 +75,8 @@ final class TypingWatch {
     /// `final`: run by `end`, so no offer (a dictation is starting) and no ending from here.
     private func check(final: Bool) {
         pending = nil
-        guard let span = TextIO.value(of: field).flatMap(anchors.span(in:)) else {
-            if !final { end() }  // the text around it changed: keep what was found, nothing more to learn
+        guard let span = TextIO.value(of: field).flatMap(anchors.span(in:)), !span.allSatisfy(\.isWhitespace) else {
+            if !final { end() }  // deleted, replaced, or the text around it changed: keep what was found
             return
         }
         latest = TypedCorrection(inserted: pasted, span: span, transcript: transcript)
