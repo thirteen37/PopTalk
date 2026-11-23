@@ -234,7 +234,8 @@ CORRECTABLE = [
     ("I'll call you back at {X}.", "time"), ("Our trip is planned for {X}.", "month"),
 ]
 CUES = ["no", "sorry", "I mean", "actually", "actually make it", "wait", "or rather", "no wait", "make that", "sorry I mean"]
-FILLERS = ["um", "uh", "like", "you know", "basically", "so", "I mean"]
+# No "so": a sentence-opening So/Well/Okay is kept (the fine-tune prompt names only um, uh, like, basically, you know).
+FILLERS = ["um", "uh", "like", "you know", "basically", "I mean"]
 
 # Sentences where a correction or filler word is real content and must stay.
 KEEP = [
@@ -594,3 +595,10 @@ VERB_PROSE = ["I still need to {L}.", "Can you {L}?", "Remember to {L} before Fr
 NOUN_PROSE = ["We're out of {L}.", "Grab {L} on the way home.", "I packed {L}.", "Can you pick up {L}?"]
 NOTE_BULLETS = ["- call the landlord", "- send the deck", "- book flights", "- renew the domain", "- ask about parking",
                 "- order a new charger", "- sort the receipts"]
+# Sentence-opening So/Well/Okay are kept as said.
+KEEP_OPENERS = ["So I think we should wait for the review.", "Well, the second draft reads better.",
+                "Okay, let's move the call to the afternoon.", "So the plan is to ship on Friday.",
+                "Well, nobody objected in the meeting.", "Okay so the build is green now.",
+                "So what do we tell the client?", "Well, that took longer than expected.",
+                "Okay, I'll send the invite after lunch.", "So we're keeping the old logo after all.",
+                "Well, it works on the staging server.", "Okay, run it one more time."]

@@ -727,6 +727,13 @@ def v4_dictation():
         if r.random() < 0.3:
             target = r.choice(L.AGENT_SAID + L.AGENT_SHORT) + " " + target
         add("d-no-list", i, heard(r, target), agent_screen(r) if r.random() < 0.6 else unrelated_context(r), target)
+
+    r = R("v4-openers")  # a sentence-opening So/Well/Okay is the speaker's, not filler: it stays
+    for i in range(60):
+        target = r.choice(L.KEEP_OPENERS)
+        if r.random() < 0.3:
+            target += " " + r.choice(L.PLAIN + L.AGENT_SAID)
+        add("d-keep-opener", i, heard(r, target), agent_screen(r) if r.random() < 0.4 else unrelated_context(r), target)
     return out
 
 
