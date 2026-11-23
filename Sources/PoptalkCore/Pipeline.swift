@@ -88,7 +88,7 @@ public struct Pipeline: Sendable {
         guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
 
         guard let selection = r.selection, !selection.isEmpty else {
-            let screen = r.context.windowTitle + "\n" + Prompts.trimmedContext(r.context)
+            let screen = r.context.titleAndDomain + "\n" + Prompts.trimmedContext(r.context)
             let saved = vocabulary.terms.map(\.text)
             let terms = Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context).map(\.text)
             let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
@@ -122,7 +122,7 @@ public struct Pipeline: Sendable {
                !Self.dropsContent(cleaned, transcript: transcript),
                !Self.dropsProtected(cleaned, transcript: transcript),
                !Self.echoesContext(cleaned, transcript: transcript,
-                                   context: r.context.windowTitle + " " + Prompts.trimmedContext(r.context)) {
+                                   context: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context)) {
                 return result(.insert(space + cleaned, label: "Dictated"))
             }
             return result(.insert(space + transcript, label: "Dictated (raw)"))
@@ -194,7 +194,7 @@ extension Pipeline {
                                   fromScreen: Bool = true) -> [VocabTerm] {
         var known = Set<String>()
         let w = Prompts.window(context)
-        let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.windowTitle) : []
+        let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.titleAndDomain) : []
         return (saved + learned + screen).filter { known.insert($0.text.lowercased()).inserted }
             .map { t in
                 var t = t

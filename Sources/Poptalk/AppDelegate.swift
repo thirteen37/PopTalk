@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let store = VocabularyStore()
     /// Screen terms that fixed a dictation (#87); recorded and used only with the setting on.
     let learned = LearnedTerms()
-    private var learnedTerms: [VocabTerm] { ContextSources(.standard).rememberScreenTerms ? learned.vocabTerms() : [] }
+    private func learnedTerms(_ s: ContextSources) -> [VocabTerm] { s.rememberScreenTerms ? learned.vocabTerms() : [] }
     private let recorder = AudioRecorder()
     let status = StatusModel()
     private var transcriber: Transcriber? { didSet { syncSpeech() } }
@@ -38,7 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlay.statusStrip = { [unowned self] in
             let sel = Settings.selection
             return StatusStrip.badges(status.value, llm: sel.provider == "mlx" ? modelStatus[sel.cleanupModel] ?? .loading : .ready,
-                                      sources: ContextSources(.standard), ocrWarm: ScreenContext.isOCRWarm, history: history.isEnabled)
+                                      sources: profile?.sources ?? ContextSources(.standard), ocrWarm: ScreenContext.isOCRWarm,
+                                      history: history.isEnabled, custom: profile?.custom ?? false)
         }
         let menu = NSMenu()
         menu.delegate = self
@@ -194,7 +195,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private let overlay = Overlay()
-    private var contextTask: Task<ScreenSnapshot, Never>?
+    private var contextTask: Task<ScreenContext.Captured, Never>?
+    /// The last press's resolved profile (#96), once its capture is done; nil shows the global sources.
+    private var profile: ResolvedProfile?
     private var selectionTask: Task<String?, Never>?
     private var startWork: DispatchWorkItem?
     private var previewTask: Task<Void, Never>?
@@ -229,7 +232,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-"
             Timing.log.info("press: capture start, app \(app, privacy: .public)")
-            contextTask = Task { await ScreenContext.capture() }
+            profile = nil
+            contextTask = Task {
+                let c = await ScreenContext.capture()
+                profile = c.profile
+                return c
+            }
             selectionTask = Task { await TextIO.selectedText() }
             overlay.showRecording(note: { if case .raw(let note) = mode { note } else { nil } }())
             // Live cleanup (#43) only with the model ready: degraded mode (#39) previews the raw transcript alone.
@@ -289,15 +297,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             defer { busy = false; offerCleanup() }  // the model may have become ready while this ran
             let t0 = Timing.start()
-            let snapshot = await ctx?.value ?? ScreenSnapshot()
+            let (snapshot, profile) = await ctx?.value ?? (ScreenSnapshot(), ResolvedProfile(sources: ContextSources(.standard)))
+            let sources = profile.sources
             Timing.mark("release: context awaited", since: t0)
             let selection = await sel?.value
             Timing.mark("release: selection awaited", since: t0)
             await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
             Timing.mark("release: preview drained", since: t0)
-            let (saved, learned) = (store.terms, learnedTerms)
-            let boost = Pipeline.boostTerms(saved: saved, learned: learned, context: snapshot,
-                                            fromScreen: ContextSources(.standard).screenVocabulary)
+            let (saved, learned) = (store.terms, learnedTerms(sources))
+            let boost = Pipeline.boostTerms(saved: saved, learned: learned, context: snapshot, fromScreen: sources.screenVocabulary)
             let split = Pipeline.boostSources(boost, saved: saved, learned: learned)
             Timing.log.info("release: boost \(split.saved) saved, \(split.learned) learned, \(split.screen) screen")
             let heard: Transcription
@@ -315,15 +323,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else { spec.task.cancel() }
             }
             Timing.log.info("release: speculative runs \(runs), reused \(reused != nil ? "yes" : "no", privacy: .public)")
-            await process(request, raw: heard.raw, boost: boost.map(\.text), samples: samples, started: started, app: app,
-                          reused: reused, since: t0, system: system)
+            await process(request, raw: heard.raw, boost: boost.map(\.text), sources: sources, samples: samples, started: started,
+                          app: app, reused: reused, since: t0, system: system)
         }
     }
 
     /// Runs a request through the pipeline, applies it and records it in history. `cleanup`: re-running an
     /// earlier raw insert, whose text is replaced in place rather than inserted again. `reused`: a speculative run's
-    /// result and model call for this exact request (#43), applied without running the pipeline.
-    private func process(_ request: Request, raw: String, boost: [String], samples: [Float]?, started: Date,
+    /// result and model call for this exact request (#43), applied without running the pipeline. `sources`: the press's
+    /// resolved sources (#96).
+    private func process(_ request: Request, raw: String, boost: [String], sources: ContextSources, samples: [Float]?, started: Date,
                          app: NSRunningApplication?, cleanup: RawInsert? = nil,
                          reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
                          system: SystemSample = .now()) async {
@@ -335,8 +344,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
         let models = Settings.selection
         let calls = reused?.calls ?? ModelCallRecorder()
-        let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store, learned: learnedTerms,
-                                cleanupModel: models.cleanupModel, editModel: models.editModel, features: DictationFeatures(.standard))
+        let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store, learned: learnedTerms(sources),
+                                cleanupModel: models.cleanupModel, editModel: models.editModel,
+                                features: DictationFeatures(.standard, sources: sources))
         let id = UUID()
         // Before apply, which moves lastInsert to this request.
         let focused = history.isEnabled && cleanup == nil ? TextIO.focusedElement() : nil
@@ -349,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Timing.mark("release: pipeline done", since: t0)
         let shown = if let cleanup { await replaceRaw(cleanup, with: result, id: id) } else {
             await apply(result, cursorKnown: request.context.cursorOffset != nil, id: id,
-                        raw: RawInsert(request: request, rawTranscript: raw, boost: boost))
+                        raw: RawInsert(request: request, rawTranscript: raw, boost: boost, sources: sources))
         }
         Timing.mark("release: applied", since: t0)
         let system = Timing.summary(system, since: t0)
@@ -388,7 +398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let app = NSWorkspace.shared.frontmostApplication
             Task {
                 defer { self.busy = false }
-                await self.process(raw.request, raw: raw.rawTranscript, boost: raw.boost, samples: nil,
+                await self.process(raw.request, raw: raw.rawTranscript, boost: raw.boost, sources: raw.sources, samples: nil,
                                    started: Date(), app: app, cleanup: raw, since: .now)
             }
         }
@@ -565,16 +575,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let complete: Pipeline.Complete, models: ModelSettings.Selection, features: DictationFeatures
     }
 
-    private func liveInput(_ ctx: Task<ScreenSnapshot, Never>, _ sel: Task<String?, Never>?) async -> LiveInput {
-        let context = await ctx.value
+    private func liveInput(_ ctx: Task<ScreenContext.Captured, Never>, _ sel: Task<String?, Never>?) async -> LiveInput {
+        let (context, profile) = await ctx.value
+        let sources = profile.sources
         let selection = await sel?.value
         let complete: Pipeline.Complete
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
-        let learned = learnedTerms
+        let learned = learnedTerms(sources)
         return LiveInput(context: context, selection: selection,
                          boost: Pipeline.boostTerms(saved: store.terms, learned: learned, context: context,
-                                                    fromScreen: ContextSources(.standard).screenVocabulary), learned: learned,
-                         complete: complete, models: Settings.selection, features: DictationFeatures(.standard))
+                                                    fromScreen: sources.screenVocabulary), learned: learned,
+                         complete: complete, models: Settings.selection, features: DictationFeatures(.standard, sources: sources))
     }
 
     /// The latest speculative run of this press (#43) and its model call; the task returns nil once cancelled.
@@ -660,9 +671,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// #87: with the setting on, remembers the screen terms a boost (raw → boosted transcript) or the casing fix wrote
-    /// into dictation `id`, if still in the text inserted. Undo forgets them again.
+    /// into dictation `id`, if still in the text inserted. Undo forgets them again. Not where the app's profile turns
+    /// learning off (#96).
     private func learn(_ raw: RawInsert, _ result: PipelineResult, inserted: String, id: UUID) {
-        guard ContextSources(.standard).rememberScreenTerms else { return }
+        guard raw.sources.learnScreenTerms else { return }
         let boosted = Pipeline.termsWritten(from: raw.rawTranscript, to: raw.request.transcript, terms: raw.boost,
                                             saved: store.terms.map(\.text))
         let (fromBoost, fromCasing) = (boosted.filter { inserted.contains($0) }, result.recased.filter { inserted.contains($0) })
@@ -749,8 +761,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         menu.addItem(withTitle: status.value.summary, action: nil, keyEquivalent: "")
         menu.addItem(.separator())
+        // The status menu doesn't activate PopTalk: the frontmost app is still the one the user was in (#96).
+        if let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier, id != Bundle.main.bundleIdentifier {
+            let item = menu.addItem(withTitle: "Don't Read the Screen in \(app.localizedName ?? id)",
+                                    action: #selector(toggleScreenOff(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = id
+            item.state = AppProfiles.screenOff(id, in: AppProfiles.load(.standard)) ? .on : .off
+        }
         menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Quit PopTalk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    }
+
+    /// Creates or updates the app's profile (Settings → Apps); unchecking turns its screen sources back on.
+    @objc private func toggleScreenOff(_ item: NSMenuItem) {
+        guard let id = item.representedObject as? String else { return }
+        var profiles = AppProfiles.load(.standard)
+        AppProfiles.setScreenOff(item.state != .on, bundleID: id, in: &profiles)
+        AppProfiles.save(profiles, to: .standard)
     }
 
     @objc private func showSettings() {

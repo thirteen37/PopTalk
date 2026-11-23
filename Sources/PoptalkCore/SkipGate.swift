@@ -12,10 +12,12 @@ public struct DictationFeatures: Sendable, Equatable {
 
     public init() {}
 
-    /// Unset keys take the defaults; `POPTALK_SKIP_LLM=1` or `0` overrides the skip gate.
-    public init(_ d: UserDefaults, environment: [String: String] = ProcessInfo.processInfo.environment) {
+    /// Unset keys take the defaults; `POPTALK_SKIP_LLM=1` or `0` overrides the skip gate. `sources`: the press's
+    /// resolved sources (#96), else the global ones.
+    public init(_ d: UserDefaults, sources: ContextSources? = nil,
+                environment: [String: String] = ProcessInfo.processInfo.environment) {
         recaseTerms = d.object(forKey: Key.recaseTerms) as? Bool ?? true
-        screenTerms = ContextSources(d).screenVocabulary
+        screenTerms = (sources ?? ContextSources(d)).screenVocabulary
         skipGate = environment["POPTALK_SKIP_LLM"].map { $0 == "1" } ?? d.bool(forKey: Key.skipGate)
     }
 }

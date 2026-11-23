@@ -27,6 +27,20 @@ private func normal() -> AppStatus {
     #expect(b[4].help == "Context off: nearby text, window title")
 }
 
+// #96: a profile that turns off every screen read shows one badge instead of each source.
+@Test func stripSaysScreenReadingIsOffInThisApp() {
+    var profiles: [AppProfile] = []
+    AppProfiles.setScreenOff(true, bundleID: "com.example.Mail", in: &profiles)
+    let r = AppProfiles.resolve(bundleID: "com.example.Mail", domain: nil, isPrivate: false, profiles: profiles,
+                                defaults: ContextSources())
+    let b = StatusStrip.badges(normal(), llm: .ready, sources: r.sources, ocrWarm: true, history: false, custom: r.custom)
+    #expect(b == [StatusBadge(symbol: "eye.slash", help: "Screen reading off in this app")])
+    var ocrOff = ContextSources()
+    ocrOff.ocr = false
+    #expect(StatusStrip.badges(normal(), llm: .ready, sources: ocrOff, ocrWarm: true, history: false, custom: true)
+        .map(\.symbol) == ["text.viewfinder"])
+}
+
 @Test func stripShowsOCROffOrWarming() {
     var src = ContextSources()
     #expect(StatusStrip.badges(normal(), llm: .ready, sources: src, ocrWarm: false, history: false).map(\.symbol) == ["hourglass"])

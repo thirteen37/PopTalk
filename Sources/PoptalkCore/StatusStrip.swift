@@ -6,20 +6,27 @@ public struct StatusBadge: Equatable, Sendable {
 
 /// Inactive or degraded subsystems, for the strip under the overlay text. Empty when all is normal.
 public enum StatusStrip {
-    /// `llm`: the cleanup model's status (`.ready` for providers that don't load in-process).
+    /// `llm`: the cleanup model's status (`.ready` for providers that don't load in-process). `sources`: the press's
+    /// resolved sources; `custom`: an app profile matched (#96).
     public static func badges(_ s: AppStatus, llm: ModelStatus, sources: ContextSources, ocrWarm: Bool,
-                              history: Bool) -> [StatusBadge] {
+                              history: Bool, custom: Bool = false) -> [StatusBadge] {
         var b: [StatusBadge] = []
         if s.speech != .ready { b.append(.init(symbol: "waveform.slash", help: "Speech model \(s.speech.title)")) }
         if llm != .ready { b.append(.init(symbol: "text.bubble", help: "Language model \(llm.title): raw dictation")) }
         b += s.missing.map { .init(symbol: "lock", help: "\($0.rawValue) permission missing") }
-        if !sources.ocr { b.append(.init(symbol: "text.viewfinder", help: "Screen text (OCR) off")) }
-        else if !s.isGranted(.screenRecording) { b.append(.init(symbol: "eye.slash", help: "No Screen Recording permission: no screen text")) }
-        else if !ocrWarm { b.append(.init(symbol: "hourglass", help: "Screen text (OCR) warming up")) }
-        let off = [("focused text", sources.focusedText), ("nearby text", sources.nearbyText),
-                   ("window title", sources.windowTitle), ("screen vocabulary", sources.screenVocabulary)]
-            .filter { !$0.1 }.map(\.0)
-        if !off.isEmpty { b.append(.init(symbol: "text.badge.xmark", help: "Context off: " + off.joined(separator: ", "))) }
+        if custom, ContextSource.screen.allSatisfy({ !sources[$0] }) {
+            b.append(.init(symbol: "eye.slash", help: "Screen reading off in this app"))
+        } else {
+            if !sources.ocr { b.append(.init(symbol: "text.viewfinder", help: "Screen text (OCR) off")) }
+            else if !s.isGranted(.screenRecording) { b.append(.init(symbol: "eye.slash", help: "No Screen Recording permission: no screen text")) }
+            else if !ocrWarm { b.append(.init(symbol: "hourglass", help: "Screen text (OCR) warming up")) }
+            // The domain goes with the title unless a profile split them.
+            let off = [("focused text", sources.focusedText), ("nearby text", sources.nearbyText),
+                       ("window title", sources.windowTitle), ("web domain", sources.webDomain || !sources.windowTitle),
+                       ("screen vocabulary", sources.screenVocabulary)]
+                .filter { !$0.1 }.map(\.0)
+            if !off.isEmpty { b.append(.init(symbol: "text.badge.xmark", help: "Context off: " + off.joined(separator: ", "))) }
+        }
         if history { b.append(.init(symbol: "circle.fill", help: "History recording on")) }
         return b
     }

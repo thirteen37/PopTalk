@@ -44,8 +44,8 @@ public enum CapturePolicy {
     }
 }
 
-/// Which context sources the user allows (#40), read at capture time so a change applies to the next press.
-/// The selection and saved vocabulary aren't optional; password fields are excluded regardless.
+/// Which context sources the user allows (#40) in Settings → Context, narrowed per press by an app profile (#96,
+/// `AppProfiles.resolve`). The selection and saved vocabulary aren't optional; password fields are excluded regardless.
 public struct ContextSources: Sendable, Equatable {
     public enum Key {
         public static let focusedText = "contextFocusedText", nearbyText = "contextNearbyText", ocr = "contextOCR"
@@ -53,8 +53,13 @@ public struct ContextSources: Sendable, Equatable {
         public static let rememberScreenTerms = "contextRememberScreenTerms"
     }
     public var focusedText = true, nearbyText = true, ocr = true, windowTitle = true, screenVocabulary = true
+    /// Its own source per app (#96); globally it goes with the window title, as one toggle.
+    public var webDomain = true
     /// #87 "Remember screen terms that fix dictations": off by default, and only with `screenVocabulary` on.
+    /// Use them (boost and recase); a profile can keep that and still turn learning off.
     public var rememberScreenTerms = false
+    /// Learn new ones from this press's screen (`LearnedTerms.record`).
+    public var learnScreenTerms = false
 
     public init() {}
 
@@ -63,13 +68,16 @@ public struct ContextSources: Sendable, Equatable {
         func on(_ k: String) -> Bool { d.object(forKey: k) as? Bool ?? true }
         (focusedText, nearbyText, ocr) = (on(Key.focusedText), on(Key.nearbyText), on(Key.ocr))
         (windowTitle, screenVocabulary) = (on(Key.windowTitle), on(Key.screenVocabulary))
+        webDomain = windowTitle
         rememberScreenTerms = screenVocabulary && d.bool(forKey: Key.rememberScreenTerms)
+        learnScreenTerms = rememberScreenTerms
     }
 
     /// The title is still read during capture (private-window check, OCR window match); it's dropped here.
     public func apply(_ s: ScreenSnapshot) -> ScreenSnapshot {
         var s = s
         if !windowTitle { s.windowTitle = "" }
+        if !webDomain { s.webDomain = "" }
         return s
     }
 }
