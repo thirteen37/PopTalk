@@ -18,9 +18,11 @@ public struct LastInsert<Target: Equatable> {
     public let terminal: TerminalStamp?
     /// Set when pasted into an app whose ⌘Z ignores the paste (#93, `AXUndo`), where it's deleted directly instead.
     public let axUndo: TerminalStamp?
+    /// Parakeet's unboosted text for this take, in memory only, for `redictated` (#95).
+    public let rawTranscript: String?
 
     public init(target: Target, text: String, at: Date = Date(), requestID: UUID? = nil, reprocess: RawInsert? = nil,
-                prefix: String = "", terminal: TerminalStamp? = nil, axUndo: TerminalStamp? = nil) {
+                prefix: String = "", terminal: TerminalStamp? = nil, axUndo: TerminalStamp? = nil, rawTranscript: String? = nil) {
         self.target = target
         self.text = text
         self.at = at
@@ -29,6 +31,7 @@ public struct LastInsert<Target: Equatable> {
         self.prefix = prefix
         self.terminal = terminal
         self.axUndo = axUndo
+        self.rawTranscript = rawTranscript
     }
 
     /// The space to put before `s` being dictated into `target`.
