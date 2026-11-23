@@ -660,6 +660,76 @@ def v3_edits():
     return out
 
 
+# ---------- v4 families: from aggregate history counts ----------
+# Both Macs' history, read as counts only: ~85% of dictations went to coding-agent terminals with screens of 4–6k
+# characters, 10–19% were three words or fewer, and v3 put list markers on 5 of 60 dictations that had no list cue.
+
+def agent_screen(r, extra=()):
+    """A coding agent's terminal: tool calls, diffs and bullet lists, the cursor at its prompt."""
+    lines, budget = [], r.randint(1500, 3500)  # under Prompts.window's 4000, so every `extra` line stays in view
+    while sum(len(l) + 1 for l in lines) < budget:
+        lines.append(r.choice(L.AGENT_LINES))
+    for x in extra:
+        lines.insert(r.randint(0, len(lines)), x)
+    text = "\n".join(lines) + "\n\n> "
+    app, win = r.choice(L.AGENT_APPS)
+    return {"appName": app, "windowTitle": win.format(w=r.choice(L.REPO_WORDS)), "text": text, "cursorOffset": utf16(text)}
+
+
+def heard(r, clean):
+    """A clean sentence as it reaches the model: punctuated as Parakeet writes it (then the target is unchanged),
+    bare lowercase, or with a filler."""
+    x = r.random()
+    if x < 0.45:
+        return clean
+    if x < 0.75:
+        return lower_transcript(clean)
+    s = add_fillers(r, clean if re.match(r"I\b", clean) else clean[0].lower() + clean[1:], 1)
+    return lower_transcript(s) if r.random() < 0.5 else s
+
+
+def ident(r):
+    """(as on screen, as spoken): loadConfig / load_config / LoadConfig ↔ "load config"."""
+    h, t = r.choice(L.ID_HEAD), r.choice(L.ID_TAIL)
+    form = r.choice([h + t.capitalize(), h + t.capitalize(), f"{h}_{t}", h.capitalize() + t.capitalize()])
+    return form, f"{h} {t}"
+
+
+def v4_dictation():
+    out = []
+    add = lambda cat, i, t, ctx, target: out.append({"id": f"{cat}-{i}", "cat": cat, "transcript": t, "context": ctx, "target": target})
+
+    r = R("v4-terminal")  # replies at a coding agent's prompt: keep them as said, no bullets, no screen text
+    for i in range(300):
+        x = r.random()
+        parts = [r.choice(L.AGENT_SHORT)] if x < 0.3 else r.sample(L.AGENT_SAID, 1 if x < 0.7 else r.randint(2, 3))
+        if x >= 0.7 and r.random() < 0.3:
+            parts.insert(0, r.choice(L.AGENT_SHORT))
+        target = " ".join(parts)
+        add("d-terminal", i, heard(r, target), agent_screen(r), target)
+
+    r = R("v4-ident")  # an identifier on the agent's screen, spoken as words: write it as the screen does
+    for i in range(120):
+        (n, spoken), others = ident(r), [ident(r)[0] for _ in range(r.randint(1, 3))]
+        lines = [r.choice(L.IDENT_LINES).format(I=v) for v in [n] + [o for o in others if o.lower().replace("_", "") != n.lower().replace("_", "")]]
+        tmpl = r.choice(L.IDENT_T)
+        t = tmpl.format(I=spoken)
+        t, ctx = lower_transcript(t) if r.random() < 0.6 else t, agent_screen(r, lines)
+        assert n in ctx["text"][-4000:], "the identifier must stay inside the window the model sees"
+        add("d-terminal-names", i, t, ctx, tmpl.format(I=n))
+
+    r = R("v4-no-list")  # to-dos said as one sentence, no "bullet"/"first … second": prose, even over a bulleted screen
+    for i in range(150):
+        items = r.choice(L.LISTS + L.DEV_TODOS * 2)
+        sel = r.sample(items, r.randint(2, min(3, len(items))))
+        joined = " and ".join(sel) if len(sel) == 2 else ", ".join(sel[:-1]) + r.choice([" and ", ", and "]) + sel[-1]
+        target = cap(r.choice(L.VERB_PROSE if " " in items[0] else L.NOUN_PROSE).format(L=joined))
+        if r.random() < 0.3:
+            target = r.choice(L.AGENT_SAID + L.AGENT_SHORT) + " " + target
+        add("d-no-list", i, heard(r, target), agent_screen(r) if r.random() < 0.6 else unrelated_context(r), target)
+    return out
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -839,13 +909,16 @@ def main(cmd):
     elif cmd == "teach":
         write(OUT / "teach.jsonl", teach_items())
     elif cmd == "build":
-        items = []
+        items, skipped = [], {}
         if (OUT / "heard.jsonl").exists():
             items += audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
-        items += text_dictation() + program_edits() + v3_dictation() + v3_edits()
+        else:  # the manifest says so, or its counts read as dropped *-audio categories
+            skipped["audio"] = "no heard.jsonl (PoptalkDatagen transcribe not run)"
+        items += text_dictation() + program_edits() + v3_dictation() + v3_edits() + v4_dictation()
         if not (OUT / "teach_out.jsonl").exists():  # SKIP_TEACH=1 make_data.zsh: build without teacher items
             n = len(jl(OUT / "teach.jsonl")) if (OUT / "teach.jsonl").exists() else 0
             print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
+            skipped["teacher"] = "no teach_out.jsonl"
         else:
             replies = {o["id"]: o["output"] for o in jl(OUT / "teach_out.jsonl")}
             kept = 0
@@ -872,7 +945,8 @@ def main(cmd):
             counts[it["cat"]] = counts.get(it["cat"], 0) + 1
         write(OUT / "items.jsonl", clean)
         (Path("training") / "manifest.json").write_text(json.dumps(
-            {"items": len(clean), "byCategory": dict(sorted(counts.items())), "contaminationRejected": rejected}, indent=2) + "\n")
+            {"items": len(clean), "byCategory": dict(sorted(counts.items())), "contaminationRejected": rejected}
+            | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
     elif cmd == "split":
         cats = {i["id"]: i["cat"] for i in jl(OUT / "items.jsonl")}
         rows, dropped = [], {}

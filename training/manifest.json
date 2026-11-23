@@ -1,25 +1,23 @@
 {
-  "items": 7138,
+  "items": 6671,
   "byCategory": {
-    "d-correction-audio": 86,
     "d-correction-text": 465,
     "d-email-url": 119,
-    "d-filler-audio": 76,
     "d-filler-text": 242,
-    "d-keep-audio": 66,
     "d-keep-marks": 149,
-    "d-keep-text": 112,
+    "d-keep-text": 114,
     "d-list": 119,
     "d-multi-screen": 148,
     "d-multi-text": 199,
-    "d-names-audio": 748,
     "d-names-text": 789,
     "d-names-vocab": 109,
     "d-no-echo": 249,
+    "d-no-list": 150,
     "d-num": 160,
-    "d-question-audio": 66,
-    "d-question-text": 144,
+    "d-question-text": 147,
     "d-spelled": 76,
+    "d-terminal": 300,
+    "d-terminal-names": 120,
     "e-bullets": 230,
     "e-case": 89,
     "e-correct-context": 448,
@@ -37,8 +35,6 @@
     "e-spelled-misheard": 94
   },
   "contaminationRejected": {
-    "d-names-audio": 2,
-    "d-keep-audio": 1,
     "d-names-text": 2,
     "d-correction-text": 3,
     "d-filler-text": 1,
@@ -52,5 +48,9 @@
     "d-email-url": 1,
     "d-spelled": 4,
     "e-spelled-misheard": 1
+  },
+  "skipped": {
+    "audio": "no heard.jsonl (PoptalkDatagen transcribe not run)",
+    "teacher": "no teach_out.jsonl"
   }
 }

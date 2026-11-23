@@ -532,3 +532,65 @@ NUM_T = ["{CN} people signed up for the workshop.", "The fix is in issue {U}.", 
          "The order is {CN} dollars with shipping.", "About {CN} percent of the tickets are duplicates.",
          "Can you move the review to {CL} {AP} on {D}?", "I read {SM} chapters on the train.",
          "The package weighs {U} point {U2} kilos."]
+
+# ---------- v4: history-driven families (only counts were read from history; all text below is invented) ----------
+# Most real dictations go to a coding agent in a terminal: long agent screens full of bullets, tool calls and code
+# identifiers, with short replies at its prompt. v3 sometimes bulletized a one-sentence to-do there.
+AGENT_LINES = [
+    "⏺ Read(src/settings/store.ts)", "  ⎿  Read 188 lines", "⏺ Bash(npm test)", "  ⎿  41 passed, 2 failed",
+    "⏺ Update(src/net/client.ts)", "  ⎿  Updated with 6 additions and 3 removals", "✻ Thinking…",
+    "⏺ The failing case expects the counter to reset after a success.", "⏺ Here's what I changed:",
+    "  - Moved the timeout into the shared settings", "  - Added a guard for empty responses",
+    "  - Kept the old behaviour behind a flag", "  - Removed the duplicate import", "⏺ Search(pattern: \"timeout\")",
+    "  ⎿  Found 9 files", "+    if (!body) return null;", "-    return body.items;", "  ⎿  Interrupted by user",
+    "⏺ Done. The build is green again.", "Do you want me to commit these changes?", "  1. Yes", "  2. No, keep editing",
+    "⏺ Next steps:", "  - Run the full suite in CI", "  - Update the changelog", "⏺ Bash(make lint)",
+    "  ⎿   3 files changed, 27 insertions(+), 9 deletions(-)", "warning: unused variable `retries`",
+    "error[E0308]: mismatched types", "⏺ I couldn't reproduce the crash locally.", "  ⎿  No matches found",
+    "? for shortcuts", "esc to interrupt", "⏺ Write(tests/fixtures/empty.json)", "  ⎿  Wrote 1 line",
+]
+AGENT_APPS = [("Ghostty", "~/src/{w}"), ("Terminal", "zsh — {w}"), ("iTerm2", "{w} (node)"), ("Ghostty", "{w} — agent")]
+REPO_WORDS = ["atlas", "harbor", "ledger", "orbit", "pantry", "relay", "sprout", "tally", "vista", "wharf"]
+# What people say to a coding agent, in clean form; the transcript is derived from it.
+AGENT_SHORT = ["Yes.", "Yes, go ahead.", "Go ahead.", "Continue.", "Keep going.", "Sounds good, do it.", "Not yet.",
+               "Good catch.", "Nope.", "Yep, ship it.", "Great, thanks.", "Stop.", "Try again.", "Do it.", "Perfect.",
+               "Hold on.", "That works.", "Leave it."]
+AGENT_SAID = [
+    "Go ahead and commit that.", "Stop, that's the wrong file.", "No, revert that last change.", "Run the tests again.",
+    "Try that again with the verbose flag.", "Looks good, push it.", "Can you explain why that test fails?",
+    "Undo the change to the settings file.", "Let's leave the docs for later.", "Wait for the build to finish first.",
+    "What does the error message say?", "Show me the diff before you commit.", "Split that into two commits.",
+    "Add a comment explaining the workaround.", "Use the existing helper instead of writing a new one.",
+    "Don't touch the migration files.", "That's fine for now, we can clean it up later.", "Skip that step.",
+    "Open a pull request when it's done.", "Check the logs from the last run.", "Is that change safe to ship today?",
+    "Why did you remove the check?", "Put it back the way it was.", "Make the error message more specific.",
+    "Can you make that smaller?", "Do the same for the other handlers.", "Bump the version and tag it.",
+    "Rebase on main before you push.", "Then update the changelog.", "I don't think that's the root cause.",
+    "Let's try the simpler fix and see if the test passes.", "Keep the public API the same.",
+    "Read the whole file before you change it.", "The flaky test is unrelated, ignore it.",
+    "Can you find where that value gets set?", "Pull the latest changes and build again.",
+    "That broke the other screen, look at it again.", "Write the plan down before you start.",
+]
+# Identifier words: the screen shows them joined (loadConfig, load_config, LoadConfig); speech splits them.
+ID_HEAD = ["load", "parse", "fetch", "retry", "flush", "build", "render", "sync", "resolve", "merge", "index", "queue"]
+ID_TAIL = ["config", "session", "token", "batch", "upload", "request", "cache", "layout", "budget", "header", "payload"]
+IDENT_T = ["Can you rename {I} to something clearer?", "The bug is in {I}, not in the caller.",
+           "Add a test for {I} that covers the empty case.", "Why does {I} get called twice?", "Move {I} into its own file.",
+           "I think {I} should return early when the list is empty.", "Inline {I} and delete the wrapper.",
+           "Check whether {I} handles a missing value.", "Log the arguments that reach {I}.", "Let's make {I} async.",
+           "Don't change the signature of {I}.", "Where else do we use {I}?", "Go back to the old version of {I}.",
+           "Put a short doc comment on {I}."]
+IDENT_LINES = ["⏺ I'll update {I} so it handles the empty case.", "  ⎿  {I} is called from three places",
+               "function {I}(options) {{", "def {I}(self):", "error: {I} returned nil", "⏺ Read the body of {I}.",
+               "    at {I} (src/core/worker.ts)", "  - {I} now logs its input"]
+# To-do-like sentences said without "bullet" or "first … second": they stay prose, never a list.
+DEV_TODOS = [["add the missing test", "fix the lint warning", "update the readme"],
+             ["bump the dependency", "rerun the benchmarks", "write up the results"],
+             ["revert the config change", "clear the cache", "restart the worker"],
+             ["delete the unused flag", "rename the helper", "squash the commits"],
+             ["check the logs", "find the slow query", "add an index for it"]]
+VERB_PROSE = ["I still need to {L}.", "Can you {L}?", "Remember to {L} before Friday.", "Today I want to {L}.",
+              "Let's {L} this week.", "Before the demo we should {L}.", "{L}.", "{L}.", "Please {L}."]
+NOUN_PROSE = ["We're out of {L}.", "Grab {L} on the way home.", "I packed {L}.", "Can you pick up {L}?"]
+NOTE_BULLETS = ["- call the landlord", "- send the deck", "- book flights", "- renew the domain", "- ask about parking",
+                "- order a new charger", "- sort the receipts"]
