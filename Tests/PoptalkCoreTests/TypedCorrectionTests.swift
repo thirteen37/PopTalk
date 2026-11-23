@@ -36,6 +36,40 @@ import Testing
     #expect(a.span(in: "Dear Bob, Thanks") == "")  // deleted
 }
 
+/// What `TypingWatch` gets from a field value: the correction and the offer, if any.
+private func watched(_ a: InsertAnchors, _ inserted: String, _ value: String, said: String) -> (TypedCorrection, VocabTerm?)? {
+    a.span(in: value).flatMap { TypedCorrection(inserted: inserted, span: $0, transcript: said) }
+        .map { ($0, $0.offer(known: [], isWord: { $0.lowercased() != "quorbit" })) }
+}
+
+@Test func dictationIntoAnEmptyFieldEndsWhenSentOrReplaced() throws {
+    // An empty composer: both anchors are empty, so they match any later value (#94).
+    let ins = "Call me later."
+    let a = try #require(InsertAnchors(value: ins, inserted: ins, caret: ins.utf16.count))
+    #expect(a.span(in: "") == "")  // sent or deleted: the watch ends there (#95 tells which)
+    // The next message: once a misheard term offer, now new text, not a fix.
+    #expect(a.span(in: "Run quorbit now") == nil)
+    #expect(watched(a, ins, "Run quorbit now", said: "call me later") == nil)
+    #expect(a.span(in: "Did the parcel arrive yet?") == nil)
+    // Typed on after a prefix the next message shares.
+    let b = try #require(InsertAnchors(value: "Hi there, call me later.", inserted: " call me later.", caret: 24))
+    #expect(b.span(in: "Hi there, see you on the weekend") == nil)
+}
+
+@Test func fixingADictationInAnEmptyFieldStillCounts() throws {
+    let ins = "Ask the cue orbit team."
+    let a = try #require(InsertAnchors(value: ins, inserted: ins, caret: ins.utf16.count))
+    let (c, term) = try #require(watched(a, ins, "Ask the Quorbit team.", said: "ask the cue orbit team"))
+    #expect(c.changes == [.init(old: ["cue", "orbit"], new: ["Quorbit"], cause: .misheard)])
+    #expect(term == VocabTerm(text: "Quorbit", aliases: ["cue orbit"]))
+    // A short one with a term fixed, and typing on after a fix.
+    let short = "Run cue orbit."
+    let s = try #require(InsertAnchors(value: short, inserted: short, caret: short.utf16.count))
+    #expect(watched(s, short, "Run Quorbit.", said: "run cue orbit")?.1?.text == "Quorbit")
+    #expect(watched(a, ins, "Ask the Quorbit team. And one more thing", said: "ask the cue orbit team")?.0.text
+        == "Ask the Quorbit team.")
+}
+
 @Test func anchorsCountUTF16LikeAX() throws {
     let value = "👋 hi 😀 there"
     let caret = ("👋 hi 😀" as String).utf16.count

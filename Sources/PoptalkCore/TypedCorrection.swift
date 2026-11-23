@@ -4,6 +4,8 @@ import Foundation
 /// has typed over it. In UTF-16 units, as AX counts them. Held in memory only.
 public struct InsertAnchors: Equatable, Sendable {
     let before: [UInt16], after: [UInt16]
+    /// The dictation's words, normalised, to tell an edit of it from new text in its place.
+    let words: [String]
 
     /// `inserted` (spacing included) as it lies in the field's `value`: ending at `caret` (AX selection end, UTF-16)
     /// when the text there matches, else its only occurrence. Nil when it isn't there or occurs more than once.
@@ -20,17 +22,27 @@ public struct InsertAnchors: Equatable, Sendable {
         }
         before = Array(v[..<start])
         after = Array(v[(start + ins.count)...])
+        words = Self.words(inserted)
     }
 
-    /// What lies between the anchors in `value` now; nil once the text before or after the dictation changed.
+    /// What lies between the anchors in `value` now: blank once the dictation was deleted (or sent, from a field it
+    /// filled). Nil once the text before or after it changed, or the text between keeps too few of its words: new
+    /// text in its place, such as the next message after a send (#94), not a fix.
     /// ponytail: exact match on the whole rest of the field, so an edit elsewhere in it (or an app that rewrites the
     /// field) loses the dictation; match only nearby text if that turns out common.
+    /// ponytail: "too few" is under half the words of the shorter side, in order; a short dictation fixed in every word
+    /// reads as new text, and new text sharing words with a short one still counts. Tune if either shows up.
     public func span(in value: String) -> String? {
         let v = Array(value.utf16)
         guard v.count >= before.count + after.count, v.starts(with: before), v.reversed().starts(with: after.reversed())
         else { return nil }
-        return String(decoding: v[before.count..<(v.count - after.count)], as: UTF16.self)
+        let span = String(decoding: v[before.count..<(v.count - after.count)], as: UTF16.self)
+        let new = Self.words(span)
+        let kept = words.count - new.difference(from: words).removals.count
+        return new.isEmpty || kept > 0 && kept * 2 >= min(words.count, new.count) ? span : nil
     }
+
+    static func words(_ s: String) -> [String] { TypedCorrection.words(s).map { TypedCorrection.normalized(s[$0]) } }
 }
 
 /// How the user's typed version of a dictation differs from what PopTalk inserted (#86), word by word, and why
