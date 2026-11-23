@@ -339,8 +339,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                 cleanupModel: models.cleanupModel, editModel: models.editModel, features: DictationFeatures(.standard))
         let id = UUID()
         // Before apply, which moves lastInsert to this request.
-        let corrects = history.isEnabled && cleanup == nil
-            ? lastInsert?.corrected(by: request.selection, in: TextIO.focusedElement()) : nil
+        let focused = history.isEnabled && cleanup == nil ? TextIO.focusedElement() : nil
+        let corrects = focused.flatMap { lastInsert?.corrected(by: request.selection, in: $0) }
+        let repeats = focused.flatMap { lastInsert?.redictated(raw: raw, selection: request.selection, in: $0) }
         Timing.mark("release: provider ready", since: t0)
         let result = if let reused { reused.result } else { await pipeline.run(request) }
         Timing.mark("release: pipeline done", since: t0)
@@ -366,6 +367,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         (entry.kind, entry.promptTokens, entry.sharedPrefix) = (call?.kind, call?.promptTokens, call?.sharedPrefix)
         history.append(entry)
         if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
+        if let repeats { history.append(HistoryEvent(.redictation, id: repeats, by: id)) }
     }
 
     /// Offers to clean up the last raw insert, if its field is focused and untouched and the model is ready.
@@ -399,7 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         else { overlay.showError(failed); return failed }
         let field = TextIO.focusedElement() ?? last.target
         let now = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
-                             prefix: raw.prefix, terminal: terminal, axUndo: axUndo)
+                             prefix: raw.prefix, terminal: terminal, axUndo: axUndo, rawTranscript: raw.rawTranscript)
         lastInsert = now
         watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID)
         overlay.showOutcome("Cleaned up", undo: undoable(now) ? { [weak self] in
@@ -698,7 +700,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         lastInsert = pasted ? field.map {
             LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
-                       prefix: space, terminal: terminal, axUndo: axUndo)
+                       prefix: space, terminal: terminal, axUndo: axUndo, rawTranscript: raw.rawTranscript)
         } : nil
         if case .insert = result.outcome, let field, let last = lastInsert {
             watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID)

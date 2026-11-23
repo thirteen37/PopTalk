@@ -95,6 +95,50 @@ private func lines(_ store: HistoryStore) throws -> [Data] {
     #expect(LastInsert(target: "slack", text: "hi", at: t0).corrected(by: "hi", in: "slack", now: t0 + 1) == nil)  // no request id
 }
 
+@Test func redictationNeedsNoSelectionSameFieldRecentInsertAndSimilarRawTranscript() {
+    let id = UUID()
+    let last = LastInsert(target: "notes", text: " Book the green room for Friday.", at: t0, requestID: id,
+                          rawTranscript: "book the green room for friday")
+    #expect(last.redictated(raw: "book the green room for friday", selection: nil, in: "notes", now: t0 + 10) == id)  // identical
+    #expect(last.redictated(raw: "Book the screen room for Friday.", selection: nil, in: "notes", now: t0 + 10) == id)  // near
+    #expect(last.redictated(raw: "remind me to water the plants", selection: nil, in: "notes", now: t0 + 10) == nil)  // unrelated
+    #expect(last.redictated(raw: "book the green room for friday", selection: nil, in: "mail", now: t0 + 10) == nil)  // other field
+    #expect(last.redictated(raw: "book the green room for friday", selection: nil, in: "notes", now: t0 + 31) == nil)  // too late
+    #expect(last.redictated(raw: "book the green room for friday", selection: "green room", in: "notes", now: t0 + 10) == nil)  // a correction
+    #expect(last.redictated(raw: "book the green room for friday", selection: " ", in: "notes", now: t0 + 10) == id)  // blank isn't a selection
+    #expect(last.redictated(raw: "", selection: nil, in: "notes", now: t0 + 10) == nil)
+    // No request id (history off), or no raw transcript kept.
+    #expect(LastInsert(target: "notes", text: "hi there", at: t0, rawTranscript: "hi there")
+        .redictated(raw: "hi there", selection: nil, in: "notes", now: t0 + 1) == nil)
+    #expect(LastInsert(target: "notes", text: "hi there", at: t0, requestID: id)
+        .redictated(raw: "hi there", selection: nil, in: "notes", now: t0 + 1) == nil)
+}
+
+@Test func redictationSimilarityIsATokenSequenceRatio() {
+    #expect(Redictation.similarity("a b c d", "a b c d") == 1)
+    #expect(Redictation.similarity("a b c d", "a x c d") == 0.75)  // 2 × 3 matches / 8 tokens
+    #expect(Redictation.similarity("a b c d", "d c b a") == 0.25)  // order matters
+    #expect(Redictation.similarity("", "a") == 0)
+    #expect(Redictation.window == 30 && Redictation.minSimilarity == 0.6)
+}
+
+@Test func redictationEventRoundTripsAndUnknownEventTypesSurviveTheMerge() throws {
+    let ev = HistoryEvent(.redictation, id: UUID(), at: t0, by: UUID())
+    let line = try HistoryStore.encoder.encode(ev)
+    #expect(String(decoding: line, as: UTF8.self).contains(#""type":"redictation""#))
+    #expect(try HistoryStore.decoder.decode(HistoryEvent.self, from: line) == ev)
+    // A newer Mac's event type this build doesn't know is kept by the merge, not dropped or counted as a request.
+    let root = tempDir()
+    let (store, _) = mac(root)
+    let r = request(at: t0)
+    store.append(r)
+    store.flush()
+    let future = #"{"at":"2023-11-14T22:13:30Z","id":"\#(r.id)","type":"someFutureKind"}"#
+    try future.write(to: root.appendingPathComponent("history-B.jsonl"), atomically: true, encoding: .utf8)
+    #expect(try store.records().map { String(decoding: $0, as: UTF8.self) } == [encoded(r), future])
+    #expect(store.stats().requests == 1)
+}
+
 @Test func modelCallRecorderKeepsLastCallAndReply() async throws {
     let calls = ModelCallRecorder()
     let complete = calls.wrap { _, _, _, _ in "reply" }

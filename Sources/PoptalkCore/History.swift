@@ -60,13 +60,14 @@ public struct HistoryRequest: Codable, Equatable, Sendable {
 
 /// A later signal about request `id`.
 public struct HistoryEvent: Codable, Equatable, Sendable {
-    /// `typedCorrection` (#86): the user fixed the dictation by typing. `HistoryStore` merges lines by their `type` string,
-    /// so an older version (another Mac) keeps the line without decoding it.
-    public enum Kind: String, Codable, Sendable { case undo, correction, vocabularyAccepted, vocabularyDeclined, typedCorrection }
+    /// `typedCorrection` (#86): the user fixed the dictation by typing. `redictation` (#95): the user said it again
+    /// (`LastInsert.redictated`). `HistoryStore` merges lines by their `type` string, so an older version (another Mac)
+    /// keeps the line without decoding it.
+    public enum Kind: String, Codable, Sendable { case undo, correction, vocabularyAccepted, vocabularyDeclined, typedCorrection, redictation }
     public var type: Kind
     public var id: UUID
     public var at: Date
-    /// For a correction: the request that corrected it.
+    /// For a correction or redictation: the request that corrected or repeated it.
     public var by: UUID?
     /// For a typed correction: the user's version of the dictated text (`TypedCorrection.text`).
     public var text: String?
@@ -87,6 +88,33 @@ extension LastInsert {
         guard let requestID, target == self.target, now.timeIntervalSince(at) < window, !sel.isEmpty, !ins.isEmpty,
               ins.contains(sel) || sel.contains(ins) else { return nil }
         return requestID
+    }
+
+    /// The request a dictation of `raw` is saying again (#95): no selection (that's `corrected`), same field,
+    /// within `window` seconds, and `raw` at least `minSimilarity` like the previous take's raw transcript.
+    /// #95 phase 2 adds an observed deletion of the insert here, with a longer window from it.
+    public func redictated(raw: String, selection: String?, in target: Target?, now: Date = Date(),
+                           window: TimeInterval = Redictation.window, minSimilarity: Double = Redictation.minSimilarity) -> UUID? {
+        guard let requestID, let rawTranscript, target == self.target, now.timeIntervalSince(at) < window,
+              selection?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true,
+              Redictation.similarity(raw, rawTranscript) >= minSimilarity else { return nil }
+        return requestID
+    }
+}
+
+/// Thresholds for `LastInsert.redictated`, from the #95 analysis: pair counts were flat from 30 s to 120 s and
+/// sensitive to the cutoff (19 pairs at ≥ 0.5, 4 at ≥ 0.9).
+public enum Redictation {
+    public static let window: TimeInterval = 30
+    public static let minSimilarity = 0.6
+
+    /// 2 × matched words / total words, matching in order (longest common subsequence via `difference`), over
+    /// `SpeechMetrics.words`; 0 when either is empty.
+    public static func similarity(_ a: String, _ b: String) -> Double {
+        let (x, y) = (SpeechMetrics.words(a), SpeechMetrics.words(b))
+        guard !x.isEmpty, !y.isEmpty else { return 0 }
+        let matched = x.count - y.difference(from: x).removals.count
+        return 2 * Double(matched) / Double(x.count + y.count)
     }
 }
 
