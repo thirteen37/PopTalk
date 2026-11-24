@@ -700,6 +700,51 @@ KEEP_CUES = [
     "Wait, is the store open on Sunday?", "Let's play it by ear instead of planning every hour.",
     "Sorry, it took me so long to answer.",
 ]
+# E2B v7 (#105): a dictation that opens with a cue-like word (no, sorry, wait, actually) or so/well/okay has nothing
+# before it to fix: the word is content and stays.
+KEEP_LEADS = [
+    "No, thanks, I already had lunch.", "No, thank you, we have enough chairs.", "No, I still haven't read the new schedule.",
+    "No, the store doesn't open until ten.", "No, we didn't get the package.", "No, that's the right address.",
+    "No, the train was on time today.", "No, I don't mind waiting.", "No, she already signed the form.",
+    "No, the tickets are still available.", "No, it's not raining here anymore.", "No, you didn't miss anything important.",
+    "No, the dentist moved my appointment.", "No, I can't find the charger anywhere.", "No, the kids are already asleep.",
+    "No, we still need two more volunteers.", "No, nothing changed since last week.", "No, the heater works fine now.",
+    "No, I think the blue one looks better.", "No, they never replied to the invitation.",
+    "No problem, I can cover your shift.", "No problem at all, happy to help.", "No worries, we can talk tomorrow.",
+    "No worries if you can't make it.", "No rush on the report.", "No need to bring anything, we have plenty of food.",
+    "No one answered the door.", "Nobody told me the gym was closed.", "No luck finding the spare keys.",
+    "No news from the landlord yet.", "No idea where I left my umbrella.", "No parking on the street after six.",
+    "Sorry, I can't make it on Saturday.", "Sorry for the late reply.", "Sorry, I was on another call.",
+    "Sorry about the noise last night.", "Sorry to bother you on the weekend.", "Sorry, the link I sent was broken.",
+    "Sorry, I forgot to water the plants.", "Sorry I missed your call this morning.", "Sorry, we're out of the large size.",
+    "Sorry, I won't be home for dinner.", "Sorry for the confusion about the dates.", "Sorry to hear about your trip.",
+    "Sorry it took so long to send the photos.",
+    "Wait for the bus at the second stop.", "Wait until the glue sets.", "Wait for me at the front entrance.",
+    "Wait, did anyone feed the cat?", "Wait, where did you park the car?", "Wait a minute before you open the oven.",
+    "Wait here while I grab my coat.",
+    "Actually, twenty people came to the workshop.", "Actually, the soup tastes better the next day.",
+    "Actually, I like the new layout.", "Actually, the bakery opens at seven.", "Actually, that's a great idea.",
+    "Actually, the hike was easier than I expected.", "Actually, I've never been to the coast.",
+    "Actually, most of the guests stayed late.",
+    "Correct, the invoice was paid on Monday.", "Forget about the dishes, I'll do them later.",
+    "Make sure the back door is locked.",
+    "So the movers arrive at eight.", "So I booked the cabin for three nights.", "So how was the concert?",
+    "So that's why the lights were off.", "So we're meeting at the park this time.",
+    "Well, the garden looks amazing this year.", "Well, I tried calling twice.", "Well, the bus never showed up.",
+    "Well, that was a long drive.", "Well, we can always order pizza.",
+    "Okay, I'll pick up the kids at four.", "Okay, the table is booked for six people.", "Okay, see you at the station.",
+    "Okay so the pool closes early today.", "Okay, that works for me.", "Okay, thanks for letting me know.",
+]
+# The same openers as replies at a coding agent's prompt.
+KEEP_LEADS_AGENT = [
+    "No, keep the old function for now.", "No, don't push yet.", "No, use the existing helper instead.",
+    "No, the tests were passing before your change.", "No, revert that last change.",
+    "No, the function should return an empty list.", "No problem, try the other approach.",
+    "Sorry, I meant the other config file.", "Sorry, that was a typo on my side.", "Wait, don't delete that folder.",
+    "Wait for the deploy to finish, then check the logs.", "Actually, let's keep both versions.",
+    "Actually, skip the docs for now.", "Okay, now run the migration.", "So the bug only shows up on the second load.",
+    "Well, the linter is happy now.",
+]
 
 # ---------- v7: ASR-style mutations (#103) ----------
 # Fillers as Parakeet writes them: real dictations carry mostly "uh" and "um" (pool_profile.py), rarely the rest.

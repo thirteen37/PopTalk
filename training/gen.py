@@ -10,6 +10,7 @@
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
   gen.py v8               → out/pool-v8/{train,val}.jsonl  dictation pool matched to real use (#103), for GEPA and E2B data
   gen.py teach6 / build6 / split6   the same three stages for the E2B v6 adapter, in out/v6/ (make_data_v6.zsh)
+  gen.py build7 / split7  E2B v7 (#105): v6's items plus d-keep-lead, in out/v7/ (make_data_v7.zsh)
   gen.py check            → asserts the v5–v7 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
@@ -1869,6 +1870,49 @@ def check_m6():
           + ", ".join(f"{n} {c}" for c, n in Counter(it["cat"] for it in teach).items()) + "; 0 contaminated")
 
 
+# ---------- E2B v7 (#105): sentence-opening content words ----------
+# v6 met "no"/"sorry"/"wait"/"actually" as cues in ~2,000 self-correction rows against 60 d-keep-cue rows, and drops
+# them at the start of a dictation, where there is nothing before them to fix. d-keep-lead says such openers, and
+# so/well/okay, as content and keeps them; v6's families still teach the drop after a value. build7 is build6 plus
+# this family: v6's speech and teacher outputs are reused as they are (teach6 is unchanged).
+
+OUT7 = OUT / "v7"
+KEEP7_N = 360  # with d-keep-cue and d-keep-opener: ~1 cue-like keep per 4 self-correction rows (v6: 1 per 17)
+
+
+def keep7_dictation():
+    checker, r, out = Checker(), R("d-keep-lead"), []
+    while len(out) < KEEP7_N:
+        agent = r.random() < 0.25
+        target = r.choice(L.KEEP_LEADS_AGENT if agent else L.KEEP_LEADS)
+        if r.random() < 0.3:
+            target += " " + r.choice(L.AGENT_SAID if agent else L.PLAIN)
+        x = r.random()  # as Parakeet writes it, bare, or with an "uh"/"um" (not heard(): its fillers include "I mean")
+        t = target if x < 0.45 else lower_transcript(target) if x < 0.75 else v8_um(r, target, 1)
+        t = lower_transcript(t) if x >= 0.75 and r.random() < 0.5 else t
+        y = r.random()
+        ctx = (agent_screen(r) if agent or y < 0.2 else m6_screen(r, avoid=[target]) if y < 0.5 else unrelated_context(r))
+        it = {"id": f"d-keep-lead-{len(out)}", "cat": "d-keep-lead", "transcript": t, "context": ctx, "target": target}
+        if not checker.reason(it):
+            out.append(it)
+    return out
+
+
+def check_keep7():
+    """`gen.py check`: d-keep-lead keeps every word as said (fillers aside), opens with each lead, is clean."""
+    checker, items = Checker(), keep7_dictation()
+    # each sentence on its own, so none is silently never drawn
+    bad = [s for s in L.KEEP_LEADS + L.KEEP_LEADS_AGENT if checker.reason({"transcript": s, "target": s})]
+    assert not bad, bad
+    for it in items:
+        y = it["target"]
+        assert y[0].isupper() and y[-1] in ".!?" and m6_words(it["transcript"]) == norm(y), it
+    leads = Counter(norm(it["target"])[0] for it in items)
+    assert all(leads[w] >= 10 for w in ("no", "sorry", "wait", "actually", "so", "well", "okay")), leads
+    print(f"keep7 check ok: {len(items)} d-keep-lead, {len({it['target'] for it in items})} distinct targets, "
+          + ", ".join(f"{w} {leads[w]}" for w in ("no", "sorry", "wait", "actually", "so", "well", "okay")))
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -2120,6 +2164,7 @@ def main(cmd):
         check_v7()
         check_v8()
         check_m6()
+        check_keep7()
     elif cmd == "v8":
         train, val = v8_pools()
         write(OUT / "pool-v8" / "train.jsonl", train)
@@ -2135,13 +2180,14 @@ def main(cmd):
         build(OUT, items, skipped, Path("training") / "manifest.json")
     elif cmd == "teach6":
         write(OUT6 / "teach.jsonl", m6_teach_items())
-    elif cmd == "build6":  # E2B v6 (#103): see the m6 section
-        skipped = {}
+    elif cmd in ("build6", "build7"):  # E2B v6 (#103): see the m6 section; v7 (#105) adds d-keep-lead
+        skipped, v7 = {}, cmd == "build7"
         items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
-        items += taught(OUT6, skipped, m6_teacher)
-        build(OUT6, items, skipped, Path("training") / "manifest-v6.json")
-    elif cmd in ("split", "split6"):
-        split(OUT if cmd == "split" else OUT6, Path("training") / ("samples.jsonl" if cmd == "split" else "samples-v6.jsonl"))
+        items += (keep7_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
+        build(OUT7 if v7 else OUT6, items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
+    elif cmd in ("split", "split6", "split7"):
+        v = cmd[5:]
+        split({"": OUT, "6": OUT6, "7": OUT7}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl")
     elif cmd == "heldout":
         keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
         write(Path("training/heldout.jsonl"), heldout(keys))

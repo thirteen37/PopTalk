@@ -1,0 +1,37 @@
+# mlx_lm.lora config for the E2B v7 adapter (#105): lora-v6.yaml's recipe and seed on v6's data plus d-keep-lead
+# (sentence-opening no/sorry/wait/actually and so/well/okay kept as content; gen.py v7 section).
+#   0. swift build -c release; training/make_data_v7.zsh   no GPU; syncs iters below to 40% of an epoch
+#   1. uv run --project training mlx_lm.lora --config training/lora-v7.yaml   ~70 min, holds the GPU
+#   2. mkdir -p adapters/gemma-4-e2b-poptalk-v7
+#      cp training/out/adapters-v7/{adapter_config.json,adapters.safetensors} adapters/gemma-4-e2b-poptalk-v7/
+#      Loads unfused, like v6; never fuse into the 4-bit base (#103). Weights stay untracked.
+#   3. Gate against v6, back to back on one build: training/bench.zsh, PoptalkBench --compare, scripts/replay.zsh.
+#      Ship bar: held-out h-d-keep >= 22/24 and no drop beyond ~2 cases on held-out, held-out edits, d, e, s;
+#      replay raw fallbacks <= v6's in the same session.
+model: mlx-community/gemma-4-e2b-it-4bit
+train: true
+data: training/out/v7/data
+adapter_path: training/out/adapters-v7
+fine_tune_type: lora
+mask_prompt: true          # loss on the assistant turn only
+num_layers: 16             # last 16 of 35 layers: halves backward cost vs all layers
+batch_size: 1
+grad_accumulation_steps: 4   # effective batch 4; batch 4 pushed a shared 24 GB Mac into swap (262k-vocab logits)
+iters: 5524                # micro-batches, ~40% of an epoch (make_data_v7.zsh syncs this and the two below)
+learning_rate: 1.0e-4
+lr_schedule:
+  name: cosine_decay
+  warmup: 10
+  arguments: [1.0e-4, 1381, 1.0e-6]   # decay over the optimizer steps
+steps_per_report: 100
+steps_per_eval: 2762
+val_batches: 60
+save_every: 300
+max_seq_length: 3072       # longest v6 row ~9,300 characters, about 2,300 tokens
+grad_checkpoint: true
+seed: 61
+lora_parameters:
+  keys: [self_attn.q_proj, self_attn.k_proj, self_attn.v_proj, self_attn.o_proj, mlp.gate_proj, mlp.up_proj, mlp.down_proj]
+  rank: 16
+  scale: 2.0
+  dropout: 0.0
