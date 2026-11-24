@@ -154,11 +154,18 @@ public enum MLXProvider {
                 } else {
                     try await container.generate(input: lm, parameters: parameters)
                 }
-                var out = ""
-                // Leaving the loop on cancellation terminates the stream, which stops generation.
+                var out = "", chunks = 0
+                let limit = Pipeline.replyLimit
+                // Leaving the loop (on cancellation or the reply limit) terminates the stream, which stops generation.
                 for await g in stream {
                     switch g {
-                    case .chunk(let s): out += s
+                    case .chunk(let s):
+                        out += s
+                        chunks += 1
+                        if let limit, Pipeline.pastReplyLimit(out, limit: limit) {
+                            timing.info("llm \(name, privacy: .public) stopped at reply limit \(limit) chars after \(chunks) chunks")
+                            return out
+                        }
                     // Timing only (no text), for diagnosing latency: `log stream --predicate 'subsystem == "io.lyx.poptalk"'`.
                     case .info(let i):
                         timing.info("llm \(name, privacy: .public) prompt \(i.promptTokenCount) tok \(i.promptTime, format: .fixed(precision: 2))s, gen \(i.generationTokenCount) tok \(i.generateTime, format: .fixed(precision: 2))s")

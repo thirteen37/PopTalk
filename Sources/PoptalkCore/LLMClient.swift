@@ -110,11 +110,13 @@ public struct LLMClient: Sendable {
             var choices: [Choice]
         }
         var content = ""
+        let limit = Pipeline.replyLimit
         for try await line in lines {
             guard line.hasPrefix("data:") else { continue }
             let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             if payload == "[DONE]" { break }
             content += try JSONDecoder().decode(Chunk.self, from: Data(payload.utf8)).choices.first?.delta.content ?? ""
+            if let limit, Pipeline.pastReplyLimit(content, limit: limit) { break }  // #100; dropping the stream stops the server
         }
         return content
     }
