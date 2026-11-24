@@ -11,6 +11,9 @@ import PoptalkSpeech
 //       also after Pipeline.dictationPrepass). Dictation targets get Pipeline.spokenNumbers too, so they keep
 //       the digits the model sees (#59).
 //   teach --model ID          {id, messages} → {id, output}   (in-process MLX, greedy, like the app)
+//   pipeline --model ID       {id, transcript, selection?, context?, vocabulary?} → {id, label, output, reply?, rejectedBy?}
+//       The app's Pipeline end to end with the model's own prompts (E4B: its dictation prompt, D, and edit prompt) and
+//       guards; `rejectedBy` names the guard that made a dictation reply a raw fallback (E2B v6 teacher, #103).
 // `context` is {appName?, windowTitle?, text?, cursorOffset?, ocrText?}, mirroring ScreenSnapshot.
 Transcriber.quietLogs()
 let args = CommandLine.arguments
@@ -95,6 +98,37 @@ case "teach":
         }
     } catch { fail(error) }
 
+case "pipeline":
+    struct Out: Encodable { var id, label, output: String; var reply, rejectedBy: String? }
+    guard let model = opt("--model") else { fail("pipeline needs --model") }
+    do {
+        let complete = try await MLXProvider.make(preload: [model]).0
+        for w in Prompts.warmup { _ = try? await complete(model, w, false, 60) }
+        for (i, it) in items.enumerated() {
+            // A fresh vocabulary per item: the item's terms only, and an edit's "remember" can't leak into the next.
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-datagen-\(UUID())")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let store = VocabularyStore(url: dir.appendingPathComponent("v.json"))
+            for t in it.vocabulary ?? [] { try store.add(t) }
+            let calls = ModelCallRecorder()
+            // Generous deadlines: a teacher is judged on its reply, not on the app's latency budget.
+            let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
+                             cleanupTimeout: 30, editTimeout: 60)
+            let res = await p.run(Request(transcript: it.transcript ?? "", selection: it.selection, context: it.context?.snapshot ?? ScreenSnapshot()))
+            try? FileManager.default.removeItem(at: dir)
+            let (label, output): (String, String) = switch res.outcome {
+            case let .insert(s, l): (l, s)
+            case let .replaceSelection(s, l): (l, s)
+            case let .insertBefore(s): ("insertBefore", s)
+            case let .insertAfter(s): ("insertAfter", s)
+            case .nothing: ("Nothing", "")
+            case let .error(m): ("error", m)
+            }
+            emit(Out(id: it.id, label: label, output: output, reply: calls.call?.reply, rejectedBy: res.rejectedBy))
+            if i % 100 == 0 { FileHandle.standardError.write(Data("\(i)/\(items.count)\n".utf8)) }
+        }
+    } catch { fail(error) }
+
 default:
-    fail("usage: PoptalkDatagen render|transcribe|teach [--model ID] [--cache DIR] < in.jsonl > out.jsonl")
+    fail("usage: PoptalkDatagen render|transcribe|teach|pipeline [--model ID] [--cache DIR] < in.jsonl > out.jsonl")
 }

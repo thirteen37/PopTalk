@@ -945,3 +945,30 @@ V8_CHAT = [
 ]
 V8_WEB_CHROME = ["Home   Pricing   Docs   Blog   Sign in", "Search…", "© All rights reserved · Privacy · Terms",
                  "Skip to main content", "Was this page helpful?  Yes  No", "Related articles"]
+
+# ---------- E2B v6 model data (#103): insert and screen-name edits said more ways ----------
+# Every insertBefore/insertAfter phrasing must pass Pipeline.asksToInsert (add/append/prepend/insert/before/after/
+# at the start/end/…), or the app turns it into a replace; gen.py check asserts it.
+M6_INSERT_AFTER = ["add a line saying {x}", "add a sentence saying {x}", "add {x} at the end", "put {x} at the end of it",
+                   "at the end put {x}", "at the end, add {x}", "insert {x} after this", "insert after it: {x}",
+                   "after that, add {x}", "add {x} to the end", "append this: {x}", "put {x} after this",
+                   "and after it add {x}", "add one more line: {x}", "add {x} afterwards", "after it, put {x}",
+                   "can you add {x} at the end", "please append {x}", "add a closing line: {x}", "add {x} to finish it off"]
+M6_INSERT_BEFORE = ["add a line before it saying {x}", "put {x} before this", "before this, add {x}", "at the start put {x}",
+                    "at the start, add {x}", "insert {x} before it", "insert {x} at the top", "add {x} in front of it",
+                    "put {x} at the beginning", "prepend this: {x}", "add an opening line: {x}", "before it, put {x}",
+                    "can you add {x} at the start", "please prepend {x}", "add {x} at the very beginning"]
+# Inside a multi-sentence selection: an edit that returns the whole selection with the sentence added. {o}/{o2}: ordinals.
+M6_INSERT_AT = {"after": ["insert {x} after the {o} sentence", "add {x} after the {o} sentence",
+                          "put {x} right after the {o} sentence", "after the {o} sentence, add {x}"],
+                "before": ["add {x} before the {o} sentence", "put {x} in front of the {o} sentence",
+                           "insert {x} before the {o} sentence"],
+                "last": ["add {x} before the last sentence", "put {x} right before the final sentence"],
+                "between": ["put {x} between the {o} and {o2} sentences", "insert {x} between the {o} and {o2} sentence",
+                            "add {x} in between the {o} and {o2} sentences"]}
+M6_ORDINALS = ["first", "second", "third"]
+M6_CONTEXT_FIX = ["the name's misspelled", "that name is spelled wrong", "match the spelling on screen",
+                  "it's spelled like on the screen", "use the spelling from the screen", "wrong spelling, fix that",
+                  "correct this name", "make the name match the screen", "that should match what's on screen",
+                  "spell it the way it's written above", "fix the capitalization", "this is misspelled",
+                  "spelled wrong", "fix this to match", "the spelling's off", "correct the spelling of this"]

@@ -9,7 +9,8 @@
   gen.py build            → out/items.jsonl       every item with its target, filtered and contamination-checked
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
   gen.py v8               → out/pool-v8/{train,val}.jsonl  dictation pool matched to real use (#103), for GEPA and E2B data
-  gen.py check            → asserts the v5–v7 families and the v8 pool are registered and shaped right (writes nothing)
+  gen.py teach6 / build6 / split6   the same three stages for the E2B v6 adapter, in out/v6/ (make_data_v6.zsh)
+  gen.py check            → asserts the v5–v7 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
@@ -1546,7 +1547,8 @@ def v8_split(n, seed, cands, checker, taken=frozenset()):
     r = R(seed)
     targeted = []
     for (cat, _), k in zip(V8_TARGETED_MIX.items(), quota(round(n * V8_TARGETED), list(V8_TARGETED_MIX.values()))):
-        targeted += r.sample([it for it in cands[cat] if it["id"] not in taken and it["transcript"] not in taken], k)
+        free = [it for it in cands[cat] if it["id"] not in taken and it["transcript"] not in taken]
+        targeted += r.sample(free, min(k, len(free)))  # a larger n (v6's E2B data) runs out: the base fills the rest
     rows = [P.row(it["transcript"], "x", [v["text"] for v in it.get("vocabulary") or []]) for it in targeted]
     wq = quota(n, [w for _, w in V8_WORDS])
     for x in rows:
@@ -1592,7 +1594,7 @@ def v8_split(n, seed, cands, checker, taken=frozenset()):
     for spec in specs:
         for _ in range(500):
             it = v8_base(r, spec, taken, debt)
-            if it and seen[it["transcript"]] < V8_REPEATS and not checker.reason(it):
+            if it and seen[it["transcript"]] < max(V8_REPEATS, V8_REPEATS * n // V8_N["train"]) and not checker.reason(it):
                 break
         else:
             raise AssertionError(f"no item for {spec}")
@@ -1603,15 +1605,16 @@ def v8_split(n, seed, cands, checker, taken=frozenset()):
     return [{"id": f"v8-{seed.split('-')[-1]}-{k}"} | {x: v for x, v in it.items() if x != "id"} for k, it in enumerate(out)]
 
 
-def v8_pools():
-    """(train, val): val first, then train with none of val's targeted items or 6+ word transcripts."""
+def v8_pools(n=V8_N["train"], seed="v8-train"):
+    """(train, val): val first, then train with none of val's targeted items or 6+ word transcripts. E2B v6's data
+    draws a larger train (n, seed) the same way, so GEPA's val stays out of it too."""
     checker, cands = Checker(), {c: [] for c in V8_TARGETED_MIX}
     for it in program_items():
         if it["cat"] in cands and v8_targeted_ok(it) and not checker.reason(it):
             cands[it["cat"]].append(it)
     val = v8_split(V8_N["val"], "v8-val", cands, checker)
     taken = {it.get("from") for it in val} | {it[k] for it in val if v8_words(it["transcript"]) > 5 for k in ("transcript", "target")}
-    return v8_split(V8_N["train"], "v8-train", cands, checker, frozenset(taken - {None})), val
+    return v8_split(n, seed, cands, checker, frozenset(taken - {None})), val
 
 
 def v8_profile(items):
@@ -1663,6 +1666,207 @@ def check_v8():
     long_t = {it["transcript"] for it in val if v8_words(it["transcript"]) > 5}
     froms = lambda items: {it["from"] for it in items if "from" in it}
     assert not long_t & {it["transcript"] for it in train} and not froms(val) & froms(train), "val overlaps train"
+
+
+# ---------- E2B v6 model data (#103): one built-in model for dictation and edits ----------
+# Not the "v6 families" above (#98's self-corrections): the data the E2B v6 adapter trains on. build6 = build's items
+# (audio, every rule family, the tone/translate/rephrase edits) + the v8 pool at M6_V8_N (GEPA's v8 val kept out) + the
+# m6 families below. Rule targets wherever the generator knows the answer; the teacher (E4B on its own prompts, D for
+# dictation, run through Pipeline by `PoptalkDatagen pipeline`) only where it doesn't: tone, translation, rephrasing,
+# and where an unpunctuated run-on's sentences break. A teacher target counts only if no guard rejected the reply
+# (rejectedBy) and the item's own checks pass (m6_teacher).
+
+OUT6 = OUT / "v6"
+M6_V8_N = 2400
+M6_EXTRA = {"d-instead": 180, "d-cancel": 150, "d-restate": 130, "d-correct-later": 100}  # on top of V6's counts
+M6_N = {"d-correction-m6": 250, "e-insert-m6": 450, "e-context-m6": 250, "d-teach-runon": 400}
+ASKS_TO_INSERT = re.compile(r"\b(add|append|prepend|insert|before|after|at the (start|end|beginning|top|bottom))\b", re.I)
+
+
+def m6_screen(r, near=(), avoid=()):
+    """A screen with v8's real-use length mix."""
+    b = r.choices([b for b, _ in V8_SCREENS], [w for _, w in V8_SCREENS])[0]
+    return v8_screen(r, *b, near=near, avoid=avoid)
+
+
+def m6_dictation():
+    """More draws of #98's self-correction families (new seeds, new transcripts), and "A, cue, B" fixes as Parakeet
+    punctuates them, half over real-use screens."""
+    checker, out, seen = Checker(), [], {it["transcript"] for it in v6_dictation()}
+    def add(it):
+        if it["transcript"] in seen or checker.reason(it):
+            return False
+        seen.add(it["transcript"])
+        out.append(it)
+        return True
+    for cat, n in M6_EXTRA.items():
+        r, make, k = R(cat + "-m6"), V6[cat][1], 0
+        for _ in range(50 * n):
+            t, target = make(r)
+            ctx = m6_screen(r, avoid=[target]) if r.random() < 0.5 else unrelated_context(r)
+            k += add({"id": f"{cat}-m6-{k}", "cat": cat, "transcript": t, "context": ctx, "target": target})
+            if k == n:
+                break
+    r, k = R("d-correction-m6"), 0
+    while k < M6_N["d-correction-m6"]:
+        s, c = correction(r)
+        t = sentence(s) if r.random() < 0.7 else lower_transcript(s)
+        ctx = m6_screen(r, avoid=[c]) if r.random() < 0.5 else unrelated_context(r)
+        k += add({"id": f"d-correction-m6-{k}", "cat": "d-correction-m6", "transcript": t, "context": ctx, "target": c})
+    return out
+
+
+def m6_said(r):
+    """(as said, as written) for text to insert: a phrase, a command or a plain sentence, said lowercase, with a
+    filler, as written or as Parakeet punctuates it. Named text is said as written (its names keep their case)."""
+    x = r.random()
+    mid = lambda s: " ".join([decap(s.split(" ", 1)[0])] + s.split(" ", 1)[1:])  # mid-utterance: "We need" → "we need"
+    if x < 0.8:
+        w = (r.choice(L.PHRASES) if x < 0.3 else fill(r, r.choice(L.IMPERATIVES))[0] if x < 0.5
+             else r.choice([s for s in L.PLAIN + L.MULTI_STATEMENTS if s.endswith(".")])[:-1])
+        y = r.random()
+        said = lower_transcript(w) if y < 0.5 else add_fillers(r, w, 1).lower() if y < 0.65 else mid(w) if y < 0.85 else mid(w) + "."
+    else:
+        w = fill(r, r.choice([t for t in L.NAMED if t.endswith(".")]))[0][:-1]
+        said = mid(w)
+    return said, sentence(w)
+
+
+def m6_edits():
+    """Inserts said many ways (before, after, and inside a multi-sentence selection), and screen-name fixes said
+    more ways, including a casing-only fix ("kelp insurance" → the screen's "Kelp Insurance")."""
+    checker, out, r = Checker(), [], R("e-insert-m6")
+    sents = [s for s in L.PLAIN + L.MULTI_STATEMENTS if s.endswith(".")]
+    while len(out) < M6_N["e-insert-m6"]:
+        said, text = m6_said(r)
+        k, i = len(out), r.random()
+        if i < 0.35:
+            sel = r.choice(sents) if r.random() < 0.7 else " ".join(r.sample(sents, 2))
+            t, target = r.choice(L.M6_INSERT_AFTER).format(x=said), ej("insertAfter", " " + text)
+        elif i < 0.6:
+            sel = r.choice(sents) if r.random() < 0.7 else " ".join(r.sample(sents, 2))
+            t, target = r.choice(L.M6_INSERT_BEFORE).format(x=said), ej("insertBefore", text + " ")
+        else:  # inside the selection: the whole selection back with the sentence in place
+            ss = r.sample(sents, r.randint(2, 4))
+            where = r.choice(["after", "before", "last", "between"] if len(ss) > 2 else ["after", "between"])
+            j = {"after": r.randrange(min(3, len(ss) - 1)), "before": r.randrange(1, min(3, len(ss))),
+                 "last": len(ss) - 1, "between": r.randrange(min(2, len(ss) - 1))}[where]
+            pos = j if where in ("before", "last") else j + 1
+            t = r.choice(L.M6_INSERT_AT[where]).format(x=said, o=L.M6_ORDINALS[min(j, 2)], o2=L.M6_ORDINALS[min(j + 1, 2)])
+            sel, target = " ".join(ss), ej("edit", " ".join(ss[:pos] + [text] + ss[pos:]))
+        if text in sel:
+            continue
+        it = {"id": f"e-insert-m6-{k}", "cat": "e-insert-m6", "transcript": cap(t) if r.random() < 0.3 else t,
+              "selection": sel, "context": edit_ctx(r) if r.random() < 0.7 else m6_screen(r, avoid=[sel]), "target": target}
+        if not checker.reason(it):
+            out.append(it)
+    r, n = R("e-context-m6"), len(out)
+    while len(out) - n < M6_N["e-context-m6"]:
+        e = r.choice([person(r, r.random() < 0.4), invented(r), invented(r), tech(r)])
+        kind = "company" if e[2] == "company" else e[2] if e[2] in L.CONTEXT_FIX else "product"
+        sel = e[0].lower() if r.random() < 0.3 else r.choice(e[1])
+        if sel.replace(" ", "") == e[0].lower().replace(" ", "") and sel != e[0].lower() and " " not in sel:
+            sel = sel[: len(sel) // 2] + " " + sel[len(sel) // 2:]
+        if sel == e[0]:
+            continue
+        ctx = context(r, [e], long=r.random() < 0.45) if r.random() < 0.6 else m6_screen(r, near=[mention(r, e)])
+        it = {"id": f"e-context-m6-{len(out) - n}", "cat": "e-context-m6", "transcript": r.choice(L.M6_CONTEXT_FIX + L.CONTEXT_FIX[kind]), "selection": sel,
+              "context": ctx, "target": ej("correct", e[0], {"text": e[0], "aliases": [sel.lower()]})}
+        if not checker.reason(it):
+            out.append(it)
+    return out
+
+
+def m6_v8():
+    return v8_pools(M6_V8_N, "v8-m6")[0]
+
+
+def m6_runon(r, target):
+    """A target said as one run-on: Parakeet drops the stops between its sentences (or leaves commas), sometimes
+    all bare, sometimes with an "uh"/"um"."""
+    ss = re.split(r"(?<=[.!?])\s+", target)
+    for k in range(len(ss)):
+        if k:
+            first, *rest = ss[k].split(" ", 1)
+            ss[k] = " ".join([decap(first)] + rest)
+        if k < len(ss) - 1:
+            ss[k] = re.sub(r"[.!?]$", "," if r.random() < 0.35 else "", ss[k])
+    t = v8_um(r, " ".join(ss), r.choice([0, 0, 1]))
+    return lower_transcript(t) if r.random() < 0.3 else t
+
+
+def m6_teach_items():
+    """Teacher inputs: the tone/translate/rephrase edits, and 2–4 sentences of v8's sayings said as one run-on over
+    a real-use screen (the rule knows their words, not where E4B would break the sentences)."""
+    r, checker, out, seen = R("d-teach-runon"), Checker(), [], set()
+    while len(out) < M6_N["d-teach-runon"]:
+        parts = [sentence(fill(r, r.choice(V8_DEV_SAYS if r.random() < 0.8 else V8_LIFE_SAYS))[0]) for _ in range(r.randint(2, 4))]
+        target = " ".join(parts)
+        it = {"id": f"d-teach-runon-{len(out)}", "cat": "d-teach-runon", "transcript": m6_runon(r, target),
+              "context": m6_screen(r, avoid=parts), "rule": target}
+        if target not in seen and not checker.reason(it | {"target": target}):
+            seen.add(target)
+            out.append(it)
+    return teach_items() + out
+
+
+def m6_teacher(it, res):
+    """A teacher result ({label, output, reply, rejectedBy} from `PoptalkDatagen pipeline`) as a target, or None.
+    Edits: the JSON reply, through teacher_target's checks. Dictation: what Pipeline inserted, only when no guard
+    rejected the reply and it has exactly the rule target's words (fillers out; nothing answered, added or lost)."""
+    if it.get("selection"):
+        return teacher_target(it, res.get("reply") or "")
+    y = (res.get("output") or "").strip()
+    if res.get("rejectedBy") or res.get("label") != "Dictated" or not y or "\n" in y:
+        return None
+    return y if norm(y) == norm(it["rule"]) and y[0].isupper() and y[-1] in ".!?" else None
+
+
+def m6_words(s):
+    return [w for w in norm(s) if w not in ("uh", "um")]
+
+
+def check_m6():
+    """`gen.py check`: the m6 families are built as planned, inserts pass Pipeline.asksToInsert, targets are shaped
+    right, teacher targets are checked, and nothing is contaminated."""
+    d, e = m6_dictation(), m6_edits()
+    cats = Counter(it["cat"] for it in d + e)
+    want = M6_EXTRA | {c: M6_N[c] for c in ("d-correction-m6", "e-insert-m6", "e-context-m6")}
+    assert all(cats[c] >= 0.95 * n for c, n in want.items()), cats
+    checker = Checker()
+    for it in d + e:
+        assert not checker.reason(it), it["id"]
+        if not it.get("selection"):
+            y = it["target"]
+            assert y[0].isupper() and y[-1] in ".!?" and len(norm(y)) < len(norm(it["transcript"])), it
+            continue
+        j = json.loads(it["target"])
+        if it["cat"] == "e-context-m6":
+            ctx = it["context"]
+            assert j["text"] in (ctx.get("text") or "") + (ctx.get("ocrText") or "") and j["text"] != it["selection"], it
+        elif j["action"] in ("insertBefore", "insertAfter"):
+            assert ASKS_TO_INSERT.search(it["transcript"]) and j["text"].strip()[0].isupper() and j["text"].strip()[-1] == ".", it
+        else:
+            ss = re.split(r"(?<=[.!?]) ", it["selection"])
+            assert j["action"] == "edit" and all(s in j["text"] for s in ss) and len(re.split(r"(?<=[.!?]) ", j["text"])) == len(ss) + 1, it
+    for t in L.M6_INSERT_AFTER + L.M6_INSERT_BEFORE:
+        assert ASKS_TO_INSERT.search(t.format(x="")), t
+    rule = {"rule": "The build is green. Let's merge it.", "transcript": "the build is green let's merge it"}
+    ok = {"label": "Dictated", "output": " The build is green, so let's merge it."}
+    assert m6_teacher(rule, ok) is None  # "so" is new
+    assert m6_teacher(rule, ok | {"output": " The build is green. Let's merge it."})
+    assert m6_teacher(rule, ok | {"output": " The build is green, let's merge it."})
+    assert m6_teacher(rule, ok | {"output": " Uh, the build is green, let's merge it."}) is None  # a filler kept
+    assert m6_teacher(rule, {"label": "Dictated (raw)", "output": "the build is green let's merge it", "rejectedBy": "length"}) is None
+    v8, (_, val) = m6_v8(), v8_pools()
+    assert len(v8) == M6_V8_N and not {it["transcript"] for it in val if v8_words(it["transcript"]) > 5} & {it["transcript"] for it in v8}
+    teach = m6_teach_items()
+    runon = [it for it in teach if it["cat"] == "d-teach-runon"]
+    # Tone/translate/rephrase inputs are v4's, contamination-checked at build6 as before.
+    assert len(runon) == M6_N["d-teach-runon"] and all(not checker.reason(it) for it in runon), len(runon)
+    assert all(it["transcript"] != it["rule"] and m6_words(it["transcript"]) == m6_words(it["rule"]) for it in runon)
+    print("m6 check ok: " + ", ".join(f"{cats[c]} {c}" for c in want) + f"; v8 pool {len(v8)}; teacher inputs "
+          + ", ".join(f"{n} {c}" for c, n in Counter(it["cat"] for it in teach).items()) + "; 0 contaminated")
 
 
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
@@ -1845,12 +2049,77 @@ def program_items():
             + v7_dictation([it for it in t + v3 + v4 + v5 + v6 if not it.get("selection")]))
 
 
+def audio_items(skipped):
+    """The spoken dictations as Parakeet heard them (shared by build and build6), or none if not transcribed yet."""
+    if (OUT / "heard.jsonl").exists():
+        return audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
+    skipped["audio"] = "no heard.jsonl (PoptalkDatagen transcribe not run)"  # else the counts read as dropped *-audio
+    return []
+
+
+def taught(out, skipped, target):
+    """Teacher items from out/teach.jsonl whose result in out/teach_out.jsonl `target` accepts."""
+    if not (out / "teach_out.jsonl").exists():  # SKIP_TEACH=1: build without teacher items
+        n = len(jl(out / "teach.jsonl")) if (out / "teach.jsonl").exists() else 0
+        print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
+        skipped["teacher"] = "no teach_out.jsonl"
+        return []
+    results, kept = {o["id"]: o for o in jl(out / "teach_out.jsonl")}, Counter()
+    items = []
+    for it in jl(out / "teach.jsonl"):
+        if (t := target(it, results.get(it["id"], {}))):
+            items.append({k: v for k, v in it.items() if k not in ("lang", "rule")} | {"target": t})
+            kept[it["cat"]] += 1
+    print(f"teacher: {sum(kept.values())}/{len(results)} kept {dict(kept)}", file=sys.stderr)
+    return items
+
+
+def build(out, items, skipped, manifest):
+    """Dedupes and contamination-checks items; writes out/items.jsonl and the manifest."""
+    bad = [it["id"] for it in items if not list_keeps_casing(it)]
+    assert not bad, f"list targets must keep the dictated casing: {bad[:5]}"
+    checker, clean, seen, rejected = Checker(), [], set(), {}
+    for it in items:
+        key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True))
+        if key in seen:
+            continue
+        seen.add(key)
+        if (why := checker.reason(it)):
+            rejected[it["cat"]] = rejected.get(it["cat"], 0) + 1
+            print(f"contaminated {it['id']}: {why}", file=sys.stderr)
+            continue
+        clean.append(it)
+    write(out / "items.jsonl", clean)
+    manifest.write_text(json.dumps(
+        {"items": len(clean), "byCategory": dict(sorted(Counter(it["cat"] for it in clean).items())),
+         "contaminationRejected": rejected} | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
+
+
+def split(out, samples):
+    """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match."""
+    cats = {i["id"]: i["cat"] for i in jl(out / "items.jsonl")}
+    rows, dropped = [], {}
+    for row in jl(out / "rendered.jsonl"):
+        if (why := prepass_mismatch(row, cats[row["id"]])):
+            dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
+            print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
+        else:
+            rows.append(row)
+    print(f"split: {len(rows)} rows, dropped for pre-pass mismatch: {dropped}", file=sys.stderr)
+    R("split").shuffle(rows)
+    n = max(100, len(rows) // 25)
+    write(out / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
+    write(out / "data" / "train.jsonl", [{"messages": r["messages"]} for r in rows[n:]])
+    samples.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows[:40]))
+
+
 def main(cmd):
     if cmd == "check":
         check_v5()
         check_v6()
         check_v7()
         check_v8()
+        check_m6()
     elif cmd == "v8":
         train, val = v8_pools()
         write(OUT / "pool-v8" / "train.jsonl", train)
@@ -1860,59 +2129,19 @@ def main(cmd):
     elif cmd == "teach":
         write(OUT / "teach.jsonl", teach_items())
     elif cmd == "build":
-        items, skipped = [], {}
-        if (OUT / "heard.jsonl").exists():
-            items += audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
-        else:  # the manifest says so, or its counts read as dropped *-audio categories
-            skipped["audio"] = "no heard.jsonl (PoptalkDatagen transcribe not run)"
-        items += program_items()
-        if not (OUT / "teach_out.jsonl").exists():  # SKIP_TEACH=1 make_data.zsh: build without teacher items
-            n = len(jl(OUT / "teach.jsonl")) if (OUT / "teach.jsonl").exists() else 0
-            print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
-            skipped["teacher"] = "no teach_out.jsonl"
-        else:
-            replies = {o["id"]: o["output"] for o in jl(OUT / "teach_out.jsonl")}
-            kept = 0
-            for it in jl(OUT / "teach.jsonl"):
-                if (t := teacher_target(it, replies.get(it["id"], ""))):
-                    items.append({k: v for k, v in it.items() if k != "lang"} | {"target": t})
-                    kept += 1
-            print(f"teacher: {kept}/{len(replies)} kept", file=sys.stderr)
-        bad = [it["id"] for it in items if not list_keeps_casing(it)]
-        assert not bad, f"list targets must keep the dictated casing: {bad[:5]}"
-        checker, clean, seen, rejected = Checker(), [], set(), {}
-        for it in items:
-            key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True))
-            if key in seen:
-                continue
-            seen.add(key)
-            if (why := checker.reason(it)):
-                rejected[it["cat"]] = rejected.get(it["cat"], 0) + 1
-                print(f"contaminated {it['id']}: {why}", file=sys.stderr)
-                continue
-            clean.append(it)
-        counts = {}
-        for it in clean:
-            counts[it["cat"]] = counts.get(it["cat"], 0) + 1
-        write(OUT / "items.jsonl", clean)
-        (Path("training") / "manifest.json").write_text(json.dumps(
-            {"items": len(clean), "byCategory": dict(sorted(counts.items())), "contaminationRejected": rejected}
-            | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
-    elif cmd == "split":
-        cats = {i["id"]: i["cat"] for i in jl(OUT / "items.jsonl")}
-        rows, dropped = [], {}
-        for row in jl(OUT / "rendered.jsonl"):
-            if (why := prepass_mismatch(row, cats[row["id"]])):
-                dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
-                print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
-            else:
-                rows.append(row)
-        print(f"split: {len(rows)} rows, dropped for pre-pass mismatch: {dropped}", file=sys.stderr)
-        R("split").shuffle(rows)
-        n = max(100, len(rows) // 25)
-        write(OUT / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
-        write(OUT / "data" / "train.jsonl", [{"messages": r["messages"]} for r in rows[n:]])
-        Path("training/samples.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows[:40]))
+        skipped = {}
+        items = audio_items(skipped) + program_items()
+        items += taught(OUT, skipped, lambda it, o: teacher_target(it, o.get("output", "")))
+        build(OUT, items, skipped, Path("training") / "manifest.json")
+    elif cmd == "teach6":
+        write(OUT6 / "teach.jsonl", m6_teach_items())
+    elif cmd == "build6":  # E2B v6 (#103): see the m6 section
+        skipped = {}
+        items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
+        items += taught(OUT6, skipped, m6_teacher)
+        build(OUT6, items, skipped, Path("training") / "manifest-v6.json")
+    elif cmd in ("split", "split6"):
+        split(OUT if cmd == "split" else OUT6, Path("training") / ("samples.jsonl" if cmd == "split" else "samples-v6.jsonl"))
     elif cmd == "heldout":
         keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
         write(Path("training/heldout.jsonl"), heldout(keys))
