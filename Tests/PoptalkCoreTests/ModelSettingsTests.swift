@@ -9,12 +9,12 @@ private func suite(_ saved: [String: String] = [:]) -> UserDefaults {
     return d
 }
 
-@Test func freshInstallUsesMLXWithE4B() {
+@Test func freshInstallUsesMLXWithFineTune() {
     let s = ModelSettings.selection(suite())
     #expect(s.provider == "mlx")
-    #expect(s.cleanupModel == ModelSettings.e4b)
-    #expect(s.editModel == ModelSettings.e4b)
-    #expect(s.mlxModels == [ModelSettings.e4b])
+    #expect(s.cleanupModel == ModelSettings.fineTune)
+    #expect(s.editModel == ModelSettings.fineTune)
+    #expect(s.mlxModels == [ModelSettings.fineTune])
 }
 
 private func tempDir(_ files: [String: String]) -> URL {
@@ -39,32 +39,60 @@ private func tempDir(_ files: [String: String]) -> URL {
     #expect(ModelSettings.adapter("models/m", roots: [root]) == nil)
 }
 
+// The bundled default adapter names the base E2B it was trained on (and runs on, unfused).
+@Test func bundledFineTuneRunsOnBaseE2B() {
+    let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../..")
+    #expect(ModelSettings.adapter(ModelSettings.fineTune, roots: [repo])?.base == ModelSettings.e2b)
+}
 
 // Saved LM Studio ids move to the LM Studio fields; MLX keeps its defaults.
 @Test func migrationKeepsLMStudioIdsForLMStudioOnly() {
     let d = suite(["cleanupModel": "qwen/qwen3-4b", "editModel": "google/gemma-4-e4b"])
     ModelSettings.migrate(d)
     #expect(d.object(forKey: "cleanupModel") == nil && d.object(forKey: "editModel") == nil)
-    #expect(ModelSettings.selection(d).cleanupModel == ModelSettings.e4b)
+    #expect(ModelSettings.selection(d).cleanupModel == ModelSettings.fineTune)
     d.set("lmstudio", forKey: "provider")
     let s = ModelSettings.selection(d)
     #expect(s.cleanupModel == "qwen/qwen3-4b")
     #expect(s.editModel == "google/gemma-4-e4b")
 }
 
-// #101: E2B and its bundled fine-tunes are gone: saved ids for them move to E4B; other ids, a local adapter
-// folder included, stay.
-@Test func migrationMovesE2BToE4B() {
-    for old in ["mlx-community/gemma-4-e2b-it-4bit", "adapters/gemma-4-e2b-poptalk-v2", "adapters/gemma-4-e2b-poptalk-v4"] {
+// #103: the E2B v6 fine-tune is the default again. E4B saved as the old default (#101) moves to it once; an
+// E4B chosen after that stays.
+@Test func migrationMovesOldDefaultE4BToFineTuneOnce() {
+    let d = suite(["mlxCleanupModel": ModelSettings.e4b, "mlxEditModel": ModelSettings.e4b])
+    ModelSettings.migrate(d)
+    #expect(ModelSettings.selection(d) == .init(provider: "mlx", cleanupModel: ModelSettings.fineTune, editModel: ModelSettings.fineTune))
+    d.set(ModelSettings.e4b, forKey: "mlxCleanupModel")
+    d.set(ModelSettings.e4b, forKey: "mlxEditModel")
+    ModelSettings.migrate(d)
+    #expect(ModelSettings.selection(d) == .init(provider: "mlx", cleanupModel: ModelSettings.e4b, editModel: ModelSettings.e4b))
+}
+
+// A fresh install has nothing to move, and an E4B picked later stays.
+@Test func freshInstallKeepsALaterE4BChoice() {
+    let d = suite()
+    ModelSettings.migrate(d)
+    d.set(ModelSettings.e4b, forKey: "mlxEditModel")
+    ModelSettings.migrate(d)
+    #expect(ModelSettings.selection(d).editModel == ModelSettings.e4b)
+    #expect(ModelSettings.selection(d).cleanupModel == ModelSettings.fineTune)
+}
+
+// The fine-tunes before v6 (bundled until #101) move to v6, every launch; other ids, base E2B and a local
+// adapter folder included, stay.
+@Test func migrationMapsOldFineTunesToV6() {
+    for old in ["adapters/gemma-4-e2b-poptalk-v2", "adapters/gemma-4-e2b-poptalk-v3", "adapters/gemma-4-e2b-poptalk-v4"] {
         let d = suite(["mlxCleanupModel": old, "mlxEditModel": old])
         ModelSettings.migrate(d)
+        ModelSettings.migrate(d)
         let s = ModelSettings.selection(d)
-        #expect(s.cleanupModel == ModelSettings.e4b && s.editModel == ModelSettings.e4b, "\(old)")
+        #expect(s.cleanupModel == ModelSettings.fineTune && s.editModel == ModelSettings.fineTune, "\(old)")
     }
     let local = "/Users/me/adapters/gemma-4-e2b-poptalk-v5"
-    let d = suite(["mlxCleanupModel": local, "mlxEditModel": "mlx-community/Qwen3.5-2B-MLX-4bit"])
+    let d = suite(["mlxCleanupModel": local, "mlxEditModel": ModelSettings.e2b])
     ModelSettings.migrate(d)
-    #expect(ModelSettings.selection(d) == .init(provider: "mlx", cleanupModel: local, editModel: "mlx-community/Qwen3.5-2B-MLX-4bit"))
+    #expect(ModelSettings.selection(d) == .init(provider: "mlx", cleanupModel: local, editModel: ModelSettings.e2b))
 }
 
 @Test func migrationDoesNotOverwriteNewerLMStudioIds() {
@@ -89,7 +117,8 @@ private func tempDir(_ files: [String: String]) -> URL {
 }
 
 @Test func modelNames() {
-    #expect(ModelSettings.knownMLXModels.map(\.id) == [ModelSettings.e4b])
+    #expect(ModelSettings.knownMLXModels.map(\.id) == [ModelSettings.fineTune, ModelSettings.e4b])
+    #expect(ModelSettings.displayName(ModelSettings.fineTune) == "Gemma 4 E2B · PopTalk fine-tune")
     #expect(ModelSettings.displayName(ModelSettings.e4b) == "Gemma 4 E4B")
     // Others: the folder or Hugging Face repo name.
     #expect(ModelSettings.displayName("/Users/me/models/gemma-4-e2b-poptalk-v2/") == "gemma-4-e2b-poptalk-v2")

@@ -8,7 +8,7 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 ## Why PopTalk
 
-- Context changes what the speech recogniser hears. While you hold the key, PopTalk collects terms from the focused field, the text near it, the window title and the web domain, with OCR as a fallback when an app hides its text. Those terms and your vocabulary are used to boost recognition (CTC vocabulary boosting on Parakeet) and to fix the casing of matching words. A local language model (Gemma 4 E4B) then cleans up the text with the same context. Cloud dictation services can steer recognition like this on their servers. Other local apps tend to give screen context only to a cleanup model after recognition, or use it to set the tone per app.
+- Context changes what the speech recogniser hears. While you hold the key, PopTalk collects terms from the focused field, the text near it, the window title and the web domain, with OCR as a fallback when an app hides its text. Those terms and your vocabulary are used to boost recognition (CTC vocabulary boosting on Parakeet) and to fix the casing of matching words. A local language model (a PopTalk fine-tune of Gemma 4 E2B) then cleans up the text with the same context. Cloud dictation services can steer recognition like this on their servers. Other local apps tend to give screen context only to a cleanup model after recognition, or use it to set the tone per app.
 - You can fix a mistake by speaking or typing. Select a misheard word and say *"it's Todoist, capital T-O-D-O-I-S-T"*. If you correct it by typing instead, PopTalk offers to add the term to your vocabulary. There's also an opt-in setting to remember screen terms that fixed a dictation, so later dictations get them right when they're no longer on screen.
 - It edits selected text by voice: "make this more formal", "turn this into bullet points", "translate to Japanese". One model decides whether you're correcting a word, replacing the selection, editing it, or inserting text before or after it.
 - Esc undoes any result, terminals included (there it deletes the dictated text with backspaces).
@@ -16,7 +16,7 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 ## Accuracy
 
-PopTalk's speech benchmark, with Parakeet TDT v2 and the default Gemma 4 E4B (`mlx-community/gemma-4-e4b-it-4bit`):
+PopTalk's speech benchmark, with Parakeet TDT v2 and Gemma 4 E4B (`mlx-community/gemma-4-e4b-it-4bit`, the default before the E2B v6 fine-tune):
 
 | Stage | Word error rate | Screen and vocabulary terms right |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ This is 21 dictations read by macOS text-to-speech voices, most of them with scr
 2. Open it and drag PopTalk to Applications, then launch it from there.
 3. Grant Microphone, Accessibility (to read and insert text) and Screen Recording (only used for the OCR fallback). The menu-bar icon shows what's missing.
 
-Models download on first use. The default language model is about 4.8 GB; PopTalk strips it to a 3.9 GB text-only copy in `~/Library/Application Support/Poptalk/models` and deletes the download. A model already in your Hugging Face cache is copied from there instead.
+Models download on first use. The default language model's base, Gemma 4 E2B, is about 3.3 GB; PopTalk strips it to a 2.5 GB text-only copy in `~/Library/Application Support/Poptalk/models` and deletes the download. A model already in your Hugging Face cache is copied from there instead.
 
 ### Build from source
 
@@ -59,7 +59,7 @@ The full details, including the overlay, the safety net when cleanup drops conte
 
 - Needs an Apple Silicon Mac with macOS 14 or later. It's macOS only.
 - English first. The default speech model, Parakeet TDT v2, is English only. Parakeet TDT v3 and Parakeet Ultra (in Settings → Models) recognise 25 European languages, but the cleanup prompts and the benchmarks are English.
-- Uses about 3 GB of memory with the default models. On a Mac with 8 GB or less, choose Apple's on-device model in Settings → Models (macOS 26 with Apple Intelligence): macOS runs it outside PopTalk.
+- Uses about 1.6 GB of memory with the default models (about 3 GB with Gemma 4 E4B). On a Mac with 8 GB or less, choose Apple's on-device model in Settings → Models (macOS 26 with Apple Intelligence): macOS runs it outside PopTalk.
 - Context comes from what apps expose through Accessibility, plus OCR. Fixing by typing only works in apps whose text fields PopTalk can read, and not in terminals.
 
 ## Privacy

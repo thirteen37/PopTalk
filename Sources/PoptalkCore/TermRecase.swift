@@ -1,8 +1,8 @@
 import AppKit
 
 extension Pipeline {
-    /// #75: whether `recaseTerms` runs before the cleanup model: E2B fine-tunes (no longer shipped, #101; a local
-    /// adapter folder from `training/` still gets it), which keep the transcript's casing and spacing as given.
+    /// #75: whether `recaseTerms` runs before the cleanup model: E2B fine-tunes (the default v6, #103, and local
+    /// adapter folders from `training/`), which keep the transcript's casing and spacing as given.
     /// E4B fixes screen terms itself and regressed when some were pre-fixed.
     public static func recasesTerms(_ model: String) -> Bool { model.lowercased().contains("gemma-4-e2b-poptalk") }
     /// PoptalkBench `--recase-terms on|off`, over the setting and the model check; the app never sets it.

@@ -3,10 +3,15 @@ import Foundation
 /// Which language-model provider and models the app uses, stored per provider in UserDefaults
 /// so switching providers never hands one provider another's model ids.
 public enum ModelSettings {
+    public static let e2b = "mlx-community/gemma-4-e2b-it-4bit"
+    /// The E2B v6 fine-tune (#103), the default for dictation and edits: a LoRA adapter applied unfused on `e2b` at
+    /// load, trained on `Prompts.dictationSystem` / `editSystem`. Relative: see `adapter(_:roots:)`.
+    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v6"
     public static let e4b = "mlx-community/gemma-4-e4b-it-4bit"
 
     /// The MLX models offered by name in Settings; any other id is "Custom".
     public static let knownMLXModels: [(id: String, name: String)] = [
+        (fineTune, "Gemma 4 E2B · PopTalk fine-tune"),
         (e4b, "Gemma 4 E4B"),
     ]
 
@@ -34,21 +39,27 @@ public enum ModelSettings {
         "speechModel": "v2",
         "provider": "mlx",  // mlx | lmstudio | apple
         "baseURL": "http://localhost:1234/v1",
-        "mlxCleanupModel": e4b,
-        "mlxEditModel": e4b,
+        "mlxCleanupModel": fineTune,
+        "mlxEditModel": fineTune,
         "lmstudioCleanupModel": "google/gemma-4-e4b",
         "lmstudioEditModel": "google/gemma-4-e4b",
     ]
 
+    /// Set once E4B saved as #101's default has moved to the fine-tune, so an E4B picked later stays.
+    static let movedToFineTune = "mlxMovedToFineTuneV6"
+    /// Fine-tunes bundled before v6 (until #101): they fall back to the default.
+    static let oldFineTunes = ["v2", "v3", "v4"].map { "adapters/gemma-4-e2b-poptalk-\($0)" }
+
     /// Before per-provider fields, `cleanupModel`/`editModel` held LM Studio ids: move them to the LM Studio fields.
-    /// #101: E2B and its bundled fine-tunes (`adapters/gemma-4-e2b-poptalk-*`, last in bd6b7ea) are gone: saved
-    /// ids for them fall back to the default, E4B.
+    /// #103: the fine-tune is the default again; old bundled fine-tunes fall back to it, and E4B (#101's default)
+    /// moves to it once.
     public static func migrate(_ d: UserDefaults) {
+        let once = !d.bool(forKey: movedToFineTune)
         for key in ["mlxCleanupModel", "mlxEditModel"] {
-            guard let v = d.string(forKey: key),
-                  v == "mlx-community/gemma-4-e2b-it-4bit" || v.hasPrefix("adapters/gemma-4-e2b-poptalk-") else { continue }
+            guard let v = d.string(forKey: key), oldFineTunes.contains(v) || (once && v == e4b) else { continue }
             d.removeObject(forKey: key)
         }
+        d.set(true, forKey: movedToFineTune)
         for (old, new) in [("cleanupModel", "lmstudioCleanupModel"), ("editModel", "lmstudioEditModel")] {
             guard let v = d.string(forKey: old) else { continue }
             // Unset (or the registered default): never overwrite an id saved in the new field.

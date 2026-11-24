@@ -12,8 +12,9 @@ macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). T
 - `/usr/bin/log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'` - stage timings (category `timing`: counts and the frontmost app's bundle ID, no text). In zsh, `log` is a builtin, so use the full path.
 
 ## Gotchas
-- Default (and only built-in) MLX model is base `mlx-community/gemma-4-e4b-it-4bit` with its own GEPA prompts. E2B and its fine-tunes were dropped in #101 (last in bd6b7ea); a local LoRA adapter dir still works as a custom model id, fused at load (its `adapter_config.json` names the base).
-- `mlx-community/gemma-4-e4b-it-4bit` loads from a text-only copy in `~/Library/Application Support/Poptalk/models/gemma-4-e4b-it-4bit-text` (#51, #72, `TextOnlyModel`), stripped at first use from the shared HF cache (read only) or from a download into `models/.download` (deleted after). Delete the copy to rebuild it.
+- Default MLX model, for dictation and edits, is the E2B v6 fine-tune `adapters/gemma-4-e2b-poptalk-v6`: a LoRA adapter loaded unfused on base E2B (its `adapter_config.json` names the base); base E4B with its own GEPA prompts is an option. Any local adapter dir works as a custom model id the same way.
+- Never fuse a LoRA into the 4-bit base (`mlx_lm.fuse`, `model.fuse(with:)`): requantizing rounds most of it away (#103).
+- Base E2B and E4B load from text-only copies in `~/Library/Application Support/Poptalk/models/<name>-text` (#51, #72, `TextOnlyModel`), stripped at first use from the shared HF cache (read only) or from a download into `models/.download` (deleted after). Delete the copy to rebuild it.
 - Gemma 4's per-layer embeddings (1.59 GB in E4B) are read per token from the mmap'd safetensors file, not GPU memory (`MappedPLE`, #52). Disable for A/B with `POPTALK_PLE_MMAP=0` or the `mlxMappedPLE` default. The gather runs on MLX's CPU stream (#62): a GPU op over the mapping wires all of it (check `vm_stat` wired memory, not just `footprintMB`).
 - The first Vision OCR per process takes ~15 s; `ScreenContext.prewarmOCR()` runs at launch and capture skips OCR until it is warm.
 - Fine-tune prompts must match `Prompts.swift` exactly; changing the prompt text or order needs a bench re-run (and possibly a retrain).
