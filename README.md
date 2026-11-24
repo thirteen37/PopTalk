@@ -16,7 +16,7 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 ## Accuracy
 
-PopTalk's speech benchmark, with the default models (Parakeet TDT v2 and `adapters/gemma-4-e2b-poptalk-v3`):
+PopTalk's speech benchmark, with Parakeet TDT v2 and the v3 fine-tune (`adapters/gemma-4-e2b-poptalk-v3`; v4, now the default, is within a case of it on this set):
 
 | Stage | Word error rate | Screen and vocabulary terms right |
 | --- | --- | --- |
@@ -71,11 +71,11 @@ PopTalk reads the focused field, nearby text, the window title, the web domain a
 ```sh
 swift build
 swift test                                   # PoptalkCore and PoptalkMLX tests (Swift Testing)
-swift build -c release && zsh training/bench.zsh adapters/gemma-4-e2b-poptalk-v3   # benchmark: dictation, edits, speech, held-out set
+swift build -c release && zsh training/bench.zsh adapters/gemma-4-e2b-poptalk-v4   # benchmark: dictation, edits, speech, held-out set
 ```
 
 The targets are `PoptalkCore` (prompts, pipeline, policies; pure and tested), `PoptalkSpeech` (speech recognition and boosting), `PoptalkMLX` (in-process models), `Poptalk` (the menu-bar app), and `PoptalkBench` and `PoptalkDatagen` (benchmark and training-data tools). `bench/` holds the benchmark cases and committed results; compare runs with `PoptalkBench --compare a.json b.json`. `training/` has the synthetic data generation and LoRA training (`mlx_lm.lora`, run with `uv`; see `training/make_data.zsh` and `training/lora.yaml`), and `training/gepa_prompts.py` tunes prompts for models without a fine-tune. The pipeline, diagrams and A/B environment variables are in [How PopTalk works](docs/how-it-works.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The bundled fine-tune adapter is a Gemma 4 derivative under Apache 2.0, see [adapters/gemma-4-e2b-poptalk-v3](adapters/gemma-4-e2b-poptalk-v3/README.md). Speech models are downloaded at runtime under their own licenses.
+MIT, see [LICENSE](LICENSE). The bundled fine-tune adapter is a Gemma 4 derivative under Apache 2.0, see [adapters/gemma-4-e2b-poptalk-v4](adapters/gemma-4-e2b-poptalk-v4/README.md). Speech models are downloaded at runtime under their own licenses.
