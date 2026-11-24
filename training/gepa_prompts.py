@@ -18,7 +18,9 @@ The seed is the model's prompt in Prompts.swift (E4B: e4bDictationSystem / e4bEd
 --length adds prompt length (tokens) as a second objective in the same run (#103): reflections alternate between
 fixing failures and shortening, a child is kept only if it is more accurate or shorter at the same accuracy, and
 the pick is the shortest candidate on the (val accuracy, tokens) Pareto front within 0.01 of the front's best accuracy.
-A child longer than the seed is never accepted. Each candidate's mean val latency is logged next to its tokens.
+A child longer than the seed is never accepted. Each candidate's mean val latency is logged next to its tokens, and
+the share of val replies each Pipeline guard rejects (length, dropsContent, …).
+A reply a guard rejects scores 0, as in the app it falls back to the raw transcript (#103), and its feedback says so.
 --dry-run builds and writes the pool, counts the seed's tokens and checks the scoring, then stops (no model, no API).
 --reflector claude sends the reflection prompts (synthetic items, failure feedback) to Claude via `claude -p`;
 anything else is a litellm model id (e.g. a local OpenAI-compatible server)."""
@@ -82,13 +84,35 @@ def loose(s):  # commas and hyphens are style the targets don't pin down ("four-
     return " ".join(s.replace(",", " ").replace("-", " ").split())
 
 
+# Pipeline's dictation guards (PoptalkBench reports `rejectedBy`): the app drops the reply and inserts the raw transcript.
+GUARDS = {
+    "length": "Reply ran past the app's length limit ({n} > {m} chars): in PopTalk this is rejected and the raw "
+              "transcript is inserted. The model answered or added text instead of cleaning.",
+    "dropsContent": "Reply lost too many of the words that were said: in PopTalk this is rejected and the raw transcript "
+                    "is inserted. The model kept only part of the dictation instead of cleaning all of it.",
+    "dropsProtected": "Reply lost a quoted or parenthesized span or a line break that was said: in PopTalk this is "
+                      "rejected and the raw transcript is inserted.",
+    "echoesContext": "Reply is mostly screen words that weren't said: in PopTalk this is rejected and the raw transcript "
+                     "is inserted. The model copied the screen instead of cleaning the transcript.",
+    "empty": "Reply was empty: in PopTalk this is rejected and the raw transcript is inserted.",
+}
+LONG = 1.3  # a reply past this × the target's length loses partial credit in proportion, before the guard rejects it
+
+
+def longer(run, case):  # how far the reply runs past LONG × the target's length; 1 within it
+    return max(1.0, len(run["output"]) / (LONG * max(len(case["expectExact"]), 1)))
+
+
 def score(run, case):
-    """1 for a pass, 0.8 when only commas or hyphens differ, else partial credit for near misses (under 0.5)."""
+    """0 for a reply the app's guards reject, 1 for a pass, 0.8 when only commas or hyphens differ, else partial
+    credit for near misses (under 0.5), divided by `longer`."""
+    if run.get("rejectedBy"):
+        return 0.0
     if not run["failures"]:
         return 1.0
     if loose(run["output"]) == loose(case["expectExact"]):
         return 0.8
-    return 0.5 * difflib.SequenceMatcher(a=run["output"], b=case["expectExact"]).ratio()
+    return 0.5 * difflib.SequenceMatcher(a=run["output"], b=case["expectExact"]).ratio() / longer(run, case)
 
 
 class Adapter:
@@ -99,6 +123,7 @@ class Adapter:
         # --length: count(text) → tokens, ref_tokens = the seed's length (brevity 1.0 there, uncapped: shorter scores higher)
         self.count, self.ref_tokens, self.tokens = count, ref_tokens, None
         self.val_ids, self.latency = set(), {}  # mean seconds per case on the full val set, per prompt text
+        self.rejected = {}  # full val set: cases each guard rejected, per prompt text
 
     def brevity(self, text):
         return self.ref_tokens / self.count(text)
@@ -118,6 +143,7 @@ class Adapter:
         outs = [runs[c["id"]] for c in batch]
         if {c["id"] for c in batch} == self.val_ids:
             self.latency[candidate[self.component]] = sum(o["seconds"] for o in outs) / len(outs)
+            self.rejected[candidate[self.component]] = Counter(o["rejectedBy"] for o in outs if o.get("rejectedBy"))
         scores = [score(o, c) for o, c in zip(outs, batch)]
         trajectories = [{"case": c, "run": o} for c, o in zip(batch, outs)] if capture_traces else None
         objectives = None
@@ -195,9 +221,17 @@ def reflective(eval_batch, component):
         if c["kind"] != component:
             continue
         inputs = {"screen": c["context"][-600:], "transcript": c["transcript"]} | ({"selection": c["selection"]} if "selection" in c else {})
-        fb = "Correct." if s == 1.0 else f"Nearly: only commas or hyphens differ from {c['expectExact']!r}" if s == 0.8 else f"Wrong: {'; '.join(run['failures'])}. Expected exactly: {c['expectExact']!r}" + (
-            f" with action {c['expectAction']}" if c["kind"] == "edit" else "")
-        recs.append({"Inputs": inputs, "Generated Outputs": run["output"] + (f" [action {run['action']}]" if c["kind"] == "edit" else ""), "Feedback": fb})
+        g, out = run.get("rejectedBy"), run["output"]
+        if g:  # the bench output is then the raw transcript: show what the model said
+            out = run.get("modelReply") or ""
+            fb = GUARDS.get(g, f"Reply rejected by the app's {g} guard; the raw transcript is inserted.").format(
+                n=len(out), m=run.get("lengthLimit")) + f" Expected exactly: {c['expectExact']!r}"
+        else:
+            fb = "Correct." if s == 1.0 else f"Nearly: only commas or hyphens differ from {c['expectExact']!r}" if s == 0.8 else f"Wrong: {'; '.join(run['failures'])}. Expected exactly: {c['expectExact']!r}" + (
+                f" with action {c['expectAction']}" if c["kind"] == "edit" else "")
+            if s < 0.8 and longer(run, c) > 1:
+                fb += f". The reply is {len(out) / len(c['expectExact']):.1f}× the expected length: it added text."
+        recs.append({"Inputs": inputs, "Generated Outputs": out + (f" [action {run['action']}]" if c["kind"] == "edit" else ""), "Feedback": fb})
     return recs
 
 
@@ -234,15 +268,26 @@ def dry_run(comp, train, seed, count):
     style = {"output": "Move the review to Tuesday, the four-day one.", "failures": ["not exact"]}
     assert score(style, c | {"expectExact": "Move the review to Tuesday the four day one."}) == 0.8
     assert score(style, c | {"expectExact": "move the review to Tuesday the four day one."}) < 0.5  # case still counts
+    # A reply a guard rejects scores 0; one well past the target's length loses credit before it gets there.
+    over = {"output": c["transcript"], "failures": ["raw fallback", "not exact"], "action": "raw", "rejectedBy": "length",
+            "lengthLimit": 110, "modelReply": "Move the review to Tuesday. " * 5}
+    long = {"output": "Move the review to Tuesday. Let me know if you need anything else!", "failures": ["not exact"], "action": "edit"}
+    plain = 0.5 * difflib.SequenceMatcher(a=long["output"], b=c["expectExact"]).ratio()
+    assert score(over, c) == 0.0 and 0 < score(long, c) < plain / 1.5 < score(ok, c), (score(long, c), plain)
     ad = Adapter("dry-run", comp, count, count(seed))
     lengths = [seed + "\n" + seed, seed, seed[: 3 * len(seed) // 4], seed[: len(seed) // 2]]
     b = [ad.brevity(t) for t in lengths]
     assert b[1] == 1.0 and b == sorted(b) and len(set(b)) == 4, b  # uncapped: shorter is always better
     assert front([(0.80, 900), (0.81, 905), (0.75, 600), (0.74, 650), (0.70, 1000)]) == [0, 1, 2]
     assert pick([(0.80, 900), (0.81, 905), (0.75, 600)], [0, 1, 2]) == 0
-    batch = EvaluationBatch(outputs=[ok, near], scores=[1.0, score(near, c)], trajectories=[{"case": c, "run": ok}, {"case": c, "run": near}])
+    runs = [ok, near, over, long]
+    batch = EvaluationBatch(outputs=runs, scores=[score(o, c) for o in runs], trajectories=[{"case": c, "run": o} for o in runs])
     recs = reflective(batch, comp)
     assert recs[0]["Feedback"] == "Correct." and recs[1]["Feedback"].startswith("Wrong: not exact."), recs
+    assert recs[2]["Feedback"].startswith("Reply ran past the app's length limit (140 > 110 chars): in PopTalk this is "
+                                          "rejected and the raw transcript is inserted."), recs[2]
+    assert recs[2]["Generated Outputs"].startswith(over["modelReply"]), recs[2]  # the reply, not the raw transcript
+    assert "2.4× the expected length" in recs[3]["Feedback"], recs[3]
     r = LengthReflector(ad)
     assert [r.goal("Wrong: x"), r.goal("Wrong: x"), r.goal("Correct."), r.goal("Correct.")] == ["fix", "shorten", "shorten", "shorten"]
     # One reflection call's prompt, with a 6-example minibatch of real pool cases (outputs = their targets).
@@ -327,11 +372,14 @@ def main():
             pts = [(s, count(text)) for _, text, s in rows]
             f = front(pts)
             best = pick(pts, f)
-            print(f"{comp}: candidate  tokens  val-latency  accuracy  (* = Pareto front, > = pick)", file=sys.stderr)
+            print(f"{comp}: candidate  tokens  val-latency  accuracy  rejected (val share the app's guards reject)  "
+                  "(* = Pareto front, > = pick)", file=sys.stderr)
             for i, ((name, text, s), (_, t)) in enumerate(zip(rows, pts)):
-                lat = ad.latency.get(text)
+                lat, rej = ad.latency.get(text), ad.rejected.get(text)
+                rej = "-" if rej is None else f"{sum(rej.values()) / len(va):.1%}" + "".join(
+                    f" {g} {n / len(va):.1%}" for g, n in rej.most_common())
                 print(f"{'>' if i == best else '*' if i in f else ' '} {name:<14} {t:5}  {f'{lat:.3f}s' if lat else '   -  '}  "
-                      f"{s:.3f}", file=sys.stderr, flush=True)
+                      f"{s:.3f}     {rej}", file=sys.stderr, flush=True)
             (a.out / f"{comp}.txt").write_text(rows[best][1])
             print(f"{comp}: pick {rows[best][0]} val {rows[best][2]:.3f} (seed {res.val_aggregate_scores[0]:.3f}), "
                   f"{res.num_candidates} candidates, {res.total_metric_calls} rollouts; wrote {a.out}/{comp}.txt",
