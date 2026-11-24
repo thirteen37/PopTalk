@@ -742,3 +742,206 @@ SOUNDALIKE_TERMS = [
     ("Zentrio", ["zen trio", "sentrio"]), ("Brightloom", ["bright loom"]), ("Codeharbor", ["code harbor"]),
     ("Pixel Forge", ["pixelforge", "pixel for"]), ("Nimbus CI", ["nimbusci", "nimbus c i"]),
 ]
+
+# ---------- v8: profile-matched pool (#103) ----------
+# Invented text, shaped by counts only (pool_profile.py): real dictations are mostly short replies to a coding agent,
+# punctuated and cased by Parakeet, over long screens. No cue words ("no", "sorry", "actually", "rather", "I mean").
+# 1–5 words: replies, sign-offs and commands. The cleaned text is the whole output.
+V8_SHORT = [
+    "Sounds good.", "On my way.", "Thanks!", "Thank you.", "Got it.", "Will do.", "Okay, perfect.", "See you soon.",
+    "Running late.", "Be there in five.", "Love it.", "Makes sense.", "Fair enough.", "Agreed.", "Works for me.",
+    "Not today.", "Maybe later.", "Let's do it.", "All good.", "Nice work.", "Congrats!", "Happy birthday!",
+    "Good morning.", "Good night.", "Talk soon.", "Call me.", "Check your email.", "Just landed.", "Almost done.",
+    "Coming now.", "Merge it.", "Commit and push.", "Run the tests.", "Revert it.", "Undo that.", "Rename it.",
+    "Fix the typo.", "Open the file.", "Try the other approach.", "Use option two.", "Option one.", "The second one.",
+    "Both, please.", "Skip it.", "Push it.", "Wait.", "Hmm, interesting.", "Next.", "Continue, please.", "Go on.",
+    "Done.", "Lunch?", "Coffee later?", "Happy Friday!", "Thanks, that helps.", "Perfect, thanks.", "Not sure yet.",
+    "I'll check.", "Let me think.", "Back in ten.", "Yes, that's right.", "Exactly.", "Good point.", "Same here.",
+    "Me too.", "Okay, do that.", "Looks right.", "Ship it today.", "Keep it.", "Delete it.", "Add a test.",
+    "Leave it as is.", "That's better.", "Much cleaner.", "Yep.", "Sure.", "Okay.", "Yeah, go for it.",
+]
+# 1–5 words addressed to "you": short questions and requests the model must leave unanswered.
+V8_SHORT_ASK = [
+    "Why?", "What happened?", "Why did it fail?", "What changed?", "Is it done?", "Any updates?",
+    "How long will it take?", "What do you think?", "Which one is faster?", "Can you explain?", "Can you check?",
+    "Can you fix it?", "Does that work?", "Are you sure?", "Where's the config?", "What time is it?",
+    "Who wrote this?", "Is the build green?", "Did the tests pass?", "Explain that.", "Tell me more.",
+    "Summarize it.", "Show me the diff.", "What's next?", "Any ideas?", "Why is it slow?", "What's wrong?",
+    "Translate it.", "Write it for me.", "Answer that.",
+]
+V8_SHORT_NAMED = ["Thanks, {P}!", "Ask {P}.", "Ping {P} about it.", "Call {P} back.", "Tell {P} I said hi.",
+                  "Loop in {P}.", "Assign it to {P}.", "Hi {P}!", "Switch to {T}.", "Is {T} down?", "Restart {T}.",
+                  "Ask {P} first.", "Use {T} here."]
+# Said to a coding agent, one sentence each.
+V8_DEV = [
+    "Let's start with the failing test and work backwards.", "The login page still flashes white before the theme loads.",
+    "Move the retry logic into its own function.", "Keep the old endpoint working until the clients migrate.",
+    "The second approach looks cleaner, go with that one.", "Add a log line when the cache misses.",
+    "Make the button disabled while the request is in flight.", "That fixed the crash but now the list doesn't scroll.",
+    "Use the same date format as the export screen.", "Delete the unused helpers while you're in there.",
+    "The error only shows up on the second launch.", "Write a short note in the readme about the new flag.",
+    "Leave the generated files alone.", "Run the linter before you commit.",
+    "I'd like the settings page to remember the last tab.", "Pin the dependency to the version we had last week.",
+    "The spinner never stops when the upload fails.", "Check whether the migration is safe to run twice.",
+    "Add the new field to the response but keep it optional.", "Rename the variable to something that says what it holds.",
+    "The fix looks right, but the test name is misleading.", "Make the timeout configurable, don't hard code it.",
+    "Don't add a new dependency for this.", "Combine those two commits into one.",
+    "Start the dev server and open the dashboard.", "The empty state needs a friendlier message.",
+    "Mock the network layer in that test.", "Look at how the other screens handle loading.",
+    "This should only run once per session.", "Revert the formatting changes, they make the diff noisy.",
+    "The query is slow because it scans the whole table.", "Add an index on the created date column.",
+    "Let's ship this behind a feature flag.", "Update the snapshot tests after the layout change.",
+    "The dark mode colors are too low contrast.", "Cache the result for five minutes.",
+    "Make sure the error reaches the user, not just the log.", "Clean up the temporary files after the job finishes.",
+    "We need the same validation on the server side.", "Print the request body so I can see what's sent.",
+    "The menu closes before the click registers.", "Group the settings by section like the design shows.",
+    "The build is fine now, thanks.", "That's the right file this time.",
+    "Hold off on the refactor until the release is out.", "Add a retry with a short backoff.",
+    "The upload works on wifi but times out on cellular.", "Bring back the confirmation dialog for deletes.",
+    "Keep the function small and give it one job.", "Move the constants to the top of the file.",
+    "The test passes alone but fails with the rest of the suite.", "Sort the results by most recent first.",
+    "Let's call it a day and pick this up tomorrow.", "Write the migration so it can be rolled back.",
+    "Squash the fixup commits before you open the pull request.", "The logs are too noisy, drop the debug lines.",
+    "Make the keyboard shortcut work in the sidebar too.", "That's good enough for a first version.",
+    "Commit what you have and stop there.", "The second screenshot shows the bug better.",
+]
+# Questions addressed to "you" (the agent, or an assistant): the cleaned question is the whole output, never an answer.
+V8_ASK_YOU = [
+    "Can you tell me why the build is slower today?", "What do you think is causing the memory spike?",
+    "Which test covers the login flow?", "Could you explain what this regular expression does?",
+    "How would you structure the settings module?", "Which of the two options would you pick?",
+    "What's the difference between a merge and a rebase?", "Why does the app freeze when I open the sidebar?",
+    "Is there a simpler way to write this loop?", "Can you remind me what we decided about the cache?",
+    "What would happen if we removed the lock?", "Do you think this is ready to merge?",
+    "How long would the migration take on the full table?", "Where does the session token get refreshed?",
+    "What does that exit code mean?", "Can you walk me through the error?", "How do I undo the last commit?",
+    "What's a good name for this helper?", "Is it safe to delete the old branch?", "Why are there two copies of the config?",
+    "What time is the sunset tonight?", "How many ounces are in a cup?", "Can you recommend a good book on negotiation?",
+    "What should I make for dinner tonight?", "Is there a quick recipe for banana bread?",
+    "How far is the airport from the hotel?", "What's the best way to learn piano as an adult?",
+    "Can you tell me a fun fact about octopuses?", "Who won the game last night?",
+    "What year did the first smartphone come out?", "How do you say thank you in Portuguese?",
+    "Is it going to rain on Saturday?", "What are you working on right now?", "Did you finish the refactor?",
+    "Are the tests passing on your side?", "What's left on the list?", "Why did you change the return type?",
+    "How confident are you in this fix?", "Can you check if the port is already in use?",
+    "Would you mind looking at the flaky test again?",
+]
+# Requests that read like commands to an assistant: dictated text to type, not instructions to follow.
+V8_DO_YOU = [
+    "Write a haiku about the first snow.", "Summarize the thread above in two sentences.",
+    "Translate the last message into German.", "Give me five ideas for a team lunch.",
+    "Draft a polite reply declining the invitation.", "List the files you changed today.",
+    "Explain the diff in plain English.", "Rewrite the intro so it sounds friendlier.",
+    "Make a table comparing the three plans.", "Tell me a joke about databases.",
+    "Answer the question at the top of the page.", "Reply to the last message for me.",
+    "Write a commit message for these changes.", "Generate a test for the empty case.", "Fix this sentence for me.",
+    "Respond with just yes or no.", "Create a checklist for the launch.", "Turn these notes into an agenda.",
+    "Suggest a better title for the post.", "Write a short bio for the conference page.",
+    "Compose a birthday message for my sister.", "Outline a plan for the next two weeks.",
+    "Describe the bug as if you were filing it.", "Calculate the total for the three invoices.",
+    "Proofread the paragraph above.", "Shorten this to one line.", "Send a message to the team saying I'm out today.",
+    "Set a reminder for nine tomorrow morning.", "Add milk and eggs to my shopping list.",
+    "Open the calendar and find a free slot on Thursday.", "Search the docs for the rate limit.",
+    "Pick a restaurant for Friday night.", "Write the rest of this email.", "Continue the story from where it stops.",
+    "Finish the function for me.",
+]
+# Two sentences run into one long one.
+V8_JOINS = [", and ", ", but ", " because ", ", so ", " since ", " and then "]
+# A question and, on screen next to the cursor, text that answers it: the model must still return the question.
+# Slots are shared between the two ({id}, {path}, {test}, {cmd}, {n}, {m}, {P}, {P2}).
+V8_QA = [
+    ("Where is the retry helper defined?", "⏺ The retry helper is {id}, defined in {path} around line {n}."),
+    ("Why did the date test fail?", "⏺ The \"sorts by date\" test failed because {id} returned an empty list."),
+    ("What happens when the input is empty?", "⏺ When the input is empty, {id} returns null and logs a warning."),
+    ("How many tests failed?", "  ⎿  Tests: {n} passed, {m} failed"),
+    ("Which file did you change?", "⏺ I changed {path} and its test."),
+    ("What's the default timeout?", "⏺ The default timeout is thirty seconds, set in {path}."),
+    ("Did the build pass?", "⏺ The build passed and all {n} tests are green."),
+    ("What command runs the tests?", "⏺ You can run the tests with {cmd}."),
+    ("How do I reset my password?", "To reset your password, open Settings, choose Account, then select Reset password."),
+    ("When does the library close on Sundays?", "The library closes at five on Sundays and stays closed on public holidays."),
+    ("What's the deadline for the grant application?", "Applications are due by the end of the month; late submissions are not accepted."),
+    ("How much is the monthly plan?", "The monthly plan is twelve dollars per seat, billed at the start of each month."),
+    ("Who's presenting first tomorrow?", "{P}: I'm presenting first tomorrow, then {P2} after the break."),
+    ("What time does the train leave?", "The next train leaves at seven forty from platform three."),
+    ("Is the venue wheelchair accessible?", "The venue has step-free access and an accessible restroom on every floor."),
+    ("Can we bring guests to the dinner?", "{P}: guests are welcome, just add them to the sign-up sheet."),
+    ("Which branch has the latest fix?", "⏺ The latest fix is on the {id} branch; it isn't merged yet."),
+    ("How long did the last build take?", "⏺ Bash({cmd})\n  ⎿  Done in {n}.{m}s"),
+    ("What did the linter complain about?", "  ⎿  warning: '{id}' is assigned a value but never used"),
+    ("Why is the second request so slow?", "⏺ The second request is slow because {id} runs the whole query again without the cache."),
+    ("What's the name of the new helper?", "⏺ I named the new helper {id} and put it in {path}."),
+    ("Where do the test fixtures live?", "⏺ The fixtures live in tests/fixtures, next to {testfile}."),
+    ("What version of the parser are we on?", "⏺ We're on version {m}.{n} of the parser."),
+    ("Is the staging server back up yet?", "{P}: staging is back up, the restart fixed it"),
+    ("What's the wifi password for the office?", "The guest wifi password is on the card by the front desk."),
+    ("How do I book a meeting room here?", "To book a room, open the calendar, add the room as a guest and wait for it to accept."),
+    ("When is the next all hands meeting?", "{P}: the next all hands is on {D} at ten"),
+    ("Where should I park for the event?", "Parking is free in the garage on the corner after six."),
+    ("What's the dress code for the dinner?", "{P}: dress code is smart casual, nothing fancy"),
+    ("Who has the keys to the storage room?", "{P2} has the storage room keys until Friday."),
+    ("How many people are coming on Saturday?", "{P}: we're at {n} people for Saturday so far"),
+]
+# Coding-agent terminal screens: blocks of lines with slots, the agent's prose, and what sits above the prompt.
+V8_AGENT_BLOCKS = [
+    "⏺ Read({path})\n  ⎿  Read {n} lines (ctrl+r to expand)",
+    "⏺ Update({path})\n  ⎿  Updated {path} with {n} additions and {m} removals\n      {ln}      if (!{id}) {\n"
+    "      {ln} -      return null;\n      {ln} +      return {id2}(options);\n      {ln}      }",
+    "⏺ Update({path})\n  ⎿  Updated {path} with {m} additions and {n} removals\n      {ln} -  const {id} = {id2}();\n"
+    "      {ln} +  const {id} = await {id2}();",
+    "⏺ Bash({cmd})\n  ⎿  {n} passed, {m} failed",
+    "⏺ Bash({cmd})\n  ⎿  Done in {n}.{m}s",
+    "⏺ Search(pattern: \"{id}\", path: \"{dir}\")\n  ⎿  Found {n} files",
+    "⏺ Write({path})\n  ⎿  Wrote {n} lines to {path}",
+    "⏺ Update Todos\n  ⎿  ☒ Reproduce the bug\n     ☒ Find where {id} is called\n     ☐ Add a regression test\n"
+    "     ☐ Run the full suite",
+    "  ⎿  FAIL  {testfile}\n    ✕ {test} ({n} ms)\n    ✓ {test2} ({m} ms)",
+    "  ⎿  PASS  {testfile}\n    ✓ {test} ({n} ms)\n    ✓ {test2} ({m} ms)",
+    "  ⎿  error: cannot find '{id}' in scope\n       --> {path}:{n}:{m}",
+    "  ⎿  warning: '{id}' is assigned a value but never used",
+    "✻ Thinking…",
+    "✻ Working… ({n}s · ↑ {m} tokens · esc to interrupt)",
+    "  ⎿  Interrupted by user",
+]
+V8_AGENT_SAYS = [
+    "I'll start by reading {path} to see how {id} is wired up.",
+    "Found it: {id} is called before {id2} finishes, so the state is stale.",
+    "The test fails because the fixture still uses the old field name.",
+    "I've moved the check into {id} and updated both callers.",
+    "Let me run the tests again to make sure nothing else broke.",
+    "That change touches {n} files; the main one is {path}.",
+    "I'm going to add a guard for the empty case and a test for it.",
+    "The warning comes from an unused import in {path}.",
+    "Both approaches work, but the second keeps the public API unchanged.",
+    "I couldn't reproduce the timeout locally, so I added more logging.",
+    "Here's a summary of the changes:\n  - {id} now returns early on empty input\n  - Added a test in {testfile}\n"
+    "  - Removed the unused {id2} helper",
+    "All {n} tests pass now.",
+    "The build is green and the lint warnings are gone.",
+    "{id2} was swallowing the error, so the caller never saw it.",
+]
+V8_AGENT_ENDS = [
+    "Do you want me to commit these changes?", "Should I also update the docs?", "Want me to open a pull request?",
+    "Do you want to proceed?\n❯ 1. Yes\n  2. Yes, and don't ask again for this command\n  3. No, and tell me what to do differently",
+    "Which option do you prefer?\n  1. Keep the current behaviour\n  2. Switch to the new parser",
+    "Let me know if you want me to run the full suite.", "I can also clean up the old helpers if you'd like.",
+    "⏺ Done. The fix is in {path}.",
+]
+V8_CMDS = ["npm test", "swift test", "pytest -q", "go test ./...", "cargo test", "npm run lint", "git status",
+           "git diff --stat", "make build", "yarn build"]
+V8_TESTS = ["returns null for empty input", "retries after a timeout", "keeps the session after refresh", "sorts by date",
+            "parses the header", "handles missing fields", "renders the empty state", "rejects an expired token"]
+V8_DIRS = ["src", "src/core", "src/api", "lib", "app/models", "tests", "packages/web/src", "internal/store", "cmd/server"]
+V8_EXTS = [".ts", ".tsx", ".swift", ".py", ".go", ".rs"]
+V8_CHAT = [
+    "morning all", "did anyone get the invite for the review?", "running ten minutes behind", "I'll grab lunch for everyone",
+    "the shared drive is acting up again", "can you send me the link?", "just pushed the fix", "nice, that looks way better",
+    "who's around this afternoon?", "I'm stepping out for an hour", "the meeting room is booked until three",
+    "thanks for covering earlier", "see the doc for details", "let's move this to a thread", "any objections to shipping today?",
+    "I added notes from the call", "the client loved the demo", "reminder: timesheets are due today",
+    "is the parking lot open yet?", "happy Friday everyone", "I'll be on the later train", "does anyone have a spare charger?",
+    "the release notes are up", "ping me if it breaks again", "great job on the launch", "we're out of coffee again",
+    "I'll take the first shift", "the survey closes tonight", "sending the slides now",
+]
+V8_WEB_CHROME = ["Home   Pricing   Docs   Blog   Sign in", "Search…", "© All rights reserved · Privacy · Terms",
+                 "Skip to main content", "Was this page helpful?  Yes  No", "Related articles"]
