@@ -344,9 +344,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
         let models = Settings.selection
         let calls = reused?.calls ?? ModelCallRecorder()
-        let pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store, learned: learnedTerms(sources),
+        var pipeline = Pipeline(complete: calls.wrap(complete), vocabulary: store, learned: learnedTerms(sources),
                                 cleanupModel: models.cleanupModel, editModel: models.editModel,
                                 features: DictationFeatures(.standard, sources: sources))
+        if models.provider == "mlx" { pipeline.termScore = MLXProvider.termScore }
         let id = UUID()
         // Before apply, which moves lastInsert to this request.
         let focused = history.isEnabled && cleanup == nil ? TextIO.focusedElement() : nil
@@ -610,6 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var pipeline = Pipeline(complete: calls.wrap(fixed.complete), vocabulary: store, learned: fixed.learned, cleanupModel: fixed.models.cleanupModel,
                                 editModel: fixed.models.editModel, features: fixed.features)
         pipeline.remembers = false
+        if fixed.models.provider == "mlx" { pipeline.termScore = MLXProvider.termScore }
         let task = Task { [weak self] () -> PipelineResult? in
             let r = await LivePreview.$speculative.withValue(true) { await pipeline.run(request) }
             guard !Task.isCancelled else { return nil }

@@ -2,13 +2,18 @@ import Foundation
 
 /// The #75 dictation settings, read per press like `ContextSources` so a change applies to the next one.
 public struct DictationFeatures: Sendable, Equatable {
-    public enum Key { public static let recaseTerms = "recaseScreenTerms", skipGate = "skipLLMGate" }
+    public enum Key {
+        public static let recaseTerms = "recaseScreenTerms", skipGate = "skipLLMGate", soundAlikeTerms = "soundAlikeTerms"
+    }
     /// "Fix screen-term casing before cleanup": still only for the models `Pipeline.recasesTerms` names.
     public var recaseTerms = true
     /// Screen terms for recasing too (#40 "Boost recognition with words on screen"); off: saved vocabulary only.
     public var screenTerms = true
     /// "Skip cleanup for clean dictations (experimental)".
     public var skipGate = false
+    /// Sound-alike terms (#75 step 2, experimental, no Settings UI yet): `termShortlist` runs the cleanup model
+    /// confirms (`Pipeline.termScore`) become the term before cleanup. Only where `recaseTerms` runs.
+    public var soundAlikeTerms = false
 
     public init() {}
 
@@ -19,6 +24,7 @@ public struct DictationFeatures: Sendable, Equatable {
         recaseTerms = d.object(forKey: Key.recaseTerms) as? Bool ?? true
         screenTerms = (sources ?? ContextSources(d)).screenVocabulary
         skipGate = environment["POPTALK_SKIP_LLM"].map { $0 == "1" } ?? d.bool(forKey: Key.skipGate)
+        soundAlikeTerms = d.bool(forKey: Key.soundAlikeTerms)
     }
 }
 
@@ -87,6 +93,37 @@ extension Pipeline {
         for c in all.sorted(by: { ($1.score, raw($1), $0.range.location) < ($0.score, raw($0), $1.range.location) })
         where !kept.contains(where: { $0.term == c.term && NSIntersectionRange($0.range, c.range).length > 0 }) { kept.append(c) }
         return kept.sorted { $0.range.location < $1.range.location }
+    }
+
+    /// log P(yes) − log P(no) at the first reply token to `termCheck(heard:term:)`, from `model`.
+    public typealias TermScore = @Sendable (_ model: String, _ heard: String, _ term: String) async throws -> Double
+
+    /// The lowest `MLXProvider.termScore` with no false yes on training/term_pairs.jsonl, on the v6 E2B LoRA
+    /// (`PoptalkBench --term-shortlist … --score`): on term_pairs_heldout.jsonl with the shortlist in front,
+    /// precision 0.96, recall 0.79. ponytail: one threshold for every E2B fine-tune; refit per adapter if another
+    /// ships (base E2B fits about −12 in `training/term_probe.py`).
+    public static let termScoreThreshold = -7.12
+
+    /// The yes/no question `TermScore` asks, as `training/term_probe.py` does.
+    public static func termCheck(heard: String, term: String) -> [ChatMessage] {
+        [ChatMessage(role: "user", content: "A speech recognizer heard '\(heard)'. Is that the term '\(term)' (the same word or name, "
+                     + "misheard or split up)? Answer yes or no.")]
+    }
+
+    /// `transcript` with each `termShortlist` run that `score` puts at or above `termScoreThreshold` written as its
+    /// term; overlapping runs: the higher score. A failed check leaves its run as heard.
+    static func soundAlikeTerms(_ transcript: String, terms: [String],
+                                score: (String, String) async throws -> Double) async -> String {
+        var yes: [(c: TermCandidate, s: Double)] = []
+        for c in termShortlist(transcript, terms: terms) {
+            if let s = try? await score(c.heard, c.term), s >= termScoreThreshold { yes.append((c, s)) }
+        }
+        var kept: [TermCandidate] = []
+        for (c, _) in yes.sorted(by: { $0.s > $1.s }) where !kept.contains(where: { NSIntersectionRange($0.range, c.range).length > 0 }) {
+            kept.append(c)
+        }
+        return kept.sorted { $0.range.location > $1.range.location }
+            .reduce(transcript as NSString) { $0.replacingCharacters(in: $1.range, with: $1.term) as NSString } as String
     }
 
     /// Spellings English speech can't tell apart, folded together: "x" → "ks", soft "c" → "s", "c"/"q" → "k",

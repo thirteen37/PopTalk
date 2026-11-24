@@ -65,6 +65,8 @@ public struct Pipeline: Sendable {
     let features: DictationFeatures
     /// False for speculative runs (#43): a "remember" edit reports `remembered` without saving it.
     public var remembers = true
+    /// The yes/no term check for `DictationFeatures.soundAlikeTerms` (#75 step 2): MLX only; nil skips it.
+    public var termScore: TermScore?
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, learned: [VocabTerm] = [], cleanupModel: String, editModel: String,
                 cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, features: DictationFeatures = DictationFeatures()) {
@@ -96,7 +98,12 @@ public struct Pipeline: Sendable {
             let terms = Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context).map(\.text)
             let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
             let recaseWith = features.screenTerms ? terms : saved + learned.map(\.text)
-            let recased = !recase ? transcript : Self.recaseTerms(transcript, terms: recaseWith, screen: screen)
+            var recased = !recase ? transcript : Self.recaseTerms(transcript, terms: recaseWith, screen: screen)
+            if recase, features.soundAlikeTerms, let termScore {
+                recased = await Self.soundAlikeTerms(recased, terms: Self.recaseCandidates(recaseWith)) {
+                    try await termScore(cleanupModel, $0, $1)
+                }
+            }
             let fixed = !recase ? [] : Self.termsWritten(from: transcript, to: recased, terms: Self.recaseCandidates(recaseWith),
                                                          saved: saved + Self.recaseCandidates(saved))
             let transcript = Self.dictationPrepass(recased)

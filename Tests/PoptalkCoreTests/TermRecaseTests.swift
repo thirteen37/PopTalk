@@ -92,3 +92,28 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
         #expect(seen.prompt.contains("<transcript>refer to my Meal Prep project</transcript>") == recased, "\(model)")
     }
 }
+
+// #75 step 2: a shortlisted sound-alike run becomes the screen term when the yes/no check scores it at or above
+// `termScoreThreshold`; off by default. Invented names.
+@Test func soundAlikeTermsNeedTheFlagAndAYes() async {
+    final class Seen: @unchecked Sendable { var prompt = ""; var asked: [String] = [] }
+    let screen = ScreenSnapshot(text: "Paavo Toivonen: the Corvelle build is out")
+    func dictate(_ on: Bool, score: Double) async -> Seen {
+        let seen = Seen()
+        var f = DictationFeatures()
+        f.soundAlikeTerms = on
+        var p = Pipeline(complete: { _, m, _, _ in seen.prompt = m.last!.content; return "Ok." },
+                         vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                         cleanupModel: fineTune, editModel: fineTune, features: f)
+        p.termScore = { _, heard, term in seen.asked.append("\(heard)=\(term)"); return score }
+        _ = await p.run(Request(transcript: "ask toy vonen about the core vell build.", selection: nil, context: screen))
+        return seen
+    }
+    let yes = await dictate(true, score: Pipeline.termScoreThreshold)
+    #expect(yes.prompt.contains("<transcript>ask Toivonen about the Corvelle build.</transcript>"))
+    #expect(Set(yes.asked) == ["toy vonen=Toivonen", "core vell=Corvelle"])
+    let no = await dictate(true, score: Pipeline.termScoreThreshold - 1)
+    #expect(no.prompt.contains("<transcript>ask toy vonen about the core vell build.</transcript>"))
+    let off = await dictate(false, score: 0)
+    #expect(off.asked.isEmpty && off.prompt.contains("toy vonen"))
+}
