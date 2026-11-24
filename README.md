@@ -16,7 +16,7 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 ## Accuracy
 
-PopTalk's speech benchmark, with Parakeet TDT v2 and Gemma 4 E4B (`mlx-community/gemma-4-e4b-it-4bit`, the default before the E2B v6 fine-tune):
+PopTalk's speech benchmark, with Parakeet TDT v2 and the default model (PopTalk's Gemma 4 E2B v6 fine-tune):
 
 | Stage | Word error rate | Screen and vocabulary terms right |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ PopTalk's speech benchmark, with Parakeet TDT v2 and Gemma 4 E4B (`mlx-community
 | With context boosting | 12.7% | 79% |
 | After cleanup with context | 5.3% | 100% |
 
-This is 21 dictations read by macOS text-to-speech voices, most of them with screen context or vocabulary that the sentence uses. It's a small synthetic set, so treat the numbers as an indication rather than a rigorous evaluation. Results: [`bench/results/2026-11-24-091444-mlx-mlx-community_gemma-4-e4b-it-4bit-audio-ctx96-all-on-s.json`](bench/results/2026-11-24-091444-mlx-mlx-community_gemma-4-e4b-it-4bit-audio-ctx96-all-on-s.json).
+This is 21 dictations read by macOS text-to-speech voices, most of them with screen context or vocabulary that the sentence uses. It's a small synthetic set, so treat the numbers as an indication rather than a rigorous evaluation. Results: [`bench/results/2026-11-24-224406-mlx-adapters_gemma-4-e2b-poptalk-v6-audio-s.json`](bench/results/2026-11-24-224406-mlx-adapters_gemma-4-e2b-poptalk-v6-audio-s.json).
 
 ## Install
 
