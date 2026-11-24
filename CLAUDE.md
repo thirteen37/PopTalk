@@ -7,6 +7,7 @@ macOS menu-bar dictation + voice editing (Swift 6, SwiftPM, no Xcode project). T
 - `swift test > .build/t.log 2>&1 && ! rg -q 'Test run with .* failed' .build/t.log` - gate commits on this. Don't gate on a `passed` match: `swift test` also prints a separate 3-test run that passes even when the main run fails.
 - `scripts/install.zsh` - release build, sign, install to /Applications, relaunch. Waits (up to 120 s, then aborts) while PopTalk records or processes: `scripts/wait-idle.zsh` polls the busy marker `~/Library/Caches/io.lyx.poptalk/busy` (`BusyMarker`). Commit first: a dirty tree stamps `PoptalkCommit` with `-dirty`. If `open` fails with -600, run `open /Applications/PopTalk.app` again.
 - `zsh training/bench.zsh <model id|dir>` - d/e/s bench + held-out set; compare back-to-back runs only (`PoptalkBench --compare a.json b.json`).
+- New issues go on the GitHub Project "Poptalk" (#4) with a Status. Do it right after `gh issue create`, including in subagent briefs that file issues: `gh project item-add 4 --owner thirteen37 --url <issue url>`, then `gh project item-edit` with Status Todo, In Progress or Done (`gh project field-list 4 --owner thirteen37` lists the ids). Move it to Done when it closes.
 - `/usr/bin/log stream --level info --predicate 'subsystem == "io.lyx.poptalk"'` - stage timings (category `timing`: counts and the frontmost app's bundle ID, no text). In zsh, `log` is a builtin, so use the full path.
 
 ## Gotchas
