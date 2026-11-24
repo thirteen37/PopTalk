@@ -3,7 +3,7 @@
 # (`PoptalkBench --replay`) for each config, back to back, and prints counts only. Run outside the sandbox.
 # Usage: scripts/replay.zsh [--model ID] [--timeout S] [--subset REGEX] [--history FILE]... [CONFIG ...]
 #   CONFIG: `current` (the built prompt; the default) or a dictation system prompt file (--dictation-prompt-file).
-#   --model defaults to E4B, --timeout to the app's 4 s; --history to this Mac's file plus every Mac's synced file.
+#   --model defaults to the shipped E2B v6 fine-tune, --timeout to the app's 4 s; --history to this Mac's file plus every Mac's synced file.
 #   --subset adds rows for dictations whose transcript matches REGEX (jq regex, case-insensitive).
 # Input: opt-in history dictations (no selection) that called a model, deduped by id; app, window, screen text and
 #   vocabulary are read back from the recorded prompt, the transcript is the one Pipeline got. Older prompt formats
@@ -87,7 +87,7 @@ if [[ ${1:-} == counts ]]; then
 fi
 
 zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -history+:=hist || exit 1
-model=${model[-1]:-mlx-community/gemma-4-e4b-it-4bit} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
+model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v6} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
 files=(${^${hist:#--history}}(:A))
 (( $#files )) || files=(
   ~/Library/Application\ Support/Poptalk/history/history.jsonl(N)

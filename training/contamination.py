@@ -22,7 +22,11 @@ BLOCK = ["Priya", "Raman", "Marcus", "FluidAudio", "Fluid Audio", "Todoist", "Ku
          "Meal Prep", "Quillmate", "Quill mate", "Quilmark", "Brightwater", "Bright water", "Analytica", "Kateryna",
          "Katerina", "Shevchuk", "Oyelaran", "Tomasz", "Wrzesniewski", "Vreshnevski", "Wrisley", "Dana", "Whitfield",
          "gpt-4o", "GPT 4o", "OKR", "OKRs", "Poptalk", "App Store Connect", "iOS 27", "Q3", "Q three", "Jira", "Helsinki",
-         "oat milk", "Ana", "田中", "plumber", "electricity bill", "Ajay", "Arjee"]
+         "oat milk", "Ana", "田中", "plumber", "electricity bill", "Ajay", "Arjee",
+         # #99's s-* cases (real-voice bench)
+         "Oskar", "PaperTrail", "Paper Trail", "Tolu", "Adeyemi", "Halvorsen", "Ledgerly", "HelpNest", "Help Nest", "Tamsin",
+         "Mireille", "Zentrix", "Imogen", "Brindle", "CloudNook", "Cloud Nook", "Corvel", "Lucan", "Pelham", "Okafor",
+         "Wexford", "Beatriz", "Nadia", "Felix"]
 BLOCK_RE = re.compile("|".join(rf"(?<!\w){re.escape(b)}(?!\w)" for b in BLOCK), re.IGNORECASE)
 
 

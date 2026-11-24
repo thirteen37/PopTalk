@@ -100,6 +100,8 @@ public struct Pipeline: Sendable {
             let fixed = !recase ? [] : Self.termsWritten(from: transcript, to: recased, terms: Self.recaseCandidates(recaseWith),
                                                          saved: saved + Self.recaseCandidates(saved))
             let transcript = Self.dictationPrepass(recased)
+            // Everything said was cancelled ("… Scratch that.", #98).
+            guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
             let space = Self.leadingSpace(r.context)
             func result(_ outcome: Outcome, degraded: Bool = false, skippedLLM: Bool = false) -> PipelineResult {
                 var res = PipelineResult(outcome: outcome, degraded: degraded, skippedLLM: skippedLLM)
@@ -249,7 +251,7 @@ extension Pipeline {
 
     /// What the cleanup model sees of a dictation after `stripHesitations`: spoken formatting (#48), then
     /// numbers (#59). PoptalkDatagen render uses it too, so training transcripts match production.
-    public static func dictationPrepass(_ s: String) -> String { spokenNumbers(spokenFormatting(s)) }
+    public static func dictationPrepass(_ s: String) -> String { spokenNumbers(spokenCancel(spokenFormatting(s))) }
 
     /// The utterance explicitly asks to add text rather than replace the selection.
     /// English-only, like the speech model (Parakeet v2 transcribes English only): revisit the
