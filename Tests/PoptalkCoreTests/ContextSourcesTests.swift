@@ -22,6 +22,15 @@ import Testing
     #expect(off.apply(snap) == ScreenSnapshot(appName: "Slack", text: "hi", cursorOffset: 2, ocrText: "ocr"))
 }
 
+// #96: the domain is its own source; off with the window title globally, as when it rode in the title.
+@Test func webDomainFollowsTheWindowTitleGlobally() {
+    let d = UserDefaults(suiteName: "poptalk-test-\(UUID())")!
+    #expect(ContextSources(d).webDomain)
+    d.set(false, forKey: ContextSources.Key.windowTitle)
+    #expect(!ContextSources(d).webDomain)
+    #expect(ContextSources(d).learnScreenTerms == ContextSources(d).rememberScreenTerms)
+}
+
 @Test func boostTermsSkipScreenTermsWhenOffButKeepSaved() {
     let saved = [VocabTerm(text: "Poptalk")]
     let snap = ScreenSnapshot(text: "Ask Kubernetes about FluidAudio and FluidAudio again")

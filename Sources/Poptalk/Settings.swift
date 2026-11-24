@@ -40,6 +40,7 @@ extension SettingsTab {
         switch self {
         case .general: "gearshape"
         case .context: "text.viewfinder"
+        case .apps: "square.grid.2x2"
         case .models: "cpu"
         case .permissions: "lock.shield"
         case .vocabulary: "character.book.closed"
@@ -97,6 +98,7 @@ struct SettingsView: View {
             switch tab {
             case .general: general
             case .context: context
+            case .apps: AppProfilesView()
             case .models: models
             case .permissions: permissions
             case .vocabulary: vocabulary
@@ -166,7 +168,7 @@ struct SettingsView: View {
             } header: {
                 Text("Context sources")
             } footer: {
-                Text("What PopTalk reads on each press to understand what you're writing. Selected text is always used (edits need it), saved vocabulary always boosts recognition, and password fields are never read. Screen text needs Screen Recording.")
+                Text("What PopTalk reads on each press to understand what you're writing. Selected text is always used (edits need it), saved vocabulary always boosts recognition, and password fields are never read. Screen text needs Screen Recording. Apps turns sources off for one app or website.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             HistorySection(history: history)
@@ -401,6 +403,171 @@ private struct TermSheet: View {
         .frame(width: 400)
         .fixedSize(horizontal: false, vertical: true)
     }
+}
+
+/// Per-app profiles (#96): the context sources an app or website turns off, on top of Context. On this Mac only.
+private struct AppProfilesView: View {
+    @AppStorage(AppProfiles.key) private var data = Data()
+    @State private var editing: AppProfile?
+
+    private var profiles: [AppProfile] { (try? JSONDecoder().decode([AppProfile].self, from: data)) ?? [] }
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            List {
+                ForEach(profiles) { p in
+                    HStack {
+                        Image(nsImage: appIcon(p.bundleID))
+                        VStack(alignment: .leading) {
+                            Text([p.bundleID.isEmpty ? "Any app" : appName(p.bundleID), p.domain].filter { !$0.isEmpty }
+                                .joined(separator: " · "))
+                            Text(summary(p)).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { editing = p } label: { Image(systemName: "pencil") }.buttonStyle(.borderless).help("Edit")
+                        Button { save(profiles.filter { $0.id != p.id }) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless).help("Delete")
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { editing = p }
+                }
+            }
+            .overlay { if profiles.isEmpty { Text("No app profiles").foregroundStyle(.secondary) } }
+            HStack {
+                Button("Add…") { editing = AppProfile() }
+                Text("Or use \"Don't Read the Screen in…\" in the menu bar.").font(.footnote).foregroundStyle(.secondary)
+            }
+            Text("A profile turns context sources off in one app, on one website, or both; the most specific one applies. Sources off in Context stay off everywhere. Password fields, password managers and private windows are never read.")
+                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(width: SettingsView.width, height: 400)
+        .sheet(item: $editing) { p in
+            ProfileSheet(draft: p, others: profiles) { new in
+                save(profiles.contains { $0.id == new.id } ? profiles.map { $0.id == new.id ? new : $0 } : profiles + [new])
+            }
+        }
+    }
+
+    private func save(_ p: [AppProfile]) { AppProfiles.save(p, to: .standard) }
+
+    private func summary(_ p: AppProfile) -> String {
+        if ContextSource.screen.isSubset(of: p.off) { return "Screen not read" }
+        let off = ContextSource.allCases.filter(p.off.contains).map(\.label)
+        return off.isEmpty ? "Nothing off" : "Off: " + off.joined(separator: ", ")
+    }
+}
+
+/// An app profile being added or edited (#96): match rule, then one checkbox per source.
+private struct ProfileSheet: View {
+    @State var draft: AppProfile
+    let others: [AppProfile]
+    let save: (AppProfile) -> Void
+    @Environment(\.dismiss) private var dismiss
+    private let global = ContextSources(.standard)
+
+    /// Running apps with a Dock icon, and the draft's app.
+    private var apps: [String] {
+        let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+            .compactMap(\.bundleIdentifier).filter { $0 != Bundle.main.bundleIdentifier }
+        return Set(running + [draft.bundleID]).filter { !$0.isEmpty }.sorted { appName($0).localizedCompare(appName($1)) == .orderedAscending }
+    }
+
+    private var valid: Bool {
+        !(draft.bundleID.isEmpty && AppProfile.host(draft.domain).isEmpty) && !AppProfiles.conflicts(draft, in: others)
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing) {
+            Form {
+                Section {
+                    LabeledContent("App") {
+                        HStack {
+                            Picker("App", selection: $draft.bundleID) {
+                                Text("Any app").tag("")
+                                ForEach(apps, id: \.self) { Text(appName($0)).tag($0) }
+                            }
+                            .labelsHidden()
+                            Button("Choose…", action: choose)
+                        }
+                    }
+                    TextField("Website", text: $draft.domain, prompt: Text("example.com (optional)"))
+                    Text("A website also matches its subdomains, in any browser unless an app is set. Not used in private windows.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    if AppProfiles.conflicts(draft, in: others) {
+                        Text("Another profile already matches this app and website.").font(.footnote).foregroundStyle(.orange)
+                    }
+                }
+                Section {
+                    Toggle("Don't read the screen", isOn: Binding(
+                        get: { ContextSource.screen.isSubset(of: draft.off) },
+                        set: { on in if on { draft.off.formUnion(ContextSource.screen) } else { draft.off.subtract(ContextSource.screen) } }))
+                    ForEach(ContextSource.allCases, id: \.self) { s in
+                        Toggle(s.label, isOn: Binding(get: { global[s] && !draft.off.contains(s) }, set: { on in
+                            if on { draft.off.remove(s) } else { draft.off.insert(s) }
+                        }))
+                        .toggleStyle(.checkbox)
+                        .disabled(!global[s])
+                        .help(global[s] ? "" : "Off in Context")
+                    }
+                } header: {
+                    Text("Read here")
+                } footer: {
+                    Text("Greyed out: off in Context for every app. Selected text and saved vocabulary are still used.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(others.contains { $0.id == draft.id } ? "Save" : "Add") {
+                    draft.domain = AppProfile.host(draft.domain)
+                    save(draft)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!valid)
+            }
+            .padding([.horizontal, .bottom])
+        }
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        if panel.runModal() == .OK, let id = panel.url.flatMap({ Bundle(url: $0)?.bundleIdentifier }) { draft.bundleID = id }
+    }
+}
+
+private extension ContextSource {
+    var label: String {
+        switch self {
+        case .focusedText: "Focused field text"
+        case .nearbyText: "Nearby text"
+        case .ocr: "Screen text (OCR)"
+        case .windowTitle: "Window title"
+        case .webDomain: "Web domain"
+        case .screenVocabulary: "Boost recognition with words on screen"
+        case .rememberScreenTerms: "Use remembered screen terms"
+        case .learnScreenTerms: "Remember screen terms from here"
+        }
+    }
+}
+
+/// The app's name from its bundle ID, or the ID when it isn't installed.
+private func appName(_ bundleID: String) -> String {
+    NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.deletingPathExtension().lastPathComponent ?? bundleID
+}
+
+/// The app's icon, or a globe for a website-only profile.
+private func appIcon(_ bundleID: String) -> NSImage {
+    let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { NSWorkspace.shared.icon(forFile: $0.path) }
+        ?? NSImage(systemSymbolName: bundleID.isEmpty ? "globe" : "app.dashed", accessibilityDescription: nil)!
+    image.size = NSSize(width: 20, height: 20)
+    return image
 }
 
 /// A known MLX model by name, or Custom…: a Hugging Face id or a local folder, shown by its short name.

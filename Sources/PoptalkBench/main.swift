@@ -14,6 +14,7 @@ import PoptalkSpeech
 //     [--recase-terms on|off]   (#75: force the label-free screen-term recaser on or off; default: per model)
 //     [--skip-gate on]   (#75: skip the cleanup LLM for clean, Parakeet-cased dictations; runs record skippedLLM)
 //     [--hold]   (#43, audio cases: simulate holding the key with live cleanup; prints preview latency and reuse at release)
+//     [--context-off text,ocr,title,vocab]   (#96: blank those sources in every case, as an app profile turning them off)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
@@ -163,6 +164,10 @@ let skipGate = opt("--skip-gate") == "on"
 var features = DictationFeatures()
 features.skipGate = skipGate
 if skipGate { meta["skipGate"] = "on" }
+// ponytail: "text" is focused and nearby text together; cases don't keep them apart.
+let contextOff = Set((opt("--context-off") ?? "").split(separator: ",").map(String.init))
+if !contextOff.isEmpty { meta["contextOff"] = contextOff.sorted().joined(separator: ",") }
+features.screenTerms = !contextOff.contains("vocab")
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)
@@ -231,10 +236,13 @@ for c in cases {
     var caseRuns: [BenchRun] = []
     for _ in 0..<runs {
         var request = c.request
+        if contextOff.contains("text") { (request.context.text, request.context.cursorOffset) = ("", nil) }
+        if contextOff.contains("ocr") { request.context.ocrText = "" }
+        if contextOff.contains("title") { request.context.windowTitle = "" }
         var heard: Transcription?
         var boost: [VocabTerm] = []
         if let transcriber, let audio = samples[c.id] {
-            boost = boostOn ? Pipeline.boostTerms(saved: [], context: request.context) : []
+            boost = boostOn ? Pipeline.boostTerms(saved: [], context: request.context, fromScreen: !contextOff.contains("vocab")) : []
             do { heard = try await transcriber.transcribeDetailed(audio, boost: boost, cbw: cbw, minSimilarity: minSimilarity) }
             catch { fail("\(c.id): \(error)") }
             request = Request(transcript: heard!.text, selection: request.selection, context: request.context)

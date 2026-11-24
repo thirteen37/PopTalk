@@ -3,6 +3,8 @@ import Foundation
 public struct ScreenSnapshot: Sendable, Equatable {
     public var appName: String
     public var windowTitle: String
+    /// Host of the focused web page (#96), its own source so a profile can keep the title without it.
+    public var webDomain: String
     /// Accessibility or OCR text of what's on screen.
     public var text: String
     /// UTF-16 offset into `text` of the cursor, when known.
@@ -10,12 +12,20 @@ public struct ScreenSnapshot: Sendable, Equatable {
     /// OCR'd window text, budgeted separately from `text` so a long field can't crowd it out.
     public var ocrText: String
 
-    public init(appName: String = "", windowTitle: String = "", text: String = "", cursorOffset: Int? = nil, ocrText: String = "") {
+    public init(appName: String = "", windowTitle: String = "", webDomain: String = "", text: String = "",
+                cursorOffset: Int? = nil, ocrText: String = "") {
         self.appName = appName
         self.windowTitle = windowTitle
+        self.webDomain = webDomain
         self.text = text
         self.cursorOffset = cursorOffset
         self.ocrText = ocrText
+    }
+
+    /// The `<screen window=…>` value: "Title (example.com)", as when the domain rode in the title, so the prompt the
+    /// fine-tune was trained on is unchanged.
+    public var titleAndDomain: String {
+        windowTitle.isEmpty ? webDomain : webDomain.isEmpty ? windowTitle : "\(windowTitle) (\(webDomain))"
     }
 }
 
@@ -69,7 +79,7 @@ public enum Prompts {
     }
 
     private static func contextBlock(_ c: ScreenSnapshot, _ vocabulary: [VocabTerm]) -> String {
-        var s = "<screen app=\"\(attr(c.appName))\" window=\"\(attr(c.windowTitle))\">\n\(esc(trimmedContext(c)))\n</screen>"
+        var s = "<screen app=\"\(attr(c.appName))\" window=\"\(attr(c.titleAndDomain))\">\n\(esc(trimmedContext(c)))\n</screen>"
         // Screen terms are left out on purpose: listing the top 20 here (#26) made gemma-4-e4b
         // echo the screen and time out on long contexts (bench 2026-11-19-2300).
         if !vocabulary.isEmpty {

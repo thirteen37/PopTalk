@@ -31,10 +31,13 @@ public struct RawInsert: Sendable {
     /// Spacing PopTalk added before the paste, and the field's text right after it (nil: unreadable).
     public var prefix: String
     public var fieldValue: String?
+    /// The press's resolved sources (#96), for learning from it and for its cleanup.
+    public var sources: ContextSources
 
-    public init(request: Request, rawTranscript: String, boost: [String], prefix: String = "", fieldValue: String? = nil) {
+    public init(request: Request, rawTranscript: String, boost: [String], prefix: String = "", fieldValue: String? = nil,
+                sources: ContextSources = ContextSources()) {
         (self.request, self.rawTranscript, self.boost) = (request, rawTranscript, boost)
-        (self.prefix, self.fieldValue) = (prefix, fieldValue)
+        (self.prefix, self.fieldValue, self.sources) = (prefix, fieldValue, sources)
     }
 }
 

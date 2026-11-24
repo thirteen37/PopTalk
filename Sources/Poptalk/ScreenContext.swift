@@ -8,17 +8,23 @@ import Vision
 /// What's on screen at hotkey press: app, window title, focused text (AX), nearby AX text, and OCR
 /// around the field when AX is thin. Held in memory for one request only; never persisted or logged.
 enum ScreenContext {
-    static func capture() async -> ScreenSnapshot {
+    typealias Captured = (snapshot: ScreenSnapshot, profile: ResolvedProfile)
+
+    /// Resolves the press's app profile (#96) before any source is read, and returns it with what was read.
+    static func capture() async -> Captured {
         let start = ContinuousClock.now
         defer { Timing.mark("context total", since: start) }
-        guard let app = NSWorkspace.shared.frontmostApplication else { return ScreenSnapshot() }
+        let (profiles, defaults) = (AppProfiles.load(.standard), ContextSources(.standard))
+        guard let app = NSWorkspace.shared.frontmostApplication else { return (ScreenSnapshot(), ResolvedProfile(sources: defaults)) }
+        let resolve = { (domain: String?, isPrivate: Bool, isSensitive: Bool) in
+            AppProfiles.resolve(bundleID: app.bundleIdentifier, domain: domain, isPrivate: isPrivate, isSensitive: isSensitive,
+                                profiles: profiles, defaults: defaults)
+        }
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
-        guard !isSensitive() else { return snap }
-        let sources = ContextSources(.standard)  // #40: a disabled source is never read
+        guard !isSensitive() else { return (snap, resolve(nil, false, true)) }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         exposeTree(axApp, app)
         Timing.mark("context sensitive+exposeTree", since: start)
-        let isPrivate = { CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle) }
 
         var windowFrame: CGRect?
         if let window: AXUIElement = attr(axApp, kAXFocusedWindowAttribute) {
@@ -26,6 +32,15 @@ enum ScreenContext {
             windowFrame = frame(of: window)
         }
         let focused: AXUIElement? = attr(axApp, kAXFocusedUIElementAttribute)
+        let isPrivate = CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle)
+        // The page's host, for matching and (if the profile allows) the prompt; not looked up when neither can use it.
+        let wantsDomain = !isPrivate && (defaults.webDomain || profiles.contains { !$0.domain.isEmpty })
+        let domain = wantsDomain ? focused.flatMap(webDomain) : nil
+        let profile = resolve(domain, isPrivate, false)
+        let sources = profile.sources  // #40, #96: a disabled source is never read
+        let off = ContextSource.allCases.filter { defaults[$0] && !sources[$0] }.map(\.rawValue)
+        Timing.log.info("context profile \(profile.custom ? "custom" : "default", privacy: .public), off: \(off.joined(separator: ","), privacy: .public)")
+        if sources.webDomain, let domain { snap.webDomain = domain }
         if let focused, sources.focusedText {
             let parent: AXUIElement? = attr(focused, kAXParentAttribute)
             snap.text = attr(focused, kAXValueAttribute) ?? parent.flatMap { attr($0, kAXValueAttribute) } ?? ""
@@ -37,27 +52,23 @@ enum ScreenContext {
 
         let fieldChars = snap.text.count
         Timing.mark("context focused field \(fieldChars) chars", since: start)
-        let nearby = isPrivate() || !sources.nearbyText ? [] : focused.map(nearbyText) ?? []
+        let nearby = !sources.nearbyText ? [] : focused.map(nearbyText) ?? []
         for t in nearby { snap.text += (snap.text.isEmpty ? "" : "\n") + t }
         let nearbyChars = snap.text.count - fieldChars
         Timing.mark("context nearby \(nearbyChars) chars", since: start)
         let wantsOCR = sources.ocr && NearbyText.needsOCR(fieldChars: fieldChars, nearbyChars: nearbyChars)
-        // Counts only (#88): not wanted, not warm, not run (no permission, private window or failed), ran.
+        // Counts only (#88): not wanted (off, private window, or enough text), not warm, not run (no permission or failed), ran.
         var ocrState = wantsOCR ? "not run" : "not wanted"
         // A cold Vision load (~14 s) would stall the request: go without OCR until the prewarm finishes (#39).
         // OCR may have been off at launch, so start the prewarm now if it never ran.
         if wantsOCR, !ocrWarm.withLock({ $0 }) { prewarmOCR(); ocrState = "not warm" }
-        else if wantsOCR, CGPreflightScreenCaptureAccess(), !isPrivate(), let ocr = await ocrFocusedWindow(
+        else if wantsOCR, CGPreflightScreenCaptureAccess(), let ocr = await ocrFocusedWindow(
             pid: app.processIdentifier, frame: windowFrame, title: snap.windowTitle, field: focused.flatMap(frame)) {
             snap.ocrText = ocr  // own budget in Prompts.window (#25)
             ocrState = "ran"
         }
         Timing.mark("context ocr done: \(ocrState), \(snap.ocrText.count) chars", since: start)
-        // ponytail: domain rides in the window title until ScreenSnapshot/<screen> grow a domain field.
-        if sources.windowTitle, !isPrivate(), let domain = focused.flatMap(webDomain) {
-            snap.windowTitle += snap.windowTitle.isEmpty ? domain : " (\(domain))"
-        }
-        return sources.apply(snap)
+        return (sources.apply(snap), profile)
     }
 
     /// Chromium and Electron build their AX tree only when asked. Skips attributes already on, so it's
