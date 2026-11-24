@@ -92,6 +92,23 @@ private func run(_ transcript: String, selection: String? = nil, reply: String) 
     }
 }
 
+// #102: a spoken cancellation drops what it cancels; only what follows the last cue must stay.
+@Test func cancellationsMayDropWhatTheyCancel() {
+    let ok = [
+        ("pick up the dry cleaning and drop off the parcels at the post office scratch that the post office is closed today",
+         "The post office is closed today."),
+        ("we should repaint the garden fence this weekend never mind it's going to rain", "It's going to rain."),
+        ("bring the camping chairs the cooler and the big umbrella actually Forget the umbrella",
+         "Bring the camping chairs and the cooler."),
+    ]
+    for (said, clean) in ok { #expect(!Pipeline.dropsContent(clean, transcript: said), "\(said)") }
+    // Dropping what follows the cue still falls back, and "don't forget the" is no cancellation.
+    #expect(Pipeline.dropsContent("The meeting moved to Friday.",
+                                  transcript: "the meeting moved to friday scratch that it stays on thursday afternoon with the whole design team"))
+    #expect(Pipeline.dropsContent("Snacks for the long drive.",
+                                  transcript: "don't forget the passports the tickets the chargers and the snacks for the long drive"))
+}
+
 // Hyphenated interjections are words: kept whole, never half-stripped.
 @Test func hesitationStripKeepsHyphenatedInterjections() {
     #expect(Pipeline.stripHesitations("Mm-hmm.") == "Mm-hmm.")

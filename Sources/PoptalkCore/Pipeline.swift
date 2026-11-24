@@ -285,13 +285,21 @@ extension Pipeline {
         "should", "could", "about", "into", "than", "then", "there", "what", "also", "just", "like", "basically",
         "know", "mean", "really", "okay", "well", "sorry", "actually", "scratch", "wait", "thing", "kind", "sort"]
 
+    /// Cancellation cues the e4b prompt names; "don't forget the …" is a reminder, not one.
+    private static let cancelCue = try! NSRegularExpression(
+        pattern: #"\b(?:scratch that|never ?mind|(?<!n't )(?<!not )forget (?:that|it|the))\b"#, options: .caseInsensitive)
+
     /// True when the cleanup lost more than 3 content words and over 40% of them (#47): the model kept
     /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3.
     /// A word counts as kept if it appears anywhere in the output, so "fluid audio" → "FluidAudio" survives.
     /// ponytail: a dropped sentence under 40% of a long dictation passes; tighten if that shows up in history.
+    /// #102: a spoken cancellation drops what it cancels, so only what follows the last cue must stay.
     static func dropsContent(_ output: String, transcript: String) -> Bool {
         let out = output.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "'" }
-        let content = transcript.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }
+        let ns = transcript as NSString
+        let said = cancelCue.matches(in: transcript, range: NSRange(location: 0, length: ns.length)).last
+            .map { ns.substring(from: NSMaxRange($0.range)) } ?? transcript
+        let content = said.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }
             .filter { $0.count >= 3 && !droppable.contains(String($0)) }
         let lost = content.filter { !out.contains($0) }.count
         return lost > 3 && Double(lost) > 0.4 * Double(content.count)
