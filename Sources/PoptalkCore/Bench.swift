@@ -110,6 +110,9 @@ public struct BenchCase: Decodable, Sendable {
         }
         var run = BenchRun(output: text, action: action, vocabOffer: offer, seconds: seconds, failures: f)
         run.modelAction = r.modelAction
+        run.rejectedBy = r.rejectedBy
+        // The raw fallback inserts the transcript the guard measured against.
+        if r.rejectedBy == "length" { run.lengthLimit = Pipeline.maxCleanupLength(text) }
         if r.skippedLLM { run.skippedLLM = true }
         if let e = expectAction, let m = r.modelAction { run.modelActionOK = Self.family(e) == Self.family(m) }
         return run
@@ -149,6 +152,9 @@ public struct BenchRun: Codable, Sendable {
     public var skippedLLM: Bool? = nil
     /// A dictation reply that differs from `output`: changed or rejected by code after the model.
     public var modelReply: String? = nil
+    /// `PipelineResult.rejectedBy`: the guard that made it a raw fallback, and for "length" its limit (#103).
+    public var rejectedBy: String? = nil
+    public var lengthLimit: Int? = nil
     public var passed: Bool { failures.isEmpty }
     /// A guard (insert ask, blank text) changed the model's action family.
     public var overridden: Bool { modelAction.map { BenchCase.family($0) != BenchCase.family(action) } ?? false }

@@ -1,0 +1,59 @@
+# mlx_lm.lora config for the E2B v6 adapter (#103): the one built-in model, dictation and edits. v4's recipe on
+# training/make_data_v6.zsh's data (gen.py m6 section): v4's families + #98's self-corrections (extra draws) + v7
+# mutations + the v8 real-use pool with its length-guard families + varied inserts and screen-name fixes, rule
+# targets wherever the generator knows the answer, E4B (prompt D, through Pipeline's guards) only for tone,
+# translation, rephrasing and run-on sentence breaks. Trained on Prompts.dictationSystem / editSystem as they are.
+#
+# Phase 2, from the repo root, outside the sandbox, with the GPU free (steps 2-3 hold it for hours):
+#   0. swift build -c release
+#   1. training/make_data_v6.zsh            speech (say + Parakeet) if training/out/heard.jsonl is missing, then the
+#                                           E4B teacher (1,240 inputs), build6, render, split6
+#      Sync iters to 40% of the real train rows (projected 13,370 below):
+#      n=$(wc -l < training/out/v6/data/train.jsonl); s=$((n * 2 / 5 / 4))
+#      sed -i '' -E "s/^iters: [0-9]+/iters: $((s * 4))/; s/(arguments: \[1\.0e-4, )[0-9]+/\1$s/; s/^steps_per_eval: [0-9]+/steps_per_eval: $((s * 2))/" training/lora-v6.yaml
+#   2. seed A: uv run --project training mlx_lm.lora --config training/lora-v6.yaml
+#   3. seed B: uv run --project training mlx_lm.lora --config training/lora-v6.yaml --seed 62 --adapter-path training/out/adapters-v6-s62
+#   4. The app and PoptalkBench load an adapter dir as is (LoRA layers on the text-only E2B base, unfused: fusing into 4-bit loses most of it): no fuse step.
+#      Weights stay untracked.
+#      for x in a:adapters-v6 b:adapters-v6-s62; do d=adapters/gemma-4-e2b-poptalk-v6${x%%:*}; mkdir -p $d
+#        cp training/out/${x#*:}/{adapter_config.json,adapters.safetensors} $d/; done
+#   5. Bench back to back on the same build, nothing else on the GPU (E4B runs its live prompt, D):
+#      for m in adapters/gemma-4-e2b-poptalk-v6a adapters/gemma-4-e2b-poptalk-v6b mlx-community/gemma-4-e4b-it-4bit; do
+#        training/bench.zsh $m --out bench/results/e2b-v6; done
+#      for m in (same three); do .build/release/PoptalkBench --provider mlx --cleanup-model $m --runs 3 --filter 'd-*' \
+#        --out bench/results/e2b-v6/quiet; done                                     # latency on a quiet machine
+#      .build/release/PoptalkBench --compare <v6 -h.json> <E4B -h.json>            # footprintMB: each JSON's provider
+#   6. Replay real history (counts only), back to back:
+#      for m in (same three); do scripts/replay.zsh --model $m; done
+#
+# Ship gate, all from step 5-6 in one session (today's E4B-D numbers in brackets; use the session's own):
+#   held-out h >= E4B-D's (201/264); held-out edits h-e-* >= 95/105; bench d >= v4's 150/183;
+#   replay raw fallbacks <= E4B-D's (10 of 400); quiet d p50 and footprint recorded (v4 0.15 s / 1.5 GB,
+#   E4B 0.26 s / 2.85 GB). Pick the seed that passes with the better held-out, then fewer raw fallbacks.
+model: mlx-community/gemma-4-e2b-it-4bit
+train: true
+data: training/out/v6/data
+adapter_path: training/out/adapters-v6   # seed A (61); seed B (62) -> training/out/adapters-v6-s62
+fine_tune_type: lora
+mask_prompt: true          # loss on the assistant turn only
+num_layers: 16             # last 16 of 35 layers: halves backward cost vs all layers
+batch_size: 1
+grad_accumulation_steps: 4   # effective batch 4; batch 4 pushed a shared 24 GB Mac into swap (262k-vocab logits)
+iters: 5388                # micro-batches = 1,347 optimizer steps, ~40% of 13,470 train rows (v4: 3,244 of 8,114)
+learning_rate: 1.0e-4
+lr_schedule:
+  name: cosine_decay
+  warmup: 10
+  arguments: [1.0e-4, 1347, 1.0e-6]   # decay over the optimizer steps
+steps_per_report: 100
+steps_per_eval: 2694
+val_batches: 60
+save_every: 300
+max_seq_length: 3072       # longest v6 row ~9,300 characters, about 2,300 tokens
+grad_checkpoint: true
+seed: 61
+lora_parameters:
+  keys: [self_attn.q_proj, self_attn.k_proj, self_attn.v_proj, self_attn.o_proj, mlp.gate_proj, mlp.up_proj, mlp.down_proj]
+  rank: 16
+  scale: 2.0
+  dropout: 0.0

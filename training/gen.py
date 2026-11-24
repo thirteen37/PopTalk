@@ -8,7 +8,9 @@
   gen.py teach            → out/teach.jsonl       edit items whose target comes from the E4B teacher
   gen.py build            → out/items.jsonl       every item with its target, filtered and contamination-checked
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
-  gen.py check            → asserts the v5, v6 and v7 families are registered and shaped right (writes nothing)
+  gen.py v8               → out/pool-v8/{train,val}.jsonl  dictation pool matched to real use (#103), for GEPA and E2B data
+  gen.py teach6 / build6 / split6   the same three stages for the E2B v6 adapter, in out/v6/ (make_data_v6.zsh)
+  gen.py check            → asserts the v5–v7 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
@@ -24,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lexicon as L  # noqa: E402
 from contamination import Checker  # noqa: E402
+import pool_profile as P  # noqa: E402
 
 OUT = Path("training/out")
 VOICES = ["Samantha", "Daniel", "Karen", "Moira", "Rishi", "Aman", "Fred", "Kathy", "Ralph", "Eddy (English (US))",
@@ -1286,6 +1289,586 @@ def check_v7():
           + f"; {dict(sorted(combos.items()))} mutators per item; {len(items)} d-mutated, 0 contaminated")
 
 
+# ---------- v8: a pool matched to real use (#103) ----------
+# pool_profile.py (counts only) showed real dictations are short, punctuated and cased by Parakeet, said over long
+# screens (mostly a coding agent's terminal), with few cues and fillers that are almost all "uh"/"um". v8 is a separate
+# pool built to that profile: base items whose target is the transcript minus its fillers (questions and requests to
+# "you" included: never answered), plus the targeted families (self-corrections, cancellations, v7 mutations) capped
+# at V8_TARGETED. The real rates below are pool_profile.py's whole-percent aggregates, never text.
+
+V8_WORDS = [((1, 5), 31), ((6, 15), 48), ((16, 40), 18), ((41, 100), 3)]
+V8_SCREENS = [((1, 500), 3), ((501, 2000), 16), ((2001, 4000), 26), ((4001, 6900), 55)]  # within Prompts.window
+V8_REAL = {"punct": 96, "multi": 16, "vocab": 12, "screenHit": 8, "uhum": 3.2}
+V8_N = {"val": 120, "train": 1500}
+V8_TARGETED = 0.12
+V8_TARGETED_MIX = {"d-mutated": 40, "d-correction-text": 15, "d-correct-later": 12, "d-restate": 10, "d-instead": 10,
+                   "d-cancel": 13}
+# Base families by length bucket (weights). d-guard-*: questions, requests and answer-like screens that tempt the model
+# to answer, add or echo (the length-guard rejections in replay); the target is still the cleaned transcript.
+V8_CATS = {(1, 5): {"d-v8-short": 70, "d-guard-short": 20, "d-guard-answer": 4, "d-v8-names": 6},
+           (6, 15): {"d-v8-say": 48, "d-v8-names": 12, "d-guard-ask": 16, "d-guard-do": 14, "d-guard-answer": 10},
+           (16, 40): {"d-v8-long": 55, "d-v8-names": 5, "d-guard-ask": 15, "d-guard-do": 15, "d-guard-answer": 10},
+           (41, 100): {"d-v8-long": 55, "d-guard-ask": 20, "d-guard-do": 15, "d-guard-answer": 10}}
+V8_FILLER_P = 0.036  # "uh"/"um" per base word: with the targeted items, about the real 3.2 per 100 words
+V8_SHORTS = L.V8_SHORT + L.AGENT_SHORT + [i for i in L.IMPERATIVES if len(i.split()) <= 4]
+V8_DEV_SAYS = L.AGENT_SAID + L.V8_DEV + L.MULTI_STATEMENTS
+V8_LIFE_SAYS = L.PLAIN + L.KEEP_OPENERS + [i for i in L.IMPERATIVES if len(i.split()) > 4]
+V8_ASKS = L.V8_ASK_YOU + [s for s in L.MULTI_REQUESTS if "you know" not in s]  # real use has no "you know"
+V8_DOC = L.FILLER + L.PLAIN + L.MULTI_STATEMENTS
+V8_SUBJECTS = {"The", "I", "I'm", "I'll", "I've", "I'd", "It", "It's", "We", "We're", "That", "That's", "This", "Our",
+               "My", "Nothing", "Half", "Most", "There", "There's", "They", "Someone", "Everyone", "Traffic"}
+V8_REPEATS = 4  # the same transcript at most this often per split
+
+
+def v8_words(s):
+    return len(re.findall(r"[\w']+", s))
+
+
+def quota(n, weights):
+    """n split by weights, largest remainder first."""
+    raw = [n * w / sum(weights) for w in weights]
+    q = [int(x) for x in raw]
+    for i in sorted(range(len(raw)), key=lambda i: q[i] - raw[i])[: n - sum(q)]:
+        q[i] += 1
+    return q
+
+
+def v8_slots(r):
+    """Slot values shared by one agent block or V8_QA pair."""
+    a, b = ident(r)[0], ident(r)[0]
+    d, (t1, t2) = r.choice(L.V8_DIRS), r.sample(L.V8_TESTS, 2)
+    f = re.sub(r"(?<!^)(?=[A-Z])", "_", a).lower() if r.random() < 0.4 else a
+    return {"id": a, "id2": b, "dir": d, "path": f"{d}/{f}{r.choice(L.V8_EXTS)}", "testfile": f"tests/{ident(r)[0]}.test.ts",
+            "test": t1, "test2": t2, "cmd": r.choice(L.V8_CMDS), "n": str(r.randint(2, 240)), "m": str(r.randint(1, 9)),
+            "P": person(r)[0], "P2": person(r)[0], "D": r.choice(L.DAYS)}
+
+
+def v8_fill(r, tmpl, vals=None):
+    vals = vals or v8_slots(r)
+    return re.sub(r"\{(\w+)\}", lambda m: str(r.randint(10, 400)) if m.group(1) == "ln" else vals.get(m.group(1), m.group(0)), tmpl)
+
+
+def v8_line(r, kind):
+    """One line (or block) of an invented screen of this kind."""
+    if kind == "agent":
+        x = r.random()
+        if x < 0.45:
+            return v8_fill(r, r.choice(L.V8_AGENT_BLOCKS))
+        if x < 0.75:
+            return "⏺ " + v8_fill(r, r.choice(L.V8_AGENT_SAYS))
+        return r.choice(L.AGENT_LINES) if x < 0.88 else "> " + r.choice(V8_DEV_SAYS)  # an earlier prompt in the scrollback
+    if kind == "chat":
+        return f"{person(r)[0]}  {r.randint(8, 11)}:{r.randint(0, 59):02d} AM\n{r.choice(L.V8_CHAT + L.CHAT_LINES)}"
+    if kind == "mail":
+        return "> " + r.choice(L.MAIL_LINES + V8_DOC)
+    if kind == "web" and r.random() < 0.15:
+        return r.choice(L.V8_WEB_CHROME)
+    return r.choice(L.TITLES) if r.random() < 0.15 else " ".join(r.sample(V8_DOC, r.randint(2, 4)))
+
+
+def v8_body(r, kind, budget, avoid):
+    out, size, miss = [], 0, 0
+    while miss < 30:
+        line = v8_line(r, kind)
+        if any(a in line for a in avoid) or size + len(line) + 1 > budget:
+            miss += 1
+            continue
+        out.append(line)
+        size += len(line) + 1
+    return out
+
+
+def v8_tail(lines, budget):
+    """The last lines that fit in budget: what OCR reads of the visible end of a long field."""
+    out = []
+    for line in reversed(lines):
+        if sum(len(x) + 1 for x in out) + len(line) + 1 > budget:
+            break
+        out.insert(0, line)
+    return out
+
+
+def screen_len(ctx):  # as pool_profile.py counts it
+    return len("\n".join(s for s in (ctx.get("ocrText"), ctx.get("text")) if s))
+
+
+def v8_screen(r, lo, hi, near=(), kinds=None, avoid=()):
+    """An invented screen of lo–hi characters, all inside Prompts.window (field text ≤ 4000 with the cursor at its
+    end or in a reply field, OCR ≤ 3000), with the `near` lines just above the cursor."""
+    near = [x for x in near if x]
+    for _ in range(100):
+        total = r.randint(lo, hi)
+        caps = {"chat": 3000, "web": 3000, "mail": 4000, "agent": 6990, "doc": 6990}
+        ks = [(k, w) for k, w in [("agent", 75), ("chat", 9), ("doc", 8), ("mail", 5), ("web", 3)]
+              if caps[k] >= total and (kinds is None or k in kinds)]
+        if not ks:
+            continue
+        kind = r.choices([k for k, _ in ks], [w for _, w in ks])[0]
+        fixed = sum(len(x) + 1 for x in near)
+        if kind in ("agent", "doc"):
+            field = total if total <= 4000 else r.randint(max(3000, total - 2990), 4000)  # OCR ≤ 3000
+            end = v8_fill(r, r.choice(L.V8_AGENT_ENDS)) if kind == "agent" and r.random() < 0.6 else ""
+            tail = "\n\n> " if kind == "agent" else "\n\n"
+            body = v8_body(r, kind, field - fixed - len(end) - len(tail) - 1, avoid)
+            if kind == "doc":
+                r.shuffle(body)  # short headings fill the budget last: spread them out
+            for x in near:
+                body.insert(r.randint(max(0, len(body) - 2), len(body)), x)
+            text = "\n".join(body + ([end] if end else [])) + tail
+            if kind == "agent":
+                app, win = r.choice(L.AGENT_APPS)
+                win = win.format(w=r.choice(L.REPO_WORDS))
+            else:
+                app, win = r.choice([("Notes", r.choice(L.TITLES)), ("Google Docs", f"{invented(r)[0]} spec"), ("Notion", invented(r)[0])])
+            ctx = {"appName": app, "windowTitle": win, "text": text, "cursorOffset": utf16(text)}
+            if total > len(text) + 1:  # a long field: OCR also reads its visible end, under the window title
+                ctx["ocrText"] = "\n".join([win] + v8_tail(text.rstrip("> \n").split("\n"), total - len(text) - len(win) - 2))
+        elif kind == "mail":
+            head = f"Hi {person(r)[0]},\n\n"
+            quoted = v8_body(r, "mail", total - len(head) - fixed - 40, avoid)
+            text = head + f"\n\nOn {r.choice(L.DAYS)}, {person(r)[0]} wrote:\n" + "\n".join(["> " + x for x in near] + quoted)
+            ctx = {"appName": "Mail", "windowTitle": f"Re: {r.choice(L.TITLES)}", "text": text, "cursorOffset": utf16(head)}
+        else:  # a thread or page read by OCR, the cursor in an empty field
+            body = v8_body(r, kind, total - fixed - 1, avoid)
+            r.shuffle(body)
+            for x in near:
+                body.insert(r.randint(max(0, len(body) - 2), len(body)), x)
+            app, win = (("Slack", r.choice(L.CHANNELS)) if r.random() < 0.6 else ("Messages", person(r)[0])) if kind == "chat" \
+                else ("Safari", f"{r.choice(L.TITLES)} – {invented(r)[0]}")
+            ctx = {"appName": app, "windowTitle": win, "text": "", "cursorOffset": 0, "ocrText": "\n".join(body)}
+        if lo <= screen_len(ctx) <= hi and all(x in (ctx.get("text", "") + ctx.get("ocrText", "")) for x in near):
+            return ctx
+    raise AssertionError(f"no {lo}–{hi} screen for {kinds}")
+
+
+def v8_um(r, t, k):
+    """Adds k "uh"/"um" as Parakeet writes them: "Uh, the build…", "I think, um, we…", "the uh logs"."""
+    ws = t.split()
+    for _ in range(k):
+        f = r.choices(["uh", "um"], [63, 37])[0]
+        i = r.choice([j for j in range(len(ws)) if j == 0 or ws[j - 1][-1] in ".!?"]) if r.random() < 0.4 else r.randrange(len(ws))
+        if i == 0 or ws[i - 1][-1] in ".!?":
+            ws[i] = decap(ws[i])
+            ws.insert(i, cap(f) + ",")
+        elif ws[i - 1].endswith(",") or r.random() < 0.3:
+            ws[i - 1] += "" if ws[i - 1].endswith(",") else ","
+            ws.insert(i, f + ",")
+        else:
+            ws.insert(i, f)
+    return " ".join(ws)
+
+
+def v8_join(r, parts):
+    """Sentences run into one: "The build is green, so let's merge it." None if one of them isn't a statement."""
+    if len(parts) == 1:
+        return parts[0]
+    if any(p[-1] != "." for p in parts[:-1]):
+        return None
+    out = parts[0][:-1]
+    for k, p in enumerate(parts[1:], 1):
+        first, *rest = p.split(" ", 1)
+        # "because"/"since" only before a statement; a command joins with "and" ("Skip it, and run the tests.")
+        joins = L.V8_JOINS if first in V8_SUBJECTS else [", and ", " and then "]
+        out += r.choice(joins) + " ".join([decap(first)] + rest)[: None if k == len(parts) - 1 else -1]
+    return out
+
+
+def v8_core(r, cat, short):
+    """(sentence, its entities, lines for the screen near the cursor, screen kinds, fill pool) for a base family."""
+    dev = r.random() < 0.8
+    pool = V8_DEV_SAYS if dev else V8_LIFE_SAYS
+    if cat == "d-v8-short":
+        s, ents = fill(r, r.choice(V8_SHORTS))
+        return sentence(s), ents, [], None, V8_SHORTS
+    if cat == "d-guard-short":
+        return r.choice(L.V8_SHORT_ASK), [], [], None, V8_SHORTS
+    if cat == "d-v8-names":
+        s, ents = fill(r, r.choice(L.V8_SHORT_NAMED if short else L.NAMED))
+        return s, ents, [mention(r, e) for e in ents] if r.random() < 0.7 else [], None, pool
+    if cat == "d-guard-ask":
+        return r.choice(V8_ASKS), [], [], None, pool
+    if cat == "d-guard-do":
+        return r.choice(L.V8_DO_YOU), [], [], None, pool
+    if cat == "d-guard-answer":
+        q, a = r.choice(L.V8_QA)
+        vals = v8_slots(r)
+        a = v8_fill(r, a, vals)
+        return v8_fill(r, q, vals), [], [a], ["agent"] if a.startswith(("⏺", "  ⎿")) else ["doc", "web", "chat", "mail"], pool
+    s, ents = fill(r, r.choice(pool))
+    return sentence(s), ents, [], None, pool
+
+
+def v8_base(r, spec, avoid, debt):
+    """One base item for spec, or None if this draw doesn't fit it."""
+    (lo, hi), cat = spec["words"], spec["cat"]
+    core, ents, near, kinds, pool = v8_core(r, cat, hi <= 5)
+    parts = [core]
+    while v8_words(" ".join(parts)) < lo:  # fill up to the bucket; a question or request stays last
+        s, e = fill(r, r.choice(pool if hi > 5 else V8_SHORTS))
+        parts.insert(r.randrange(len(parts)), sentence(s))
+        ents += e
+    if spec["multi"] and len(parts) == 1:
+        s, e = fill(r, r.choice(V8_SHORTS if hi <= 15 else pool))
+        parts.insert(0, sentence(s))
+        ents += e
+    # A question or request to "you" stays its own sentence: "…, so who's presenting first?" reads like no dictation.
+    target = " ".join(parts) if spec["multi"] else None if cat.startswith("d-guard") and len(parts) > 1 else v8_join(r, parts)
+    if not target or not lo <= v8_words(target) <= hi or target in avoid:
+        return None
+    t = v8_um(r, target, int(debt + V8_FILLER_P * v8_words(target)))  # carried over: the split's rate is exact
+    if spec["drop"]:
+        t = t.rstrip(".!?")
+    if not lo <= v8_words(t) <= hi or bool(re.search(r"[.!?]\s+\S", t)) != spec["multi"] or t in avoid:
+        return None
+    ctx = v8_screen(r, *spec["screen"], near=near, kinds=kinds, avoid=parts)
+    it = {"cat": cat, "transcript": t, "context": ctx, "target": target}
+    if spec["vocab"]:
+        terms = [x for x, _ in L.TECH + L.PEOPLE + L.SOUNDALIKE_TERMS] + [invented(r)[0] for _ in range(5)]
+        terms = [x for x in dict.fromkeys(r.sample(terms, 12)) if not P.word_in(x, t) and not P.word_in(x, target)]
+        it["vocabulary"] = [{"text": x, "aliases": [], "weight": 10} for x in terms[: r.randint(2, 8)]]
+    return it
+
+
+def v8_bucket(n, buckets):
+    return next((i for i, ((lo, hi), _) in enumerate(buckets) if n <= hi), len(buckets) - 1)
+
+
+def v8_targeted_ok(it):
+    """Targeted items as Parakeet would deliver them: punctuated and cased, fillers only "uh"/"um" (no "I mean",
+    filler or cue), and no saved term said verbatim (0% in real use)."""
+    t = it["transcript"]
+    return (bool(re.search(r"[.!?]", t)) and t != t.lower() and not re.search(r"\b(you know|basically|like|I mean)\b", t, re.I)
+            and not any(P.word_in(v["text"], t) for v in it.get("vocabulary") or []))
+
+
+def v8_split(n, seed, cands, checker, taken=frozenset()):
+    """n items matched to the real profile by quota (length, screen length, 2+ sentences, vocabulary, punctuation),
+    V8_TARGETED of them from the targeted families. `taken`: ids and 6+ word transcripts the other split used."""
+    r = R(seed)
+    targeted = []
+    for (cat, _), k in zip(V8_TARGETED_MIX.items(), quota(round(n * V8_TARGETED), list(V8_TARGETED_MIX.values()))):
+        free = [it for it in cands[cat] if it["id"] not in taken and it["transcript"] not in taken]
+        targeted += r.sample(free, min(k, len(free)))  # a larger n (v6's E2B data) runs out: the base fills the rest
+    rows = [P.row(it["transcript"], "x", [v["text"] for v in it.get("vocabulary") or []]) for it in targeted]
+    wq = quota(n, [w for _, w in V8_WORDS])
+    for x in rows:
+        wq[v8_bucket(x["words"], V8_WORDS)] -= 1
+    sq = quota(n, [w for _, w in V8_SCREENS])
+    out = []
+    for it in targeted:  # long screens stay (a fix may depend on them); short ones move onto a realistic screen
+        if screen_len(it.get("context") or {}) > 500:
+            sq[v8_bucket(screen_len(it["context"]), V8_SCREENS)] -= 1
+            out.append(it)
+    screens = [b for (b, _), k in zip(V8_SCREENS, sq) for _ in range(max(0, k))]
+    r.shuffle(screens)
+    for it in targeted:
+        if it in out:
+            continue
+        ctx = it.get("context") or {}
+        near = [x for s in (ctx.get("ocrText"), ctx.get("text")) if s for x in s.split("\n") if x.strip()]
+        b = screens.pop()
+        while checker.reason(moved := it | {"context": v8_screen(r, *b, near=near)}):
+            pass
+        out.append(moved)
+    out = [it | {"from": it["id"]} for it in out]
+    # Base specs: length bucket by quota, then 2+ sentences (all 41+, ~5% of 6–15, then 16–40), vocabulary, no final mark.
+    specs = [{"words": b, "screen": screens.pop() if screens else V8_SCREENS[-1][0], "multi": False, "vocab": False,
+              "drop": False} for (b, _), k in zip(V8_WORDS, wq) for _ in range(max(0, k))]
+    r.shuffle(specs)
+    by = lambda b: [s for s in specs if s["words"] == b]
+    want = round(n * V8_REAL["multi"] / 100) - sum(x["multi"] for x in rows)
+    b2 = by((6, 15))
+    order = by((41, 100)) + b2[: round(0.05 * len(b2))] + by((16, 40)) + b2[round(0.05 * len(b2)):] + by((1, 5))
+    for s in order[: max(0, want)]:
+        s["multi"] = True
+    for s in r.sample(specs, round(n * V8_REAL["vocab"] / 100) - sum(bool(it.get("vocabulary")) for it in targeted)):
+        s["vocab"] = True
+    for s in r.sample([s for s in specs if not s["multi"]], round(n * (100 - V8_REAL["punct"]) / 100)):
+        s["drop"] = True
+    for b, cats in V8_CATS.items():  # guard families first, onto the 2+ sentence specs (see v8_base)
+        ss = sorted(by(b), key=lambda s: not s["multi"])
+        cats = dict(sorted(cats.items(), key=lambda c: not c[0].startswith("d-guard")))
+        for s, c in zip(ss, [c for c, k in zip(cats, quota(len(ss), list(cats.values()))) for _ in range(k)]):
+            s["cat"] = "d-v8-long" if c.startswith("d-guard") and not s["multi"] and b[0] > 15 else c
+    seen, debt = Counter(it["transcript"] for it in out), 0.0
+    for spec in specs:
+        for _ in range(500):
+            it = v8_base(r, spec, taken, debt)
+            if it and seen[it["transcript"]] < max(V8_REPEATS, V8_REPEATS * n // V8_N["train"]) and not checker.reason(it):
+                break
+        else:
+            raise AssertionError(f"no item for {spec}")
+        seen[it["transcript"]] += 1
+        debt += V8_FILLER_P * v8_words(it["target"]) - (v8_words(it["transcript"]) - v8_words(it["target"]))
+        out.append(it)
+    r.shuffle(out)
+    return [{"id": f"v8-{seed.split('-')[-1]}-{k}"} | {x: v for x, v in it.items() if x != "id"} for k, it in enumerate(out)]
+
+
+def v8_pools(n=V8_N["train"], seed="v8-train"):
+    """(train, val): val first, then train with none of val's targeted items or 6+ word transcripts. E2B v6's data
+    draws a larger train (n, seed) the same way, so GEPA's val stays out of it too."""
+    checker, cands = Checker(), {c: [] for c in V8_TARGETED_MIX}
+    for it in program_items():
+        if it["cat"] in cands and v8_targeted_ok(it) and not checker.reason(it):
+            cands[it["cat"]].append(it)
+    val = v8_split(V8_N["val"], "v8-val", cands, checker)
+    taken = {it.get("from") for it in val} | {it[k] for it in val if v8_words(it["transcript"]) > 5 for k in ("transcript", "target")}
+    return v8_split(n, seed, cands, checker, frozenset(taken - {None})), val
+
+
+def v8_profile(items):
+    """pool_profile.py's rows for items, as rates: {key: percent or per-100-words}."""
+    rows = [P.row(it["transcript"], "\n".join(s for s in (it["context"].get("ocrText"), it["context"].get("text")) if s),
+                  [v["text"] for v in it.get("vocabulary") or []]) for it in items]
+    pct = lambda f, base=rows: 100 * sum(1 for x in base if f(x)) / max(1, len(base))
+    words = sum(x["words"] for x in rows)
+    out = {f"words {lo}–{hi}": pct(lambda x, lo=lo, hi=hi: lo <= x["words"] <= hi) for (lo, hi), _ in V8_WORDS}
+    out |= {f"screen {lo}–{hi}": pct(lambda x, lo=lo, hi=hi: lo <= x["screen"] <= hi) for (lo, hi), _ in V8_SCREENS}
+    vocab = [x for x in rows if x["vocab"]]
+    return out | {"punct": pct(lambda x: x["punct"]), "lower": pct(lambda x: x["lower"]), "multi": pct(lambda x: x["multi"]),
+                  "vocab": pct(lambda x: x["vocab"]), "vocabHit": pct(lambda x: x["vocabHit"], vocab),
+                  "screenHit": pct(lambda x: x["screenHit"]), "cue": pct(lambda x: x["cue"]), "strong": pct(lambda x: x["strong"]),
+                  "uhum": 100 * sum(x["uh"] + x["um"] for x in rows) / words,
+                  "other fillers": 100 * sum(x["you know"] + x["basically"] for x in rows) / words}
+
+
+def check_v8():
+    """`gen.py check`: both v8 splits match the real profile (shares within a few points), keep the targeted share in
+    range, base targets are their transcripts minus fillers, and nothing is contaminated."""
+    train, val = v8_pools()
+    checker = Checker()
+    real = {f"words {lo}–{hi}": w for (lo, hi), w in V8_WORDS} | {f"screen {lo}–{hi}": w for (lo, hi), w in V8_SCREENS} \
+        | {k: v for k, v in V8_REAL.items()}
+    tol = {"uhum": 0.8}
+    for name, items, n in (("train", train, V8_N["train"]), ("val", val, V8_N["val"])):
+        assert len(items) == n and len({it["id"] for it in items}) == n, (name, len(items))
+        prof = v8_profile(items)
+        # Screen-term hits aren't set by quota (they follow from names on screen): wider, more so for the small val.
+        tol["screenHit"] = 5 if name == "train" else 6
+        off = {k: round(prof[k], 1) for k, v in real.items() if abs(prof[k] - v) > tol.get(k, 3)}
+        assert not off, f"{name} off the real profile: {off}"
+        assert prof["lower"] <= 2 and prof["vocabHit"] == 0 and prof["other fillers"] == 0, (name, prof)
+        base = [it for it in items if "from" not in it]
+        bp = v8_profile(base)
+        assert bp["cue"] <= 8 and bp["strong"] <= 2, (name, "base cues", bp["cue"], bp["strong"])
+        share = 100 * (n - len(base)) / n
+        assert 10 <= share <= 15, (name, share)
+        for it in items:
+            assert screen_len(it["context"]) > 0 and not checker.reason(it), it["id"]
+            y = it["target"]
+            assert y[0].isupper() and y[-1] in ".!?", it
+        for it in base:  # the target is what was said, fillers out: nothing answered, added or echoed
+            assert [w for w in norm(it["transcript"]) if w not in ("uh", "um")] == norm(it["target"]), it
+        guard = Counter(it["cat"] for it in base if it["cat"].startswith("d-guard"))
+        print(f"v8 check ok ({name}): {n} items, {share:.0f}% targeted, guard {dict(sorted(guard.items()))}, "
+              f"base cue {bp['cue']:.0f}%, 0 contaminated")
+    long_t = {it["transcript"] for it in val if v8_words(it["transcript"]) > 5}
+    froms = lambda items: {it["from"] for it in items if "from" in it}
+    assert not long_t & {it["transcript"] for it in train} and not froms(val) & froms(train), "val overlaps train"
+
+
+# ---------- E2B v6 model data (#103): one built-in model for dictation and edits ----------
+# Not the "v6 families" above (#98's self-corrections): the data the E2B v6 adapter trains on. build6 = build's items
+# (audio, every rule family, the tone/translate/rephrase edits) + the v8 pool at M6_V8_N (GEPA's v8 val kept out) + the
+# m6 families below. Rule targets wherever the generator knows the answer; the teacher (E4B on its own prompts, D for
+# dictation, run through Pipeline by `PoptalkDatagen pipeline`) only where it doesn't: tone, translation, rephrasing,
+# and where an unpunctuated run-on's sentences break. A teacher target counts only if no guard rejected the reply
+# (rejectedBy) and the item's own checks pass (m6_teacher).
+
+OUT6 = OUT / "v6"
+M6_V8_N = 2400
+M6_EXTRA = {"d-instead": 180, "d-cancel": 150, "d-restate": 130, "d-correct-later": 100}  # on top of V6's counts
+M6_N = {"d-correction-m6": 250, "e-insert-m6": 450, "e-context-m6": 250, "d-teach-runon": 400}
+ASKS_TO_INSERT = re.compile(r"\b(add|append|prepend|insert|before|after|at the (start|end|beginning|top|bottom))\b", re.I)
+
+
+def m6_screen(r, near=(), avoid=()):
+    """A screen with v8's real-use length mix."""
+    b = r.choices([b for b, _ in V8_SCREENS], [w for _, w in V8_SCREENS])[0]
+    return v8_screen(r, *b, near=near, avoid=avoid)
+
+
+def m6_dictation():
+    """More draws of #98's self-correction families (new seeds, new transcripts), and "A, cue, B" fixes as Parakeet
+    punctuates them, half over real-use screens."""
+    checker, out, seen = Checker(), [], {it["transcript"] for it in v6_dictation()}
+    def add(it):
+        if it["transcript"] in seen or checker.reason(it):
+            return False
+        seen.add(it["transcript"])
+        out.append(it)
+        return True
+    for cat, n in M6_EXTRA.items():
+        r, make, k = R(cat + "-m6"), V6[cat][1], 0
+        for _ in range(50 * n):
+            t, target = make(r)
+            ctx = m6_screen(r, avoid=[target]) if r.random() < 0.5 else unrelated_context(r)
+            k += add({"id": f"{cat}-m6-{k}", "cat": cat, "transcript": t, "context": ctx, "target": target})
+            if k == n:
+                break
+    r, k = R("d-correction-m6"), 0
+    while k < M6_N["d-correction-m6"]:
+        s, c = correction(r)
+        t = sentence(s) if r.random() < 0.7 else lower_transcript(s)
+        ctx = m6_screen(r, avoid=[c]) if r.random() < 0.5 else unrelated_context(r)
+        k += add({"id": f"d-correction-m6-{k}", "cat": "d-correction-m6", "transcript": t, "context": ctx, "target": c})
+    return out
+
+
+def m6_said(r):
+    """(as said, as written) for text to insert: a phrase, a command or a plain sentence, said lowercase, with a
+    filler, as written or as Parakeet punctuates it. Named text is said as written (its names keep their case)."""
+    x = r.random()
+    mid = lambda s: " ".join([decap(s.split(" ", 1)[0])] + s.split(" ", 1)[1:])  # mid-utterance: "We need" → "we need"
+    if x < 0.8:
+        w = (r.choice(L.PHRASES) if x < 0.3 else fill(r, r.choice(L.IMPERATIVES))[0] if x < 0.5
+             else r.choice([s for s in L.PLAIN + L.MULTI_STATEMENTS if s.endswith(".")])[:-1])
+        y = r.random()
+        said = lower_transcript(w) if y < 0.5 else add_fillers(r, w, 1).lower() if y < 0.65 else mid(w) if y < 0.85 else mid(w) + "."
+    else:
+        w = fill(r, r.choice([t for t in L.NAMED if t.endswith(".")]))[0][:-1]
+        said = mid(w)
+    return said, sentence(w)
+
+
+def m6_edits():
+    """Inserts said many ways (before, after, and inside a multi-sentence selection), and screen-name fixes said
+    more ways, including a casing-only fix ("kelp insurance" → the screen's "Kelp Insurance")."""
+    checker, out, r = Checker(), [], R("e-insert-m6")
+    sents = [s for s in L.PLAIN + L.MULTI_STATEMENTS if s.endswith(".")]
+    while len(out) < M6_N["e-insert-m6"]:
+        said, text = m6_said(r)
+        k, i = len(out), r.random()
+        if i < 0.35:
+            sel = r.choice(sents) if r.random() < 0.7 else " ".join(r.sample(sents, 2))
+            t, target = r.choice(L.M6_INSERT_AFTER).format(x=said), ej("insertAfter", " " + text)
+        elif i < 0.6:
+            sel = r.choice(sents) if r.random() < 0.7 else " ".join(r.sample(sents, 2))
+            t, target = r.choice(L.M6_INSERT_BEFORE).format(x=said), ej("insertBefore", text + " ")
+        else:  # inside the selection: the whole selection back with the sentence in place
+            ss = r.sample(sents, r.randint(2, 4))
+            where = r.choice(["after", "before", "last", "between"] if len(ss) > 2 else ["after", "between"])
+            j = {"after": r.randrange(min(3, len(ss) - 1)), "before": r.randrange(1, min(3, len(ss))),
+                 "last": len(ss) - 1, "between": r.randrange(min(2, len(ss) - 1))}[where]
+            pos = j if where in ("before", "last") else j + 1
+            t = r.choice(L.M6_INSERT_AT[where]).format(x=said, o=L.M6_ORDINALS[min(j, 2)], o2=L.M6_ORDINALS[min(j + 1, 2)])
+            sel, target = " ".join(ss), ej("edit", " ".join(ss[:pos] + [text] + ss[pos:]))
+        if text in sel:
+            continue
+        it = {"id": f"e-insert-m6-{k}", "cat": "e-insert-m6", "transcript": cap(t) if r.random() < 0.3 else t,
+              "selection": sel, "context": edit_ctx(r) if r.random() < 0.7 else m6_screen(r, avoid=[sel]), "target": target}
+        if not checker.reason(it):
+            out.append(it)
+    r, n = R("e-context-m6"), len(out)
+    while len(out) - n < M6_N["e-context-m6"]:
+        e = r.choice([person(r, r.random() < 0.4), invented(r), invented(r), tech(r)])
+        kind = "company" if e[2] == "company" else e[2] if e[2] in L.CONTEXT_FIX else "product"
+        sel = e[0].lower() if r.random() < 0.3 else r.choice(e[1])
+        if sel.replace(" ", "") == e[0].lower().replace(" ", "") and sel != e[0].lower() and " " not in sel:
+            sel = sel[: len(sel) // 2] + " " + sel[len(sel) // 2:]
+        if sel == e[0]:
+            continue
+        ctx = context(r, [e], long=r.random() < 0.45) if r.random() < 0.6 else m6_screen(r, near=[mention(r, e)])
+        it = {"id": f"e-context-m6-{len(out) - n}", "cat": "e-context-m6", "transcript": r.choice(L.M6_CONTEXT_FIX + L.CONTEXT_FIX[kind]), "selection": sel,
+              "context": ctx, "target": ej("correct", e[0], {"text": e[0], "aliases": [sel.lower()]})}
+        if not checker.reason(it):
+            out.append(it)
+    return out
+
+
+def m6_v8():
+    return v8_pools(M6_V8_N, "v8-m6")[0]
+
+
+def m6_runon(r, target):
+    """A target said as one run-on: Parakeet drops the stops between its sentences (or leaves commas), sometimes
+    all bare, sometimes with an "uh"/"um"."""
+    ss = re.split(r"(?<=[.!?])\s+", target)
+    for k in range(len(ss)):
+        if k:
+            first, *rest = ss[k].split(" ", 1)
+            ss[k] = " ".join([decap(first)] + rest)
+        if k < len(ss) - 1:
+            ss[k] = re.sub(r"[.!?]$", "," if r.random() < 0.35 else "", ss[k])
+    t = v8_um(r, " ".join(ss), r.choice([0, 0, 1]))
+    return lower_transcript(t) if r.random() < 0.3 else t
+
+
+def m6_teach_items():
+    """Teacher inputs: the tone/translate/rephrase edits, and 2–4 sentences of v8's sayings said as one run-on over
+    a real-use screen (the rule knows their words, not where E4B would break the sentences)."""
+    r, checker, out, seen = R("d-teach-runon"), Checker(), [], set()
+    while len(out) < M6_N["d-teach-runon"]:
+        parts = [sentence(fill(r, r.choice(V8_DEV_SAYS if r.random() < 0.8 else V8_LIFE_SAYS))[0]) for _ in range(r.randint(2, 4))]
+        target = " ".join(parts)
+        it = {"id": f"d-teach-runon-{len(out)}", "cat": "d-teach-runon", "transcript": m6_runon(r, target),
+              "context": m6_screen(r, avoid=parts), "rule": target}
+        if target not in seen and not checker.reason(it | {"target": target}):
+            seen.add(target)
+            out.append(it)
+    return teach_items() + out
+
+
+def m6_teacher(it, res):
+    """A teacher result ({label, output, reply, rejectedBy} from `PoptalkDatagen pipeline`) as a target, or None.
+    Edits: the JSON reply, through teacher_target's checks. Dictation: what Pipeline inserted, only when no guard
+    rejected the reply and it has exactly the rule target's words (fillers out; nothing answered, added or lost)."""
+    if it.get("selection"):
+        return teacher_target(it, res.get("reply") or "")
+    y = (res.get("output") or "").strip()
+    if res.get("rejectedBy") or res.get("label") != "Dictated" or not y or "\n" in y:
+        return None
+    return y if norm(y) == norm(it["rule"]) and y[0].isupper() and y[-1] in ".!?" else None
+
+
+def m6_words(s):
+    return [w for w in norm(s) if w not in ("uh", "um")]
+
+
+def check_m6():
+    """`gen.py check`: the m6 families are built as planned, inserts pass Pipeline.asksToInsert, targets are shaped
+    right, teacher targets are checked, and nothing is contaminated."""
+    d, e = m6_dictation(), m6_edits()
+    cats = Counter(it["cat"] for it in d + e)
+    want = M6_EXTRA | {c: M6_N[c] for c in ("d-correction-m6", "e-insert-m6", "e-context-m6")}
+    assert all(cats[c] >= 0.95 * n for c, n in want.items()), cats
+    checker = Checker()
+    for it in d + e:
+        assert not checker.reason(it), it["id"]
+        if not it.get("selection"):
+            y = it["target"]
+            assert y[0].isupper() and y[-1] in ".!?" and len(norm(y)) < len(norm(it["transcript"])), it
+            continue
+        j = json.loads(it["target"])
+        if it["cat"] == "e-context-m6":
+            ctx = it["context"]
+            assert j["text"] in (ctx.get("text") or "") + (ctx.get("ocrText") or "") and j["text"] != it["selection"], it
+        elif j["action"] in ("insertBefore", "insertAfter"):
+            assert ASKS_TO_INSERT.search(it["transcript"]) and j["text"].strip()[0].isupper() and j["text"].strip()[-1] == ".", it
+        else:
+            ss = re.split(r"(?<=[.!?]) ", it["selection"])
+            assert j["action"] == "edit" and all(s in j["text"] for s in ss) and len(re.split(r"(?<=[.!?]) ", j["text"])) == len(ss) + 1, it
+    for t in L.M6_INSERT_AFTER + L.M6_INSERT_BEFORE:
+        assert ASKS_TO_INSERT.search(t.format(x="")), t
+    rule = {"rule": "The build is green. Let's merge it.", "transcript": "the build is green let's merge it"}
+    ok = {"label": "Dictated", "output": " The build is green, so let's merge it."}
+    assert m6_teacher(rule, ok) is None  # "so" is new
+    assert m6_teacher(rule, ok | {"output": " The build is green. Let's merge it."})
+    assert m6_teacher(rule, ok | {"output": " The build is green, let's merge it."})
+    assert m6_teacher(rule, ok | {"output": " Uh, the build is green, let's merge it."}) is None  # a filler kept
+    assert m6_teacher(rule, {"label": "Dictated (raw)", "output": "the build is green let's merge it", "rejectedBy": "length"}) is None
+    v8, (_, val) = m6_v8(), v8_pools()
+    assert len(v8) == M6_V8_N and not {it["transcript"] for it in val if v8_words(it["transcript"]) > 5} & {it["transcript"] for it in v8}
+    teach = m6_teach_items()
+    runon = [it for it in teach if it["cat"] == "d-teach-runon"]
+    # Tone/translate/rephrase inputs are v4's, contamination-checked at build6 as before.
+    assert len(runon) == M6_N["d-teach-runon"] and all(not checker.reason(it) for it in runon), len(runon)
+    assert all(it["transcript"] != it["rule"] and m6_words(it["transcript"]) == m6_words(it["rule"]) for it in runon)
+    print("m6 check ok: " + ", ".join(f"{cats[c]} {c}" for c in want) + f"; v8 pool {len(v8)}; teacher inputs "
+          + ", ".join(f"{n} {c}" for c, n in Counter(it["cat"] for it in teach).items()) + "; 0 contaminated")
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -1466,69 +2049,99 @@ def program_items():
             + v7_dictation([it for it in t + v3 + v4 + v5 + v6 if not it.get("selection")]))
 
 
+def audio_items(skipped):
+    """The spoken dictations as Parakeet heard them (shared by build and build6), or none if not transcribed yet."""
+    if (OUT / "heard.jsonl").exists():
+        return audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
+    skipped["audio"] = "no heard.jsonl (PoptalkDatagen transcribe not run)"  # else the counts read as dropped *-audio
+    return []
+
+
+def taught(out, skipped, target):
+    """Teacher items from out/teach.jsonl whose result in out/teach_out.jsonl `target` accepts."""
+    if not (out / "teach_out.jsonl").exists():  # SKIP_TEACH=1: build without teacher items
+        n = len(jl(out / "teach.jsonl")) if (out / "teach.jsonl").exists() else 0
+        print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
+        skipped["teacher"] = "no teach_out.jsonl"
+        return []
+    results, kept = {o["id"]: o for o in jl(out / "teach_out.jsonl")}, Counter()
+    items = []
+    for it in jl(out / "teach.jsonl"):
+        if (t := target(it, results.get(it["id"], {}))):
+            items.append({k: v for k, v in it.items() if k not in ("lang", "rule")} | {"target": t})
+            kept[it["cat"]] += 1
+    print(f"teacher: {sum(kept.values())}/{len(results)} kept {dict(kept)}", file=sys.stderr)
+    return items
+
+
+def build(out, items, skipped, manifest):
+    """Dedupes and contamination-checks items; writes out/items.jsonl and the manifest."""
+    bad = [it["id"] for it in items if not list_keeps_casing(it)]
+    assert not bad, f"list targets must keep the dictated casing: {bad[:5]}"
+    checker, clean, seen, rejected = Checker(), [], set(), {}
+    for it in items:
+        key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True))
+        if key in seen:
+            continue
+        seen.add(key)
+        if (why := checker.reason(it)):
+            rejected[it["cat"]] = rejected.get(it["cat"], 0) + 1
+            print(f"contaminated {it['id']}: {why}", file=sys.stderr)
+            continue
+        clean.append(it)
+    write(out / "items.jsonl", clean)
+    manifest.write_text(json.dumps(
+        {"items": len(clean), "byCategory": dict(sorted(Counter(it["cat"] for it in clean).items())),
+         "contaminationRejected": rejected} | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
+
+
+def split(out, samples):
+    """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match."""
+    cats = {i["id"]: i["cat"] for i in jl(out / "items.jsonl")}
+    rows, dropped = [], {}
+    for row in jl(out / "rendered.jsonl"):
+        if (why := prepass_mismatch(row, cats[row["id"]])):
+            dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
+            print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
+        else:
+            rows.append(row)
+    print(f"split: {len(rows)} rows, dropped for pre-pass mismatch: {dropped}", file=sys.stderr)
+    R("split").shuffle(rows)
+    n = max(100, len(rows) // 25)
+    write(out / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
+    write(out / "data" / "train.jsonl", [{"messages": r["messages"]} for r in rows[n:]])
+    samples.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows[:40]))
+
+
 def main(cmd):
     if cmd == "check":
         check_v5()
         check_v6()
         check_v7()
+        check_v8()
+        check_m6()
+    elif cmd == "v8":
+        train, val = v8_pools()
+        write(OUT / "pool-v8" / "train.jsonl", train)
+        write(OUT / "pool-v8" / "val.jsonl", val)
     elif cmd == "speak":
         write(OUT / "speak.jsonl", speak_items())
     elif cmd == "teach":
         write(OUT / "teach.jsonl", teach_items())
     elif cmd == "build":
-        items, skipped = [], {}
-        if (OUT / "heard.jsonl").exists():
-            items += audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
-        else:  # the manifest says so, or its counts read as dropped *-audio categories
-            skipped["audio"] = "no heard.jsonl (PoptalkDatagen transcribe not run)"
-        items += program_items()
-        if not (OUT / "teach_out.jsonl").exists():  # SKIP_TEACH=1 make_data.zsh: build without teacher items
-            n = len(jl(OUT / "teach.jsonl")) if (OUT / "teach.jsonl").exists() else 0
-            print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
-            skipped["teacher"] = "no teach_out.jsonl"
-        else:
-            replies = {o["id"]: o["output"] for o in jl(OUT / "teach_out.jsonl")}
-            kept = 0
-            for it in jl(OUT / "teach.jsonl"):
-                if (t := teacher_target(it, replies.get(it["id"], ""))):
-                    items.append({k: v for k, v in it.items() if k != "lang"} | {"target": t})
-                    kept += 1
-            print(f"teacher: {kept}/{len(replies)} kept", file=sys.stderr)
-        bad = [it["id"] for it in items if not list_keeps_casing(it)]
-        assert not bad, f"list targets must keep the dictated casing: {bad[:5]}"
-        checker, clean, seen, rejected = Checker(), [], set(), {}
-        for it in items:
-            key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True))
-            if key in seen:
-                continue
-            seen.add(key)
-            if (why := checker.reason(it)):
-                rejected[it["cat"]] = rejected.get(it["cat"], 0) + 1
-                print(f"contaminated {it['id']}: {why}", file=sys.stderr)
-                continue
-            clean.append(it)
-        counts = {}
-        for it in clean:
-            counts[it["cat"]] = counts.get(it["cat"], 0) + 1
-        write(OUT / "items.jsonl", clean)
-        (Path("training") / "manifest.json").write_text(json.dumps(
-            {"items": len(clean), "byCategory": dict(sorted(counts.items())), "contaminationRejected": rejected}
-            | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
-    elif cmd == "split":
-        cats = {i["id"]: i["cat"] for i in jl(OUT / "items.jsonl")}
-        rows, dropped = [], {}
-        for row in jl(OUT / "rendered.jsonl"):
-            if (why := prepass_mismatch(row, cats[row["id"]])):
-                dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
-                print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
-            else:
-                rows.append(row)
-        print(f"split: {len(rows)} rows, dropped for pre-pass mismatch: {dropped}", file=sys.stderr)
-        R("split").shuffle(rows)
-        n = max(100, len(rows) // 25)
-        write(OUT / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
-        write(OUT / "data" / "train.jsonl", [{"messages": r["messages"]} for r in rows[n:]])
-        Path("training/samples.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows[:40]))
+        skipped = {}
+        items = audio_items(skipped) + program_items()
+        items += taught(OUT, skipped, lambda it, o: teacher_target(it, o.get("output", "")))
+        build(OUT, items, skipped, Path("training") / "manifest.json")
+    elif cmd == "teach6":
+        write(OUT6 / "teach.jsonl", m6_teach_items())
+    elif cmd == "build6":  # E2B v6 (#103): see the m6 section
+        skipped = {}
+        items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
+        items += taught(OUT6, skipped, m6_teacher)
+        build(OUT6, items, skipped, Path("training") / "manifest-v6.json")
+    elif cmd in ("split", "split6"):
+        split(OUT if cmd == "split" else OUT6, Path("training") / ("samples.jsonl" if cmd == "split" else "samples-v6.jsonl"))
     elif cmd == "heldout":
         keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
         write(Path("training/heldout.jsonl"), heldout(keys))

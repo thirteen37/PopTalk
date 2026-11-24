@@ -213,13 +213,13 @@ struct SettingsView: View {
                 default:
                     MLXModelPicker(label: "Dictation cleanup model", id: $mlxCleanupModel)
                     MLXModelPicker(label: "Edit model", id: $mlxEditModel)
-                    // #101: E4B needs about 3 GB; Apple's model runs in the system, outside PopTalk's memory.
-                    if ProcessInfo.processInfo.physicalMemory <= 8 << 30 {
+                    // #101: E4B needs about 3 GB (the default fine-tune about 1.6); Apple's model runs in the system.
+                    if ProcessInfo.processInfo.physicalMemory <= 8 << 30, [mlxCleanupModel, mlxEditModel].contains(ModelSettings.e4b) {
                         Text("Gemma 4 E4B uses about 3 GB of memory. On this Mac, Apple on-device may be the better choice.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                // Only E2B fine-tunes (local adapter folders since #101) use it.
+                // Only E2B fine-tunes (the default, #103, and local adapter folders) use it.
                 if provider == "mlx" && Pipeline.recasesTerms(mlxCleanupModel) {
                     Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
                     Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")

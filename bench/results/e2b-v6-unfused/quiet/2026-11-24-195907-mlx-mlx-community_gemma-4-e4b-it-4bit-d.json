@@ -1,0 +1,1896 @@
+{
+  "cases" : [
+    {
+      "id" : "d-meal-prep",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.5065469741821289
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.19026899337768555
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Refer to my Meal Prep project on Todoist.",
+          "seconds" : 0.18138504028320312
+        }
+      ]
+    },
+    {
+      "id" : "d-tuesday-no-thursday",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Tuesday\""
+          ],
+          "output" : "So let's meet on Tuesday or Thursday at three.",
+          "seconds" : 0.25541508197784424
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Tuesday\""
+          ],
+          "output" : "So let's meet on Tuesday or Thursday at three.",
+          "seconds" : 0.25030601024627686
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Tuesday\""
+          ],
+          "output" : "So let's meet on Tuesday or Thursday at three.",
+          "seconds" : 0.24983704090118408
+        }
+      ]
+    },
+    {
+      "id" : "d-friday",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.21226799488067627
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.21236896514892578
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you send me the report by Friday?",
+          "seconds" : 0.21348702907562256
+        }
+      ]
+    },
+    {
+      "id" : "d-priya-q3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Remind me to call Priya about the Q3 OKRs.",
+          "seconds" : 0.26949799060821533
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Remind me to call Priya about the Q3 OKRs.",
+          "seconds" : 0.2667210102081299
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Remind me to call Priya about the Q3 OKRs.",
+          "seconds" : 0.26897501945495605
+        }
+      ]
+    },
+    {
+      "id" : "d-fluidaudio",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.31383299827575684
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.2869589328765869
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll review the Kubernetes PR for FluidAudio this afternoon.",
+          "seconds" : 0.2196650505065918
+        }
+      ]
+    },
+    {
+      "id" : "d-filler-basically",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "So, the thing is we need to ship this by next week.",
+          "seconds" : 0.2839699983596802
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "So, the thing is we need to ship this by next week.",
+          "seconds" : 0.2889291048049927
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "So, the thing is we need to ship this by next week.",
+          "seconds" : 0.2860391139984131
+        }
+      ]
+    },
+    {
+      "id" : "d-sorry-four-pm",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"2\"",
+            "contains \"sorry\""
+          ],
+          "output" : "The meeting is at 2 PM, sorry, 4 PM in the main room.",
+          "seconds" : 0.34625792503356934
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"2\"",
+            "contains \"sorry\""
+          ],
+          "output" : "The meeting is at 2 PM, sorry, 4 PM in the main room.",
+          "seconds" : 0.34620797634124756
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"2\"",
+            "contains \"sorry\""
+          ],
+          "output" : "The meeting is at 2 PM, sorry, 4 PM in the main room.",
+          "seconds" : 0.3522709608078003
+        }
+      ]
+    },
+    {
+      "id" : "d-question-not-answered",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.2515360116958618
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.2497880458831787
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "What do you think about moving the launch to March?",
+          "seconds" : 0.2508770227432251
+        }
+      ]
+    },
+    {
+      "id" : "d-i-mean",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "Call me at nine, I mean 10 tomorrow.",
+          "seconds" : 0.26805901527404785
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "Call me at nine, I mean 10 tomorrow.",
+          "seconds" : 0.26072394847869873
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "Call me at nine, I mean 10 tomorrow.",
+          "seconds" : 0.2603529691696167
+        }
+      ]
+    },
+    {
+      "id" : "d-actually",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Book the table for six.",
+          "seconds" : 0.17329204082489014
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Book the table for six.",
+          "seconds" : 0.1737370491027832
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Book the table for six.",
+          "seconds" : 0.17034506797790527
+        }
+      ]
+    },
+    {
+      "id" : "d-no-invented-name",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We went to the store yesterday and bought some milk.",
+          "seconds" : 0.24010896682739258
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We went to the store yesterday and bought some milk.",
+          "seconds" : 0.23999202251434326
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We went to the store yesterday and bought some milk.",
+          "seconds" : 0.24080407619476318
+        }
+      ]
+    },
+    {
+      "id" : "d-filler-you-know",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I think we should just go with the first option.",
+          "seconds" : 0.23964297771453857
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I think we should just go with the first option.",
+          "seconds" : 0.24123704433441162
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I think we should just go with the first option.",
+          "seconds" : 0.24086010456085205
+        }
+      ]
+    },
+    {
+      "id" : "d-cjk-emoji-context",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "See you at the FluidAudio sync tomorrow.",
+          "seconds" : 0.2580530643463135
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "See you at the FluidAudio sync tomorrow.",
+          "seconds" : 0.22521507740020752
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "See you at the FluidAudio sync tomorrow.",
+          "seconds" : 0.16286301612854004
+        }
+      ]
+    },
+    {
+      "id" : "d-long-name-before-cursor",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The launch email should say Quillmate everywhere.",
+          "seconds" : 0.5143250226974487
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The launch email should say Quillmate everywhere.",
+          "seconds" : 0.5596580505371094
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The launch email should say Quillmate everywhere.",
+          "seconds" : 0.17583799362182617
+        }
+      ]
+    },
+    {
+      "id" : "d-long-ocr-thread",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll send the questionnaire to Tomasz Wrzesniewski today.",
+          "seconds" : 0.5443800687789917
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll send the questionnaire to Tomasz Wrzesniewski today.",
+          "seconds" : 0.5129979848861694
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll send the questionnaire to Tomasz Wrzesniewski today.",
+          "seconds" : 0.23804593086242676
+        }
+      ]
+    },
+    {
+      "id" : "d-long-emoji-utf16",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Welcome Kateryna Shevchuk-Oyelaran to the team.",
+          "seconds" : 0.8165609836578369
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Kateryna\"",
+            "missing \"Shevchuk-Oyelaran\""
+          ],
+          "lengthLimit" : 109,
+          "modelReply" : "Welcome Kateryna Shevchuk-Oyelaran to the team.\n\nNew hires start in March. Nobody objected to dropping the legacy export since usage is close to zero. The Helsinki",
+          "output" : "welcome katerina shevchuk oyelaran to the team",
+          "rejectedBy" : "length",
+          "seconds" : 1.135882019996643
+        },
+        {
+          "action" : "raw",
+          "failures" : [
+            "raw fallback",
+            "missing \"Kateryna\"",
+            "missing \"Shevchuk-Oyelaran\""
+          ],
+          "lengthLimit" : 109,
+          "modelReply" : "Welcome Kateryna Shevchuk-Oyelaran to the team.\n\nNew hires start in March. Nobody objected to dropping the legacy export since usage is close to zero. The Helsinki",
+          "output" : "welcome katerina shevchuk oyelaran to the team",
+          "rejectedBy" : "length",
+          "seconds" : 0.5649009943008423
+        }
+      ]
+    },
+    {
+      "id" : "d-actually-kept",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually like the new design a lot.",
+          "seconds" : 0.22122502326965332
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually like the new design a lot.",
+          "seconds" : 0.20732200145721436
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I actually like the new design a lot.",
+          "seconds" : 0.21007204055786133
+        }
+      ]
+    },
+    {
+      "id" : "d-multi-whose-job",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "One of my earlier dictations had quote and unquote, but those weren't translated properly. Whose job is that?",
+          "seconds" : 0.471856951713562
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "One of my earlier dictations had quote and unquote, but those weren't translated properly. Whose job is that?",
+          "seconds" : 0.4501669406890869
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "One of my earlier dictations had quote and unquote, but those weren't translated properly. Whose job is that?",
+          "seconds" : 0.40226006507873535
+        }
+      ]
+    },
+    {
+      "id" : "d-multi-configurable",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The delay when closing the overlay and also the time given to the user to press escape is a bit too short. Can we make it configurable?",
+          "seconds" : 0.5818140506744385
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The delay when closing the overlay and also the time given to the user to press escape is a bit too short. Can we make it configurable?",
+          "seconds" : 0.5483119487762451
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The delay when closing the overlay and also the time given to the user to press escape is a bit too short. Can we make it configurable?",
+          "seconds" : 0.4790610074996948
+        }
+      ]
+    },
+    {
+      "id" : "d-multi-can-you-check",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I pushed the fix to staging this morning. Can you check whether the login bug is gone?",
+          "seconds" : 0.3765439987182617
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I pushed the fix to staging this morning. Can you check whether the login bug is gone?",
+          "seconds" : 0.3762199878692627
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I pushed the fix to staging this morning. Can you check whether the login bug is gone?",
+          "seconds" : 0.37068700790405273
+        }
+      ]
+    },
+    {
+      "id" : "d-multi-three-sentences",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The slides are in the shared drive. I added two charts at the end. Could you take a look before lunch?",
+          "seconds" : 0.44209301471710205
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The slides are in the shared drive. I added two charts at the end. Could you take a look before lunch?",
+          "seconds" : 0.43651092052459717
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The slides are in the shared drive. I added two charts at the end. Could you take a look before lunch?",
+          "seconds" : 0.43762099742889404
+        }
+      ]
+    },
+    {
+      "id" : "d-multi-please-forward",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks for sending the invoice. The total looks right. Please forward it to accounting when you get a chance.",
+          "seconds" : 0.4133960008621216
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks for sending the invoice. The total looks right. Please forward it to accounting when you get a chance.",
+          "seconds" : 0.4104599952697754
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks for sending the invoice. The total looks right. Please forward it to accounting when you get a chance.",
+          "seconds" : 0.4169729948043823
+        }
+      ]
+    },
+    {
+      "id" : "d-multi-question-first",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Do we still need the old API tokens? I want to rotate them tonight and nobody seems to use them.",
+          "seconds" : 0.4147850275039673
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Do we still need the old API tokens? I want to rotate them tonight and nobody seems to use them.",
+          "seconds" : 0.4132089614868164
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Do we still need the old API tokens? I want to rotate them tonight and nobody seems to use them.",
+          "seconds" : 0.4132009744644165
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-quote-unquote",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "modelReply" : "I wanted to replace text and I said, \"replace this with,\" and it was just put verbatim.",
+          "output" : "I wanted to replace text and I said, “replace this with”, and it was just put verbatim.",
+          "seconds" : 0.4013330936431885
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "modelReply" : "I wanted to replace text and I said, \"replace this with,\" and it was just put verbatim.",
+          "output" : "I wanted to replace text and I said, “replace this with”, and it was just put verbatim.",
+          "seconds" : 0.3985179662704468
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "modelReply" : "I wanted to replace text and I said, \"replace this with,\" and it was just put verbatim.",
+          "output" : "I wanted to replace text and I said, “replace this with”, and it was just put verbatim.",
+          "seconds" : 0.39671099185943604
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-end-quote",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "modelReply" : "The error just says \"permission denied\" and nothing else.",
+          "output" : "The error just says “permission denied” and nothing else.",
+          "seconds" : 0.25982093811035156
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "modelReply" : "The error just says \"permission denied\" and nothing else.",
+          "output" : "The error just says “permission denied” and nothing else.",
+          "seconds" : 0.2559390068054199
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "modelReply" : "The error just says \"permission denied\" and nothing else.",
+          "output" : "The error just says “permission denied” and nothing else.",
+          "seconds" : 0.2562580108642578
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-lone-quote",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The final quote from the printer came in at $400.",
+          "seconds" : 0.28891801834106445
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The final quote from the printer came in at $400.",
+          "seconds" : 0.2881929874420166
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The final quote from the printer came in at $400.",
+          "seconds" : 0.28596198558807373
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-quote-mention",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "One of my dictations had quote and unquote, but the app turned them into quotation marks.",
+          "seconds" : 0.37798500061035156
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "One of my dictations had quote and unquote, but the app turned them into quotation marks.",
+          "seconds" : 0.3768860101699829
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "One of my dictations had quote and unquote, but the app turned them into quotation marks.",
+          "seconds" : 0.3749810457229614
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-new-paragraph",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Hi team.\n\nThe build is green and we ship tomorrow.",
+          "seconds" : 0.27066802978515625
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Hi team.\n\nThe build is green and we ship tomorrow.",
+          "seconds" : 0.27218496799468994
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Hi team.\n\nThe build is green and we ship tomorrow.",
+          "seconds" : 0.2767620086669922
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-new-line",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks for the quick review,\nBob",
+          "seconds" : 0.2006009817123413
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks for the quick review,\nBob",
+          "seconds" : 0.1992189884185791
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Thanks for the quick review,\nBob",
+          "seconds" : 0.19814491271972656
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-new-line-noun",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you draw a new line on the chart for the target?",
+          "seconds" : 0.26925790309906006
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you draw a new line on the chart for the target?",
+          "seconds" : 0.2741520404815674
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you draw a new line on the chart for the target?",
+          "seconds" : 0.2709050178527832
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-new-paragraph-noun",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Start a new paragraph in the doc for the risks section.",
+          "seconds" : 0.2563279867172241
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Start a new paragraph in the doc for the risks section.",
+          "seconds" : 0.2558499574661255
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Start a new paragraph in the doc for the risks section.",
+          "seconds" : 0.2588399648666382
+        }
+      ]
+    },
+    {
+      "id" : "d-fmt-parens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The deadline (tentative) is next Friday.",
+          "seconds" : 0.22513699531555176
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The deadline (tentative) is next Friday.",
+          "seconds" : 0.22326898574829102
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The deadline (tentative) is next Friday.",
+          "seconds" : 0.23175203800201416
+        }
+      ]
+    },
+    {
+      "id" : "d-num-compound",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Okay to proceed with 52, and for 51 let's strip it locally at first launch.",
+          "seconds" : 0.41104090213775635
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Okay to proceed with 52, and for 51 let's strip it locally at first launch.",
+          "seconds" : 0.41956400871276855
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Okay to proceed with 52, and for 51 let's strip it locally at first launch.",
+          "seconds" : 0.4201749563217163
+        }
+      ]
+    },
+    {
+      "id" : "d-num-units",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Conversion went up 25% and the plan costs $12 a month.",
+          "seconds" : 0.3406059741973877
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Conversion went up 25% and the plan costs $12 a month.",
+          "seconds" : 0.3406640291213989
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Conversion went up 25% and the plan costs $12 a month.",
+          "seconds" : 0.3447030782699585
+        }
+      ]
+    },
+    {
+      "id" : "d-num-time-cue",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's go through issue 3 and version 2 at 3:30 PM.",
+          "seconds" : 0.38914501667022705
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's go through issue 3 and version 2 at 3:30 PM.",
+          "seconds" : 0.3850209712982178
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's go through issue 3 and version 2 at 3:30 PM.",
+          "seconds" : 0.3805779218673706
+        }
+      ]
+    },
+    {
+      "id" : "d-num-small-words",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"one of my\""
+          ],
+          "output" : "One of my two teammates said a hundred times that one or two tests are flaky.",
+          "seconds" : 0.33904600143432617
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"one of my\""
+          ],
+          "output" : "One of my two teammates said a hundred times that one or two tests are flaky.",
+          "seconds" : 0.343593955039978
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"one of my\""
+          ],
+          "output" : "One of my two teammates said a hundred times that one or two tests are flaky.",
+          "seconds" : 0.33510708808898926
+        }
+      ]
+    },
+    {
+      "id" : "d-screen-dash-bullets",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The deploy finished early so I am heading out for lunch now.",
+          "seconds" : 0.37830400466918945
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The deploy finished early so I am heading out for lunch now.",
+          "seconds" : 0.314703106880188
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The deploy finished early so I am heading out for lunch now.",
+          "seconds" : 0.22706997394561768
+        }
+      ]
+    },
+    {
+      "id" : "d-screen-star-bullets",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you check whether the nightly backup ran before we merge this?",
+          "seconds" : 0.3732351064682007
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you check whether the nightly backup ran before we merge this?",
+          "seconds" : 0.3071039915084839
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Can you check whether the nightly backup ran before we merge this?",
+          "seconds" : 0.22089993953704834
+        }
+      ]
+    },
+    {
+      "id" : "d-screen-numbered-list",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let us keep the old endpoint until the mobile app ships its update.",
+          "seconds" : 0.38127410411834717
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let us keep the old endpoint until the mobile app ships its update.",
+          "seconds" : 0.31864404678344727
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let us keep the old endpoint until the mobile app ships its update.",
+          "seconds" : 0.23547804355621338
+        }
+      ]
+    },
+    {
+      "id" : "d-opener-so-kept",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "So the caterer can only do Tuesday now.",
+          "seconds" : 0.22345900535583496
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "So the caterer can only do Tuesday now.",
+          "seconds" : 0.22235000133514404
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "So the caterer can only do Tuesday now.",
+          "seconds" : 0.2241729497909546
+        }
+      ]
+    },
+    {
+      "id" : "d-opener-well-kept",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Well, the quote came in higher than we hoped.",
+          "seconds" : 0.24077999591827393
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Well, the quote came in higher than we hoped.",
+          "seconds" : 0.23755502700805664
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Well, the quote came in higher than we hoped.",
+          "seconds" : 0.23908889293670654
+        }
+      ]
+    },
+    {
+      "id" : "d-opener-okay-so-kept",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Okay, so the visitors arrive at noon.",
+          "seconds" : 0.21445894241333008
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Okay, so the visitors arrive at noon.",
+          "seconds" : 0.21393299102783203
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Okay, so the visitors arrive at noon.",
+          "seconds" : 0.2183699607849121
+        }
+      ]
+    },
+    {
+      "id" : "d-filler-so-mid",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I think we should just book the bigger room.",
+          "seconds" : 0.23809099197387695
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I think we should just book the bigger room.",
+          "seconds" : 0.23569393157958984
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I think we should just book the bigger room.",
+          "seconds" : 0.23924708366394043
+        }
+      ]
+    },
+    {
+      "id" : "d-xs-sorry-meant",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"two\"",
+            "contains \"sorry\"",
+            "contains \"meant\""
+          ],
+          "output" : "The demo starts at two tomorrow. Bring the printed slides. Sorry, I meant three.",
+          "seconds" : 0.35635197162628174
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"two\"",
+            "contains \"sorry\"",
+            "contains \"meant\""
+          ],
+          "output" : "The demo starts at two tomorrow. Bring the printed slides. Sorry, I meant three.",
+          "seconds" : 0.3602299690246582
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"two\"",
+            "contains \"sorry\"",
+            "contains \"meant\""
+          ],
+          "output" : "The demo starts at two tomorrow. Bring the printed slides. Sorry, I meant three.",
+          "seconds" : 0.3537830114364624
+        }
+      ]
+    },
+    {
+      "id" : "d-xs-oh-sorry-day",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Monday\"",
+            "contains \"sorry\"",
+            "contains \"meant\""
+          ],
+          "output" : "We fly out on Monday morning. I booked the window seats. Oh, sorry, I meant Wednesday morning.",
+          "seconds" : 0.4028240442276001
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Monday\"",
+            "contains \"sorry\"",
+            "contains \"meant\""
+          ],
+          "output" : "We fly out on Monday morning. I booked the window seats. Oh, sorry, I meant Wednesday morning.",
+          "seconds" : 0.39713799953460693
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Monday\"",
+            "contains \"sorry\"",
+            "contains \"meant\""
+          ],
+          "output" : "We fly out on Monday morning. I booked the window seats. Oh, sorry, I meant Wednesday morning.",
+          "seconds" : 0.40092599391937256
+        }
+      ]
+    },
+    {
+      "id" : "d-xs-no-wait-number",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"four\""
+          ],
+          "output" : "The workshop needs four tables. Please bring a laptop too. No, wait, six tables.",
+          "seconds" : 0.359529972076416
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"four\""
+          ],
+          "output" : "The workshop needs four tables. Please bring a laptop too. No, wait, six tables.",
+          "seconds" : 0.36738598346710205
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"four\""
+          ],
+          "output" : "The workshop needs four tables. Please bring a laptop too. No, wait, six tables.",
+          "seconds" : 0.3727480173110962
+        }
+      ]
+    },
+    {
+      "id" : "d-cancel-scratch-that",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"fixed\""
+          ],
+          "output" : "Tell them the price is fixed. Ask them what budget they have.",
+          "seconds" : 0.3037259578704834
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"fixed\""
+          ],
+          "output" : "Tell them the price is fixed. Ask them what budget they have.",
+          "seconds" : 0.3039480447769165
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"fixed\""
+          ],
+          "output" : "Tell them the price is fixed. Ask them what budget they have.",
+          "seconds" : 0.29742705821990967
+        }
+      ]
+    },
+    {
+      "id" : "d-cancel-never-mind",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"airport\"",
+            "contains \"never mind\""
+          ],
+          "output" : "I can drive everyone to the airport. Never mind that part, we'll book a shuttle.",
+          "seconds" : 0.3794209957122803
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"airport\"",
+            "contains \"never mind\""
+          ],
+          "output" : "I can drive everyone to the airport. Never mind that part, we'll book a shuttle.",
+          "seconds" : 0.3736220598220825
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"airport\"",
+            "contains \"never mind\""
+          ],
+          "output" : "I can drive everyone to the airport. Never mind that part, we'll book a shuttle.",
+          "seconds" : 0.38808000087738037
+        }
+      ]
+    },
+    {
+      "id" : "d-cancel-forget-it",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please pack snacks for the trip.",
+          "seconds" : 0.18899798393249512
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please pack snacks for the trip.",
+          "seconds" : 0.19022893905639648
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please pack snacks for the trip.",
+          "seconds" : 0.19554996490478516
+        }
+      ]
+    },
+    {
+      "id" : "d-instead-name",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Helga\""
+          ],
+          "output" : "Send the invoice to Helga, no Ruben instead.",
+          "seconds" : 0.24783599376678467
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Helga\""
+          ],
+          "output" : "Send the invoice to Helga, no Ruben instead.",
+          "seconds" : 0.24149096012115479
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "contains \"Helga\""
+          ],
+          "output" : "Send the invoice to Helga, no Ruben instead.",
+          "seconds" : 0.25120794773101807
+        }
+      ]
+    },
+    {
+      "id" : "d-instead-phrase",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's order the gray ones instead.",
+          "seconds" : 0.22452104091644287
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's order the gray ones instead.",
+          "seconds" : 0.22216403484344482
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Let's order the gray ones instead.",
+          "seconds" : 0.22398996353149414
+        }
+      ]
+    },
+    {
+      "id" : "d-instead-plain",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We'll take the bus instead.",
+          "seconds" : 0.20651304721832275
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We'll take the bus instead.",
+          "seconds" : 0.20721900463104248
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We'll take the bus instead.",
+          "seconds" : 0.20943498611450195
+        }
+      ]
+    },
+    {
+      "id" : "d-restate-day",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Wednesday\"",
+            "contains \"Monday\""
+          ],
+          "output" : "We'll ship on Monday.",
+          "seconds" : 0.197301983833313
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Wednesday\"",
+            "contains \"Monday\""
+          ],
+          "output" : "We'll ship on Monday.",
+          "seconds" : 0.19922399520874023
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"Wednesday\"",
+            "contains \"Monday\""
+          ],
+          "output" : "We'll ship on Monday.",
+          "seconds" : 0.19506800174713135
+        }
+      ]
+    },
+    {
+      "id" : "d-restate-number",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"eight\"",
+            "contains \"six\""
+          ],
+          "output" : "The dinner is for six people.",
+          "seconds" : 0.18750596046447754
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"eight\"",
+            "contains \"six\""
+          ],
+          "output" : "The dinner is for six people.",
+          "seconds" : 0.187485933303833
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"eight\"",
+            "contains \"six\""
+          ],
+          "output" : "The dinner is for six people.",
+          "seconds" : 0.18528807163238525
+        }
+      ]
+    },
+    {
+      "id" : "d-restate-place",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"basement\"",
+            "contains \"garage\""
+          ],
+          "output" : "Put the boxes in the garage.",
+          "seconds" : 0.18681609630584717
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"basement\"",
+            "contains \"garage\""
+          ],
+          "output" : "Put the boxes in the garage.",
+          "seconds" : 0.18480002880096436
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"basement\"",
+            "contains \"garage\""
+          ],
+          "output" : "Put the boxes in the garage.",
+          "seconds" : 0.1835559606552124
+        }
+      ]
+    },
+    {
+      "id" : "d-keep-actually-adverb",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The new route is actually shorter than the old one.",
+          "seconds" : 0.2387080192565918
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The new route is actually shorter than the old one.",
+          "seconds" : 0.24162697792053223
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The new route is actually shorter than the old one.",
+          "seconds" : 0.2412729263305664
+        }
+      ]
+    },
+    {
+      "id" : "d-keep-no-answer",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, we don't need a bigger van.",
+          "seconds" : 0.23755192756652832
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, we don't need a bigger van.",
+          "seconds" : 0.24238896369934082
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "No, we don't need a bigger van.",
+          "seconds" : 0.23992598056793213
+        }
+      ]
+    },
+    {
+      "id" : "d-keep-sorry-apology",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry about the mess in the kitchen, I was away all week.",
+          "seconds" : 0.28182506561279297
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry about the mess in the kitchen, I was away all week.",
+          "seconds" : 0.28456103801727295
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Sorry about the mess in the kitchen, I was away all week.",
+          "seconds" : 0.2855219841003418
+        }
+      ]
+    },
+    {
+      "id" : "d-keep-i-mean-it",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I mean it when I say the soup was perfect.",
+          "seconds" : 0.24222803115844727
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I mean it when I say the soup was perfect.",
+          "seconds" : 0.24535298347473145
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I mean it when I say the soup was perfect.",
+          "seconds" : 0.24761199951171875
+        }
+      ]
+    },
+    {
+      "id" : "d-keep-scratch-idea",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll scratch that idea off the list.",
+          "seconds" : 0.2308950424194336
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll scratch that idea off the list.",
+          "seconds" : 0.23374998569488525
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "I'll scratch that idea off the list.",
+          "seconds" : 0.23214399814605713
+        }
+      ]
+    },
+    {
+      "id" : "d-keep-wait-for",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Wait for the paint to dry before you hang the frame.",
+          "seconds" : 0.260822057723999
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Wait for the paint to dry before you hang the frame.",
+          "seconds" : 0.2575719356536865
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Wait for the paint to dry before you hang the frame.",
+          "seconds" : 0.2569460868835449
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-24-195907",
+  "provider" : {
+    "cleanupModel" : "mlx-community/gemma-4-e4b-it-4bit",
+    "editModel" : "mlx-community/gemma-4-e4b-it-4bit",
+    "footprintMB" : "2855",
+    "footprintMBAfterRun" : "3025",
+    "hwModel" : "Mac17,9",
+    "loadSeconds" : "2.17",
+    "macOS" : "Version 27.2.1 (Build 26B131)",
+    "promptCache" : "on",
+    "promptCacheBudgetMB" : "200",
+    "promptCacheMinReuse" : "256",
+    "provider" : "mlx",
+    "recaseTerms" : "off",
+    "runs" : "3"
+  }
+}
