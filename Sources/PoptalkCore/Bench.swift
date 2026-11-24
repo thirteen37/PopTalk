@@ -32,11 +32,16 @@ public struct BenchCase: Decodable, Sendable {
     public var rate: Int?
     /// Path to a recording, relative to the repo root.
     public var audio: String?
+    /// Saved vocabulary terms the case dictates with (#99), as in Settings → Vocabulary.
+    public var vocabulary: [String]
+    /// The intended written text, the reference for the final WER when it differs from what is said
+    /// (self-corrections, spoken formatting); defaults to `transcript`.
+    public var written: String?
     public var hasAudio: Bool { speak != nil || audio != nil }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, transcript, selection, context, cursor, ocr, expectAction, expectExact, expectAnyOf
-        case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio, speak, voice, rate, audio
+        case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio, speak, voice, rate, audio, vocabulary, written
     }
 
     public init(from decoder: Decoder) throws {
@@ -47,6 +52,8 @@ public struct BenchCase: Decodable, Sendable {
         voice = try c.decodeIfPresent(String.self, forKey: .voice)
         rate = try c.decodeIfPresent(Int.self, forKey: .rate)
         audio = try c.decodeIfPresent(String.self, forKey: .audio)
+        vocabulary = try c.decodeIfPresent([String].self, forKey: .vocabulary) ?? []
+        written = try c.decodeIfPresent(String.self, forKey: .written)
         transcript = try speak.map { try c.decodeIfPresent(String.self, forKey: .transcript) ?? $0 } ?? c.decode(String.self, forKey: .transcript)
         selection = try c.decodeIfPresent(String.self, forKey: .selection)
         context = try c.decodeIfPresent(String.self, forKey: .context)
@@ -172,10 +179,13 @@ public struct BenchCaseResult: Codable, Sendable {
     public var id: String
     public var kind: BenchCase.Kind
     public var runs: [BenchRun]
-    public init(id: String, kind: BenchCase.Kind, runs: [BenchRun]) {
+    /// Audio cases: `BenchCase.AudioSource.label` (real, file or speak); nil for text cases and older results.
+    public var audio: String?
+    public init(id: String, kind: BenchCase.Kind, runs: [BenchRun], audio: String? = nil) {
         self.id = id
         self.kind = kind
         self.runs = runs
+        self.audio = audio
     }
 }
 

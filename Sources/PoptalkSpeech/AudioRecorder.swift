@@ -3,13 +3,16 @@ import CoreAudio
 import FluidAudio
 import os
 
-/// Captures the microphone while the hotkey is held; returns 16 kHz mono Float32.
-final class AudioRecorder: @unchecked Sendable {
+/// Captures the microphone while the hotkey is held (or, in `PoptalkBench --record`, between two Enters);
+/// returns 16 kHz mono Float32.
+public final class AudioRecorder: @unchecked Sendable {
     private var engine = AVAudioEngine()
     private let samples = OSAllocatedUnfairLock(initialState: [Float]())
     private var sampleRate: Double = 48_000
 
-    func start(deviceUID: String?) throws {
+    public init() {}
+
+    public func start(deviceUID: String?) throws {
         // Fresh engine each time: a long-lived one keeps a stale format after device changes
         // (AirPods connecting), and installTap then raises an uncatchable ObjC exception.
         engine = AVAudioEngine()
@@ -32,14 +35,14 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     /// Stops capture and returns the recording resampled to 16 kHz mono.
-    func stop() -> [Float] {
+    public func stop() -> [Float] {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         return snapshot()
     }
 
     /// The recording so far, resampled to 16 kHz mono, without stopping capture.
-    func snapshot() -> [Float] {
+    public func snapshot() -> [Float] {
         let raw = samples.withLock { $0 }
         guard !raw.isEmpty else { return [] }
         return (try? AudioConverter().resample(raw, from: sampleRate)) ?? []
@@ -57,11 +60,20 @@ final class AudioRecorder: @unchecked Sendable {
         }
         return status == noErr && id != 0 ? id : nil
     }
+
+    /// Asks for microphone access (macOS prompts once, for the terminal app when run from one); true when granted.
+    public static func requestAccess() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: true
+        case .notDetermined: await AVCaptureDevice.requestAccess(for: .audio)
+        default: false
+        }
+    }
 }
 
 extension AudioRecorder {
     /// Saves 16 kHz mono samples as Apple Lossless (.m4a), for replaying against future ASR versions.
-    static func write(_ samples: [Float], to url: URL) throws {
+    public static func write(_ samples: [Float], to url: URL) throws {
         let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return }
         buffer.frameLength = buffer.frameCapacity
