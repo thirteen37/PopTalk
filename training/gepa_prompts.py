@@ -7,29 +7,35 @@
 `swift build -c release` and `gen.py teach && gen.py build` (training/out/items.jsonl):
 
   training/gepa_prompts.py [--model mlx-community/gemma-4-e4b-it-4bit] [--budget 1500] [--reflector claude]
-                           [--component dictation|edit] [--out training/out/gepa] [--compress training/out/gepa]
+                           [--component dictation|edit] [--out training/out/gepa] [--seed DIR] [--length] [--dry-run]
 
 Candidates are scored through the real pipeline: PoptalkBench --dictation-prompt-file/--edit-prompt-file.
 Train/val come from the synthetic items only; bench and held-out stay out of the loop (test them after,
 back to back with --compare). The two prompts never meet in one case, so each gets its own GEPA run
-(half --budget each). Writes <out>/{dictation,edit}.txt and GEPA's run dirs (a rerun resumes them).
+(half --budget each). Writes <out>/{dictation,edit}.txt, the sampled <out>/pool-{train,val}.jsonl and GEPA's
+run dirs (a rerun resumes them).
+The seed is the model's prompt in Prompts.swift (E4B: e4bDictationSystem / e4bEditSystem), or <DIR>/<prompt>.txt.
+--length adds prompt length (tokens) as a second objective in the same run (#103): reflections alternate between
+fixing failures and shortening, a child is kept only if it is more accurate or shorter at the same accuracy, and
+the result is the shortest candidate within 0.01 val accuracy of the best (#74 ran this as a separate --compress pass).
+--dry-run builds and writes the pool, counts the seed's tokens and checks the scoring, then stops (no model, no API).
 --reflector claude sends the reflection prompts (synthetic items, failure feedback) to Claude via `claude -p`;
 anything else is a litellm model id (e.g. a local OpenAI-compatible server)."""
 import argparse, difflib, json, random, subprocess, sys, tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import gepa
 from gepa.core.adapter import EvaluationBatch
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contamination import swift_prompt  # noqa: E402
+
 BENCH = ".build/release/PoptalkBench"
 
 
-def prompt(name):  # the current Prompts.swift text: the seed candidate
-    src = Path("Sources/PoptalkCore/Prompts.swift").read_text()
-    body = src.split(f"static var {name}System = \"\"\"\n", 1)[1].split('\n    """', 1)[0]
-    lines = [l[4:] for l in body.split("\n")]
-    return "\n".join(lines).replace("\\\n", "")  # Swift's trailing \ joins lines
+def prompt(comp, model):  # the Prompts.swift text the app uses for `model`: the seed candidate
+    return swift_prompt(f"e4b{comp.capitalize()}System" if "e4b" in model else f"{comp}System")
 
 
 def case(it):
@@ -71,12 +77,17 @@ def tokenizer(model):  # Gemma 4 E2B and E4B (v3's base) share one tokenizer; th
     return lambda s: len(t.encode(s, add_special_tokens=False).ids)
 
 
+def score(run, case):
+    """1 for a pass; partial credit for near misses, so one wrong comma still tells GEPA it was close."""
+    return 1.0 if not run["failures"] else 0.5 * difflib.SequenceMatcher(a=run["output"], b=case["expectExact"]).ratio()
+
+
 class Adapter:
     propose_new_texts = None
 
     def __init__(self, model, component, count=None, ref_tokens=None):
         self.model, self.component = model, component
-        # --compress: count(text) → tokens, ref_tokens = the Prompts.swift seed's length (brevity 1.0 there)
+        # --length: count(text) → tokens, ref_tokens = the seed's length (brevity 1.0 there and above)
         self.count, self.ref_tokens, self.tokens = count, ref_tokens, None
 
     def brevity(self, text):
@@ -94,13 +105,8 @@ class Adapter:
             if p.returncode:
                 sys.exit(f"PoptalkBench failed:\n{p.stderr[-2000:]}")
             runs = {r["id"]: r["runs"][0] for r in json.loads(next((d / "res").glob("*.json")).read_text())["cases"]}
-        outs, scores = [], []
-        for c in batch:
-            run = runs[c["id"]]
-            # Partial credit for near misses, so one wrong comma still tells GEPA it was close.
-            sim = difflib.SequenceMatcher(a=run["output"], b=c["expectExact"]).ratio()
-            outs.append(run)
-            scores.append(1.0 if not run["failures"] else 0.5 * sim)
+        outs = [runs[c["id"]] for c in batch]
+        scores = [score(o, c) for o, c in zip(outs, batch)]
         trajectories = [{"case": c, "run": o} for c, o in zip(batch, outs)] if capture_traces else None
         objectives = None
         if self.count:
@@ -129,7 +135,7 @@ class NoAccuracyForLength:
         return after > before or (shorter and after >= before - 0.01 * n)
 
 
-COMPRESS_TEMPLATE = """I gave a small on-device model (Gemma) these instructions; they are {tokens} tokens long:
+LENGTH_TEMPLATE = """I gave a small on-device model (Gemma) these instructions; they are {tokens} tokens long:
 ```
 <curr_param>
 ```
@@ -140,11 +146,32 @@ Here are task inputs, the model's outputs and feedback on them:
 ```
 
 The model re-reads every token of the instructions on every request, so a shorter prompt is directly faster on-device. \
-Write a SHORTER version that keeps the same behavior: remove or merge rules and examples that don't change outcomes, \
-collapse repeated points, and prefer one crisp example over several. Keep every tested rule (the ones the feedback \
-above exercises) and fix any failures shown. Don't add new content that isn't needed for the failures above.
+{goal}
 
 Provide the new instructions within ``` blocks."""
+
+GOALS = {
+    "fix": "Revise the instructions so the model gets the failed examples above right, with the smallest change that \
+does it. Generalize from the failures instead of quoting them, keep every rule the correct examples rely on, and don't \
+make the instructions longer than the fix needs; merge or cut something else if you can.",
+    "shorten": "Write a SHORTER version that keeps the same behavior: remove or merge rules and examples that don't \
+change outcomes, collapse repeated points, and prefer one crisp example over several. Keep every tested rule (the ones \
+the feedback above exercises) and fix any failures shown. Don't add new content that isn't needed for the failures above.",
+}
+
+
+class LengthReflector:
+    """--length: odd calls fix failures, even calls (and any minibatch with none) shorten, so one run does both."""
+
+    def __init__(self, adapter):
+        self.a, self.n = adapter, 0
+
+    def goal(self, p):
+        self.n += 1
+        return "fix" if self.n % 2 and "Wrong:" in p else "shorten"
+
+    def __call__(self, p):
+        return claude(p.replace("{tokens}", str(self.a.tokens)).replace("{goal}", GOALS[self.goal(p)]))
 
 
 def reflective(eval_batch, component):
@@ -171,6 +198,29 @@ def claude(p):
     return r.stdout
 
 
+def dry_run(comp, train, seed, count):
+    """Checks the scoring, the length objective and the reflection prompt on fixed strings; prints its size."""
+    c = {"id": "x", "kind": comp, "cat": "x", "transcript": "move the review to monday sorry i meant tuesday",
+         "context": "", "expectExact": "Move the review to Tuesday."} | ({"selection": "x", "expectAction": "edit"} if comp == "edit" else {})
+    ok, near, wrong = ({"output": o, "failures": f, "action": "edit"} for o, f in [
+        ("Move the review to Tuesday.", []), ("Move the review to Tuesday", ["not exact"]), ("Sure! Here it is.", ["not exact"])])
+    assert score(ok, c) == 1.0 and 0.45 < score(near, c) < 0.5 and score(wrong, c) < 0.2, (score(near, c), score(wrong, c))
+    ad = Adapter("dry-run", comp, count, count(seed))
+    assert ad.brevity(seed) == 1.0 and 0.45 < ad.brevity(seed + "\n" + seed) < 0.55
+    batch = EvaluationBatch(outputs=[ok, near], scores=[1.0, score(near, c)], trajectories=[{"case": c, "run": ok}, {"case": c, "run": near}])
+    recs = reflective(batch, comp)
+    assert recs[0]["Feedback"] == "Correct." and recs[1]["Feedback"].startswith("Wrong: not exact."), recs
+    r = LengthReflector(ad)
+    assert [r.goal("Wrong: x"), r.goal("Wrong: x"), r.goal("Correct."), r.goal("Correct.")] == ["fix", "shorten", "shorten", "shorten"]
+    # One reflection call's prompt, with a 6-example minibatch of real pool cases (outputs = their targets).
+    side = [{"Inputs": {"screen": t["context"][-600:], "transcript": t["transcript"]}, "Generated Outputs": t["expectExact"],
+             "Feedback": "Wrong: … Expected exactly: " + repr(t["expectExact"])} for t in train[:6]]
+    p = LENGTH_TEMPLATE.replace("<curr_param>", seed).replace("<side_info>", json.dumps(side, indent=1, ensure_ascii=False))
+    ad.tokens = count(seed)
+    print(f"{comp}: dry run ok; categories {dict(Counter(t['cat'] for t in train))}; one reflection prompt ≈ "
+          f"{count(p.replace('{goal}', GOALS['fix']))} tokens in, a reply ≈ {count(seed)} tokens", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="mlx-community/gemma-4-e4b-it-4bit")
@@ -180,41 +230,52 @@ def main():
     ap.add_argument("--reflector", default="claude")
     ap.add_argument("--component", choices=["dictation", "edit"], help="optimize only this prompt")
     ap.add_argument("--out", type=Path, default=Path("training/out/gepa"))
-    ap.add_argument("--compress", type=Path, metavar="DIR",
-                    help="compression pass: seed from DIR/<prompt>.txt (an earlier run's best) and add a length objective")
+    ap.add_argument("--seed", type=Path, metavar="DIR", help="seed from DIR/<prompt>.txt (e.g. an earlier run's best)")
+    ap.add_argument("--length", action="store_true", help="add prompt length (tokens) as an objective")
+    ap.add_argument("--dry-run", action="store_true", help="write the pool and check the scoring; no model, no API")
     a = ap.parse_args()
-    items = [json.loads(l) for l in open("training/out/items.jsonl")]
+    if a.length and a.reflector != "claude":
+        sys.exit("--length reflects through claude -p only")
+    items =[json.loads(l) for l in open("training/out/items.jsonl")]
     items = [it for it in items if "vocabulary" not in it]  # saved vocabulary isn't wired into bench cases
     val = sample(items, a.val_per_cat, seed=1)
     seen = {c["id"] for c in val}
     train = itn(sample([it for it in items if it["id"] not in seen], a.train_per_cat, seed=2))
     val = itn(val)
     a.out.mkdir(parents=True, exist_ok=True)
+    for name, cases in (("train", train), ("val", val)):
+        (a.out / f"pool-{name}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in cases))
     comps = [a.component] if a.component else ["dictation", "edit"]
+    count = tokenizer(a.model) if a.length or a.dry_run else None
     for comp in comps:
         tr, va = [c for c in train if c["kind"] == comp], [c for c in val if c["kind"] == comp]
-        print(f"{comp}: train {len(tr)}, val {len(va)}", file=sys.stderr, flush=True)
-        lm = claude if a.reflector == "claude" else a.reflector
-        if not a.compress:
+        seed = (a.seed / f"{comp}.txt").read_text() if a.seed else prompt(comp, a.model)
+        print(f"{comp}: train {len(tr)}, val {len(va)} in {len({c['cat'] for c in tr})} categories; seed "
+              + (f"{count(seed)} tokens" if count else f"{len(seed)} chars"), file=sys.stderr, flush=True)
+        if a.dry_run:
+            dry_run(comp, tr, seed, count)
+            continue
+        if not a.length:
             ad = Adapter(a.model, comp)
-            res = gepa.optimize(seed_candidate={comp: prompt(comp)}, trainset=tr, valset=va, adapter=ad, reflection_lm=lm,
+            res = gepa.optimize(seed_candidate={comp: seed}, trainset=tr, valset=va, adapter=ad,
+                                reflection_lm=claude if a.reflector == "claude" else a.reflector,
                                 reflection_minibatch_size=6, max_metric_calls=a.budget // len(comps),
                                 run_dir=str(a.out / f"run-{comp}"), cache_evaluation=True)
             best = res.best_idx
         else:
-            count = tokenizer(a.model)
-            ad = Adapter(a.model, comp, count, count(prompt(comp)))
+            ad = Adapter(a.model, comp, count, count(seed))
             # "hybrid" keeps per-example winners plus the best mean of each objective (most accurate, shortest)
             # as parents. No perfect-minibatch skip: a perfect minibatch can still be said in fewer tokens.
-            res = gepa.optimize(seed_candidate={comp: (a.compress / f"{comp}.txt").read_text()}, trainset=tr, valset=va,
-                                adapter=ad, reflection_lm=lambda p: claude(p.replace("{tokens}", str(ad.tokens))),
-                                reflection_prompt_template=COMPRESS_TEMPLATE, frontier_type="hybrid",
-                                acceptance_criterion=NoAccuracyForLength(ad), skip_perfect_score=False,
-                                reflection_minibatch_size=6, max_metric_calls=a.budget // len(comps),
-                                run_dir=str(a.out / f"run-{comp}"), cache_evaluation=True)
-            # The shortest candidate whose val accuracy is within 0.01 of the (long) seed's.
-            ok = [i for i, s in enumerate(res.val_aggregate_scores) if s >= res.val_aggregate_scores[0] - 0.01]
-            best = min(ok, key=lambda i: count(res.candidates[i][comp]))
+            res = gepa.optimize(seed_candidate={comp: seed}, trainset=tr, valset=va, adapter=ad,
+                                reflection_lm=LengthReflector(ad), reflection_prompt_template=LENGTH_TEMPLATE,
+                                frontier_type="hybrid", acceptance_criterion=NoAccuracyForLength(ad),
+                                skip_perfect_score=False, reflection_minibatch_size=6,
+                                max_metric_calls=a.budget // len(comps), run_dir=str(a.out / f"run-{comp}"),
+                                cache_evaluation=True)
+            # The shortest candidate whose val accuracy is within 0.01 of the most accurate one's.
+            top = max(res.val_aggregate_scores)
+            best = min((i for i, s in enumerate(res.val_aggregate_scores) if s >= top - 0.01),
+                       key=lambda i: count(res.candidates[i][comp]))
             print(f"{comp}: tokens " + ", ".join(f"#{i} {count(c[comp])} @ {res.val_aggregate_scores[i]:.3f}"
                                                   for i, c in enumerate(res.candidates)), file=sys.stderr, flush=True)
         (a.out / f"{comp}.txt").write_text(res.candidates[best][comp])
