@@ -77,6 +77,21 @@ if args.contains("--warmup-probe") {
     exit(0)
 }
 
+// #75 step 2: adds `candidate` to each line of a term_probe.py pairs file: the best `termShortlist` run of `heard`
+// for `term`, or null when the shortlist drops the pair.
+//   PoptalkBench --term-shortlist training/term_pairs.jsonl > pairs.jsonl
+if let path = opt("--term-shortlist") {
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
+    for l in text.split(separator: "\n") {
+        guard var o = (try? JSONSerialization.jsonObject(with: Data(l.utf8))) as? [String: Any],
+              let heard = o["heard"] as? String, let term = o["term"] as? String else { fail("bad line in \(path)") }
+        let all = Pipeline.termShortlist(heard, terms: [term]), whole = all.filter { $0.term == term }
+        o["candidate"] = (whole.isEmpty ? all : whole).max { $0.score < $1.score }?.heard ?? NSNull()
+        print(String(decoding: try JSONSerialization.data(withJSONObject: o, options: .sortedKeys), as: UTF8.self))
+    }
+    exit(0)
+}
+
 // Skip-gate eval (#75): runs `GateEval` on every dictation in history files (local and synced, deduped by id) and
 // compares the gate's decision with what the cleanup model replied. Prints counts only.
 //   PoptalkBench --gate-eval history.jsonl [history-*.jsonl …]

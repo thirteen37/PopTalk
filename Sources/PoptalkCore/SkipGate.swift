@@ -52,19 +52,47 @@ extension Pipeline {
         guard transcript.first(where: \.isLetter)?.isUppercase == true, let last = end.last, ".!?".contains(last),
               !has(cue, said), !has(command, transcript) else { return false }
 
+        return termShortlist(transcript, terms: terms).isEmpty
+    }
+
+    /// A run of `transcript` that may be a misheard term (#75 step 2), for the yes/no term check to confirm.
+    public struct TermCandidate: Equatable, Sendable {
+        public var range: NSRange, heard: String, term: String, score: Double
+    }
+
+    /// The near misses `skipsLLM` looks for: runs of 1–3 words, not spelled exactly like a term or one of its names
+    /// (a multi-word term's non-dictionary words, 4+ letters), at least 0.75 like it by `similarity` on the raw
+    /// strings or on `soundFold`ed ones. Runs overlapping an exact term are left out ("to TestFlight").
+    public static func termShortlist(_ transcript: String, terms: [String]) -> [TermCandidate] {
         func squash(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
         let forms = terms.flatMap { t in [t] + (t.contains(" ") ? t.split(separator: " ").map(String.init).filter { !isCommonWord($0) } : []) }
             .filter { squash($0).count >= 4 }
         let ns = transcript as NSString
-        let words = token.matches(in: transcript, range: NSRange(location: 0, length: ns.length)).map {
-            ns.substring(with: $0.range).replacing(/['’]s$/, with: "")
-        }
-        // Runs of 1–3 words; those overlapping an exact term are left out ("to TestFlight" isn't a near miss).
+        let tokens = token.matches(in: transcript, range: NSRange(location: 0, length: ns.length)).map(\.range)
+        let words = tokens.map { ns.substring(with: $0).replacing(/['’]s$/, with: "") }
         let runs = (1...3).flatMap { n in words.count < n ? [] : (0...(words.count - n)).map { $0..<$0 + n } }
         let exact = runs.filter { r in forms.contains(words[r].joined(separator: " ")) }
-        return !runs.contains { r in
-            let run = words[r].joined(separator: " ")
-            return !exact.contains { $0.overlaps(r) } && forms.contains { similarity(squash(run), squash($0)) >= 0.75 }
+        let all = runs.filter { r in !exact.contains { $0.overlaps(r) } }.flatMap { r -> [TermCandidate] in
+            let heard = squash(words[r].joined(separator: " "))
+            let range = NSUnionRange(tokens[r.lowerBound], tokens[r.upperBound - 1])
+            return forms.compactMap { f in
+                let score = max(similarity(heard, squash(f)), similarity(soundFold(heard), soundFold(squash(f))))
+                return score >= 0.75 ? TermCandidate(range: range, heard: ns.substring(with: range), term: f, score: score) : nil
+            }
         }
+        // Per term, the best of overlapping runs ("grav links", not "grav links now"); ties: the closer spelling
+        // ("kas ia", not "kas", for "Kasia"), then the earlier.
+        func raw(_ c: TermCandidate) -> Int { -levenshtein(Array(squash(c.heard)), Array(squash(c.term))) }
+        var kept: [TermCandidate] = []
+        for c in all.sorted(by: { ($1.score, raw($1), $0.range.location) < ($0.score, raw($0), $1.range.location) })
+        where !kept.contains(where: { $0.term == c.term && NSIntersectionRange($0.range, c.range).length > 0 }) { kept.append(c) }
+        return kept.sorted { $0.range.location < $1.range.location }
+    }
+
+    /// Spellings English speech can't tell apart, folded together: "x" → "ks", soft "c" → "s", "c"/"q" → "k",
+    /// "ph" → "f", "z" → "s" ("grav links" for "Gravlynx").
+    static func soundFold(_ s: String) -> String {
+        [("ph", "f"), ("x", "ks"), ("qu", "kw"), ("q", "k"), ("z", "s")].reduce(
+            s.replacing(/c(?=[eiy])/, with: "s").replacing("ck", with: "k").replacing("c", with: "k")) { $0.replacing($1.0, with: $1.1) }
     }
 }

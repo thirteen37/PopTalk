@@ -71,3 +71,28 @@ private func skips(_ said: String, screen: String = "") -> Bool {
     #expect(c("So we send it on Friday.") == .replaced)
     #expect(GateEval.change(from: "Open meal prep.", to: "Open Meal Prep.", terms: ["Meal Prep"]) == .term)
 }
+
+// #75 step 2: runs of 1–3 words that may be a misheard term, for the yes/no term check. Invented names.
+@Test func shortlistFindsSoundAlikeRuns() {
+    let s = "Ping toy vonen about the core vell build."
+    let c = Pipeline.termShortlist(s, terms: ["Toivonen", "Corvelle"])
+    #expect(c.contains { $0.heard == "toy vonen" && $0.term == "Toivonen" })
+    #expect(c.contains { $0.heard == "core vell" && $0.term == "Corvelle" })
+    #expect(c.allSatisfy { (s as NSString).substring(with: $0.range) == $0.heard })
+}
+
+@Test func shortlistFoldsSpellingsThatSoundAlike() {
+    // x heard as "ks": edit distance alone puts these under 0.75.
+    #expect(Pipeline.termShortlist("Open grav links now.", terms: ["Gravlynx"]).map(\.heard) == ["grav links"])
+    #expect(Pipeline.termShortlist("Ask pel tricks.", terms: ["Peltrix"]).map(\.heard) == ["pel tricks"])
+    // Overlapping runs that sound alike equally: the closer spelling.
+    #expect(Pipeline.termShortlist("Ask kas ia now.", terms: ["Kasia"]).map(\.heard) == ["kas ia"])
+}
+
+@Test func shortlistSkipsExactAndUnrelated() {
+    #expect(Pipeline.termShortlist("Ask Mahina about the Corvelle build.", terms: ["Mahina", "Corvelle"]).isEmpty)
+    #expect(Pipeline.termShortlist("Can you send me the report by Friday?", terms: ["Korvanta", "Brisolt"]).isEmpty)
+    // A multi-word term's names count alone; terms under 4 letters are left out.
+    #expect(Pipeline.termShortlist("Tell toy vonen.", terms: ["Paavo Toivonen"]).map(\.term) == ["Toivonen"])
+    #expect(Pipeline.termShortlist("Tell Bo.", terms: ["Boa"]).isEmpty)
+}
