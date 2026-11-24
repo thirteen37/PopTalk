@@ -700,3 +700,45 @@ KEEP_CUES = [
     "Wait, is the store open on Sunday?", "Let's play it by ear instead of planning every hour.",
     "Sorry, it took me so long to answer.",
 ]
+
+# ---------- v7: ASR-style mutations (#103) ----------
+# Fillers as Parakeet writes them: real dictations carry mostly "uh" and "um" (pool_profile.py), rarely the rest.
+# No "I mean": it is also a self-correction cue.
+ASR_FILLERS = [("uh", 55), ("um", 35), ("like", 7), ("you know", 3)]
+# Short words a speaker repeats while thinking ("I, I think", "the the").
+STUTTER_WORDS = {"i", "the", "we", "it", "it's", "to", "a", "and", "that", "this", "my", "our", "you", "i'll", "we're",
+                 "is", "of", "in", "for", "can", "so", "if"}
+# Abandoned openings before the real sentence ("we should, let's just go"); no cue words, no complete clause.
+FALSE_STARTS = ["we should", "I was going to", "can we", "so the", "I think we", "let's", "maybe we", "do you",
+                "I need to", "is it", "could you", "I want to", "so we", "did you", "we need", "I'll", "the thing is",
+                "what if we", "I was", "are we"]
+# Sound-alike pairs (right, heard) a recognizer swaps where the sentence alone decides, so the target has the right
+# word. Generic English; no cue words (no/know and wait/weight stay out).
+HOMOPHONES = [("their", "there"), ("there", "their"), ("they're", "their"), ("your", "you're"), ("you're", "your"),
+              ("whether", "weather"), ("weather", "whether"), ("accept", "except"), ("except", "accept"),
+              ("role", "roll"), ("roll", "role"), ("affect", "effect"), ("effect", "affect"), ("than", "then"),
+              ("then", "than"), ("lose", "loose"), ("break", "brake"), ("site", "sight"), ("write", "right"),
+              ("here", "hear"), ("hear", "here"), ("knew", "new"), ("week", "weak"), ("buy", "by"), ("whole", "hole"),
+              ("piece", "peace"), ("through", "threw"), ("board", "bored"), ("plane", "plain"), ("principal", "principle"),
+              ("too", "to"), ("whose", "who's"), ("who's", "whose"), ("aloud", "allowed"), ("suite", "sweet"),
+              ("meet", "meat"), ("sent", "cent"), ("waste", "waist"), ("mail", "male"), ("pair", "pear"),
+              ("sale", "sail"), ("cell", "sell"), ("steal", "steel")]
+# Short-word swaps that leave a fine sentence (a → the, can → could; not the → a, which breaks "the keys"): nothing tells the model, so the target keeps
+# the heard word.
+FUNCTION_SWAPS = [("a", "the"), ("this", "that"), ("these", "those"), ("those", "these"),
+                  ("can", "could"), ("could", "can"), ("will", "would"), ("our", "the"), ("my", "the")]
+# Invented brand-like terms that split, merge or blur into ordinary words as Parakeet hears them, like a to-do app
+# heard as "to do list" or an audio library as "fluid audio": (written, heard forms). Swapped in for an invented
+# entity the dictation already names, so screen and target change with it.
+SOUNDALIKE_TERMS = [
+    ("Tudalist", ["to do list", "to-do list"]), ("Lucidvoice", ["lucid voice"]), ("Notewise", ["note wise", "know twice"]),
+    ("Shiploop", ["ship loop"]), ("Inkwell Labs", ["ink well labs", "inkwell lab"]), ("Bytewise", ["bite wise", "by twice"]),
+    ("Taskrail", ["task rail", "tasks rail"]), ("Docuflow", ["docu flow", "doc you flow"]), ("Mailpine", ["mail pine"]),
+    ("Querylane", ["query lane", "queer lane"]), ("Saltbox", ["salt box", "salt books"]), ("Kanbanly", ["can ban lee", "kanban lee"]),
+    ("Pantrify", ["pantry fy", "pan tree fly"]), ("Syncwell", ["sink well", "sync well"]), ("Loomly AI", ["loom lee a i", "loomly ai"]),
+    ("Fernkit", ["fern kit", "fern kid"]), ("Gridops", ["grid ops", "grid opps"]), ("Heyform", ["hey form", "hay form"]),
+    ("Pipewise", ["pipe wise"]), ("Cobaltdesk", ["cobalt desk"]), ("Waveline Audio", ["wave line audio", "waveline audio"]),
+    ("StackNest", ["stack nest", "stack next"]), ("Railyard", ["rail yard", "real yard"]), ("Tallyhop", ["tally hop", "tally hope"]),
+    ("Zentrio", ["zen trio", "sentrio"]), ("Brightloom", ["bright loom"]), ("Codeharbor", ["code harbor"]),
+    ("Pixel Forge", ["pixelforge", "pixel for"]), ("Nimbus CI", ["nimbusci", "nimbus c i"]),
+]
