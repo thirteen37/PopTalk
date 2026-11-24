@@ -81,3 +81,47 @@ private func dictate(_ transcript: String, reply: @escaping @Sendable ([ChatMess
     // The raw fallback is formatted as well.
     #expect(await dictate(said) { _ in "" } == .insert(formatted, label: "Dictated (raw)"))
 }
+
+// #98: "scratch that" / "delete that" as its own delimited unit (the "new line" rule) drops the sentence before
+// it with the command. With nothing before it to drop it stays literal (#85); undelimited it is dictation.
+private let c = Pipeline.spokenCancel
+
+@Test func cancelDropsThePreviousSentence() {
+    #expect(c("Tell them the price is fixed. Scratch that. Ask them what budget they have.") == "Ask them what budget they have.")
+    #expect(c("The demo is at ten. Bring the slides. Scratch that. Bring the handouts.") == "The demo is at ten. Bring the handouts.")
+    #expect(c("Order the blue chairs. Delete that. Order the green ones.") == "Order the green ones.")
+    #expect(c("we could rent a cabin, scratch that, let's look at hotels in town") == "Let's look at hotels in town")
+    #expect(c("Can you call the plumber? Scratch that! I'll call him myself.") == "I'll call him myself.")
+    #expect(c("The meeting is at noon. Lunch is on me. Scratch that.") == "The meeting is at noon.")
+    #expect(c("Hi team,\n\nThe build is red. Scratch that. The build is green.") == "Hi team,\n\nThe build is green.")
+    #expect(c("Call at one. Scratch that. Call at two. Scratch that. Call at three.") == "Call at three.")
+    #expect(c("Scratch that. Ship it Monday. Scratch that. Ship it Friday.") == "Scratch that. Ship it Friday.")
+    // A lead-in "actually" / "wait" / "no" belongs to the command, not the sentence it cancels.
+    #expect(c("We could rent a cabin. Actually, scratch that. Let's look at hotels.") == "Let's look at hotels.")
+    #expect(c("Paint it red. Wait, scratch that. Paint it blue.") == "Paint it blue.")
+    #expect(c("Paint it red, no, delete that, paint it blue") == "Paint it blue")
+    // Everything was cancelled.
+    #expect(c("The price is fixed. Scratch that.") == "")
+}
+
+@Test func cancelLookAlikesStayLiteral() {
+    for s in ["Scratch that.", "scratch that", "Delete that", "Scratch that. Make it blue.",
+              "I'll scratch that idea off the list.", "Scratch that off the list.",
+              "we could rent a cabin by the lake scratch that let's look at hotels in town",
+              "Please delete that file. Then restart the server.", "Did you delete that?",
+              "I asked them to scratch that."] {
+        #expect(c(s) == s, "\(s)")
+    }
+}
+
+@Test func cancelRunsBeforeTheModelAndInTheRawFallback() async {
+    let said = "Tell them the price is fixed. Scratch that. Ask them what budget they have."
+    let left = "Ask them what budget they have."
+    let echo = await dictate(said) { m in
+        m.last!.content.components(separatedBy: "<transcript>")[1].components(separatedBy: "</transcript>")[0]
+    }
+    #expect(echo == .insert(left, label: "Dictated"))
+    #expect(await dictate(said) { _ in "" } == .insert(left, label: "Dictated (raw)"))
+    // A fully cancelled dictation inserts nothing and never calls the model.
+    #expect(await dictate("The price is fixed. Scratch that.") { _ in Issue.record("model called"); return "x" } == .nothing)
+}

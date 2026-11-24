@@ -25,4 +25,34 @@ extension Pipeline {
         }
         return out.replacing(/\n(\p{Ll})/) { "\n" + $0.1.uppercased() }
     }
+
+    /// "scratch that" / "delete that" as its own unit (the "new line" delimiters) drops the sentence before it, from
+    /// the previous . ! ? or newline (or the start), and the command; the next letter is capitalized (#98). With no
+    /// sentence before it in this dictation (a lone command, or one that opens it) it stays literal: commands on the
+    /// previous dictation are gone (#85). Undelimited ("I'll scratch that idea") it is dictation.
+    /// ponytail: unpunctuated transcripts leave the command to the model, like "new line".
+    public static func spokenCancel(_ s: String) -> String {
+        // A lead-in "actually," / "wait," / "no," (as in the training templates) is part of the command.
+        let command = /(?i)(?:^|[.!?,;:\n])\h*(?:(?:actually|wait|no)\h*[,;:]?\h*)*(?:scratch|delete)\h+that(?:\h*[.!?,;:]+|\h*$)\h*/
+        // What stays of `before` once its last sentence is cancelled; nil when there is no sentence to cancel.
+        func kept(_ before: Substring) -> Substring? {
+            var body = before
+            while let l = body.last, l.isWhitespace || ".!?,;:".contains(l) { body.removeLast() }
+            guard !body.isEmpty else { return nil }
+            guard var cut = body.lastIndex(where: { ".!?\n".contains($0) }) else { return "" }
+            repeat { cut = body.index(after: cut) } while cut < body.endIndex && body[cut].isWhitespace
+            return body[..<cut]
+        }
+        var out = s
+        next: while true {
+            for m in out.matches(of: command) {
+                guard let keep = kept(out[..<m.range.lowerBound]) else { continue }
+                let rest = out[m.range.upperBound...]
+                out = rest.isEmpty ? String(keep).replacing(/\h+$/, with: "")
+                    : keep + rest.prefix(1).uppercased() + rest.dropFirst()
+                continue next
+            }
+            return out
+        }
+    }
 }
