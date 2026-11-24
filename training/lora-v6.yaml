@@ -13,7 +13,7 @@
 #      sed -i '' -E "s/^iters: [0-9]+/iters: $((s * 4))/; s/(arguments: \[1\.0e-4, )[0-9]+/\1$s/; s/^steps_per_eval: [0-9]+/steps_per_eval: $((s * 2))/" training/lora-v6.yaml
 #   2. seed A: uv run --project training mlx_lm.lora --config training/lora-v6.yaml
 #   3. seed B: uv run --project training mlx_lm.lora --config training/lora-v6.yaml --seed 62 --adapter-path training/out/adapters-v6-s62
-#   4. The app and PoptalkBench load an adapter dir as is (fused onto the text-only E2B base at load): no fuse step.
+#   4. The app and PoptalkBench load an adapter dir as is (LoRA layers on the text-only E2B base, unfused: fusing into 4-bit loses most of it): no fuse step.
 #      Weights stay untracked.
 #      for x in a:adapters-v6 b:adapters-v6-s62; do d=adapters/gemma-4-e2b-poptalk-v6${x%%:*}; mkdir -p $d
 #        cp training/out/${x#*:}/{adapter_config.json,adapters.safetensors} $d/; done

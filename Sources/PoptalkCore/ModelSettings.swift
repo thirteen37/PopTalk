@@ -58,7 +58,7 @@ public enum ModelSettings {
     }
 
     /// An MLX model id names a LoRA adapter when it is a directory holding an `adapter_config.json`, as
-    /// `mlx_lm.lora` writes it; that file's `model` is the base to fuse it into. A relative id is looked up
+    /// `mlx_lm.lora` writes it; that file's `model` is the base it runs on. A relative id is looked up
     /// in each of `roots` in turn (the app's Resources, then the working directory).
     public static func adapter(_ id: String, roots: [URL]) -> (base: String, dir: URL)? {
         struct Config: Decodable { let model: String }

@@ -24,11 +24,12 @@ public enum MLXProvider {
             let t = Task {
                 let container: ModelContainer
                 if let (base, dir) = ModelSettings.adapter(id, roots: MLXProvider.roots) {
-                    // Base + LoRA adapter, fused in memory (QLoRALinear.fused(): dequantize, add, requantize, as
-                    // mlx_lm.fuse). Lazy: the fused weights are computed on first use, i.e. by `prepare`'s warm-up.
+                    // Base + LoRA adapter as separate low-rank layers, not fused: requantizing a fused 4-bit
+                    // weight (QLoRALinear.fused(), as mlx_lm.fuse) rounds most of the adapter away (#103: v6 kept
+                    // 28/32 of its own training targets unfused, 3/32 fused).
                     container = try await load(base, progress)
                     let adapter = try LoRAContainer.from(directory: dir)
-                    try await container.perform { try $0.model.fuse(with: adapter) }
+                    try await container.perform { try $0.model.load(adapter: adapter) }
                 } else {
                     container = try await load(id, progress)
                 }

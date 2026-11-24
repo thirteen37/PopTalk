@@ -19,7 +19,7 @@ $lora training/lora-qwen3-1.7b.yaml    # -> training/out/adapters-qwen3-1.7b
 $lora training/lora-qwen3-0.6b.yaml    # -> training/out/adapters-qwen3-0.6b
 
 # 3. Benches, back to back (compare with PoptalkBench --compare a.json b.json). Adapter dirs load as
-#    base + LoRA fused in memory (adapter_config.json names the base).
+#    base + LoRA layers, unfused (adapter_config.json names the base).
 zsh training/bench.zsh adapters/gemma-4-e2b-poptalk-v2          # E2B v2 (shipping baseline)
 zsh training/bench.zsh training/out/adapters-v3                 # E2B v3
 zsh training/bench.zsh training/out/adapters-qwen3-1.7b         # Qwen3-1.7B v3
