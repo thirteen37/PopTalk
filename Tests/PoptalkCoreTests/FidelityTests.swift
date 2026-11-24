@@ -10,6 +10,54 @@ private func dictate(_ transcript: String, reply: String) async -> Outcome {
     return await p.run(Request(transcript: transcript, selection: nil, context: ScreenSnapshot())).outcome
 }
 
+// A cleanup reply past the length guard is cut off at it: same raw outcome, sooner.
+private final class Seen: @unchecked Sendable { var limits: [Int?] = [] }
+
+private func run(_ transcript: String, selection: String? = nil, reply: String) async -> (Outcome, [Int?]) {
+    let seen = Seen()
+    let p = Pipeline(complete: { _, _, _, _ in seen.limits.append(Pipeline.replyLimit); return reply },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                     cleanupModel: "s", editModel: "b")
+    return (await p.run(Request(transcript: transcript, selection: selection, context: ScreenSnapshot())).outcome, seen.limits)
+}
+
+@Test func longCleanupGetsLimitAndFallsBackToRaw() async {
+    let said = "Send the report by Friday."
+    let (outcome, limits) = await run(said, reply: String(repeating: "lorem ipsum dolor ", count: 60))
+    #expect(outcome == .insert(said, label: "Dictated (raw)"))
+    #expect(limits == [Pipeline.maxCleanupLength(said)])
+    #expect(Pipeline.maxCleanupLength(said) == 79)  // 26 × 1.5 + 40
+}
+
+@Test func editsGetNoReplyLimit() async {
+    let (outcome, limits) = await run("make it formal", selection: "hey there",
+                                      reply: #"{"action":"edit","text":"Hello there.","vocabulary":null,"remember":false}"#)
+    #expect(outcome == .replaceSelection("Hello there.", label: "Edited"))
+    #expect(limits == [nil])
+}
+
+@Test func cleanupAtTheLimitIsAccepted() async {
+    let said = "Send the report by Friday."
+    let atLimit = "Send the report by Friday. " + String(repeating: "x", count: 79 - 27)
+    #expect(await run(said, reply: atLimit).0 == .insert(atLimit, label: "Dictated"))
+    #expect(await run(said, reply: atLimit + "x").0 == .insert(said, label: "Dictated (raw)"))
+}
+
+@Test func pastReplyLimitOnlyWhenNoAcceptedReplyCanFollow() {
+    let x = { String(repeating: "x", count: $0) }
+    #expect(!Pipeline.pastReplyLimit(x(79), limit: 79))
+    // Margin: tag fragments and a list marker the guard strips before measuring.
+    #expect(!Pipeline.pastReplyLimit(x(79) + "</transcript", limit: 79))
+    #expect(!Pipeline.pastReplyLimit("  12. " + x(79), limit: 79))
+    // Whitespace can be trimmed or collapsed away, so it never counts.
+    #expect(!Pipeline.pastReplyLimit(x(70) + String(repeating: " ", count: 500), limit: 79))
+    #expect(Pipeline.pastReplyLimit(x(200), limit: 79))
+    // An open reasoning block may still close and be stripped; a closed one is ignored.
+    #expect(!Pipeline.pastReplyLimit("<think>" + x(500), limit: 79))
+    #expect(!Pipeline.pastReplyLimit("<think>" + x(500) + "</think>Fine.", limit: 79))
+    #expect(Pipeline.pastReplyLimit("<think>a</think>" + x(200), limit: 79))
+}
+
 @Test func lastSentenceOnlyFallsBackToRaw() async {
     let said = "One of my earlier dictations had quote and unquote, but those weren't translated properly. Whose job is that?"
     // "quote and unquote" is a mention, not a spoken quote (#69).
