@@ -73,9 +73,9 @@ public actor Transcriber {
         return t
     }
 
-    /// Conservative default thresholds: FluidAudio's docs show these avoid replacing correctly heard words.
+    /// Defaults: `Pipeline.boostCbw` and `boostMinSimilarity` (#99).
     public func transcribeDetailed(_ samples: [Float], boost: [VocabTerm],
-                                   cbw: Float = 0, minSimilarity: Float = 0.7) async throws -> Transcription {
+                                   cbw: Float = Pipeline.boostCbw, minSimilarity: Float = Pipeline.boostMinSimilarity) async throws -> Transcription {
         let asrStart = Date()
         var state = TdtDecoderState.make(decoderLayers: await asr.decoderLayerCount)
         let result = try await asr.transcribe(samples, decoderState: &state)

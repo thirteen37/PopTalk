@@ -8,7 +8,7 @@ import PoptalkSpeech
 // PoptalkBench: scores Pipeline (cleanup + edits) against bench/cases.jsonl, from the repo root.
 //   swift run PoptalkBench [--provider lmstudio|apple|apple-pcc|mlx] [--apple-variant core3|coreAdvanced3]
 //     [--base-url URL] [--cleanup-model ID] [--edit-model ID] [--runs 3] [--filter 'e-*'] [--cases FILE] [--out DIR]
-//     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 0] [--min-similarity 0.7]
+//     [--speech-model v2|v3|ultra|bark3Clean|phonon2] [--boost on|off] [--cbw 1] [--min-similarity 0.7]
 //     [--dictation-prompt-file F] [--edit-prompt-file F]   (#74: replace the system prompts for this run)
 //     [--oracle-terms]   (#75: recase on-screen mustContain terms in the transcript before the LLM; a ceiling)
 //     [--recase-terms on|off]   (#75: force the label-free screen-term recaser on or off; default: per model)
@@ -341,8 +341,8 @@ if provider == "lmstudio" {
 
 let audioCases = cases.filter(\.hasAudio)
 let boostOn = (opt("--boost") ?? "on") != "off"
-let cbw = Float(opt("--cbw") ?? "0") ?? 0
-let minSimilarity = Float(opt("--min-similarity") ?? "0.7") ?? 0.7
+let cbw = opt("--cbw").flatMap(Float.init) ?? Pipeline.boostCbw
+let minSimilarity = opt("--min-similarity").flatMap(Float.init) ?? Pipeline.boostMinSimilarity
 var transcriber: Transcriber?
 var samples: [String: [Float]] = [:]
 // --audio-dir (#99): real-voice recordings, where there, replace the synthesized or committed audio.
