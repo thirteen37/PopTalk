@@ -17,7 +17,8 @@ run dirs (a rerun resumes them).
 The seed is the model's prompt in Prompts.swift (E4B: e4bDictationSystem / e4bEditSystem), or <DIR>/<prompt>.txt.
 --length adds prompt length (tokens) as a second objective in the same run (#103): reflections alternate between
 fixing failures and shortening, a child is kept only if it is more accurate or shorter at the same accuracy, and
-the result is the shortest candidate within 0.01 val accuracy of the best (#74 ran this as a separate --compress pass).
+the pick is the shortest candidate on the (val accuracy, tokens) Pareto front within 0.01 of the front's best accuracy.
+A child longer than the seed is never accepted. Each candidate's mean val latency is logged next to its tokens.
 --dry-run builds and writes the pool, counts the seed's tokens and checks the scoring, then stops (no model, no API).
 --reflector claude sends the reflection prompts (synthetic items, failure feedback) to Claude via `claude -p`;
 anything else is a litellm model id (e.g. a local OpenAI-compatible server)."""
@@ -87,11 +88,12 @@ class Adapter:
 
     def __init__(self, model, component, count=None, ref_tokens=None):
         self.model, self.component = model, component
-        # --length: count(text) → tokens, ref_tokens = the seed's length (brevity 1.0 there and above)
+        # --length: count(text) → tokens, ref_tokens = the seed's length (brevity 1.0 there, uncapped: shorter scores higher)
         self.count, self.ref_tokens, self.tokens = count, ref_tokens, None
+        self.val_ids, self.latency = set(), {}  # mean seconds per case on the full val set, per prompt text
 
     def brevity(self, text):
-        return min(1.0, self.ref_tokens / self.count(text))
+        return self.ref_tokens / self.count(text)
 
     def evaluate(self, batch, candidate, capture_traces=False):
         with tempfile.TemporaryDirectory() as d:
@@ -106,6 +108,8 @@ class Adapter:
                 sys.exit(f"PoptalkBench failed:\n{p.stderr[-2000:]}")
             runs = {r["id"]: r["runs"][0] for r in json.loads(next((d / "res").glob("*.json")).read_text())["cases"]}
         outs = [runs[c["id"]] for c in batch]
+        if {c["id"] for c in batch} == self.val_ids:
+            self.latency[candidate[self.component]] = sum(o["seconds"] for o in outs) / len(outs)
         scores = [score(o, c) for o, c in zip(outs, batch)]
         trajectories = [{"case": c, "run": o} for c, o in zip(batch, outs)] if capture_traces else None
         objectives = None
@@ -121,8 +125,8 @@ class Adapter:
 
 
 class NoAccuracyForLength:
-    """--compress acceptance: `scores` stay pure accuracy. A child passes if it is more accurate on the
-    minibatch, or shorter and within 0.01 per example of its parent; length never buys accuracy away."""
+    """--length acceptance: `scores` stay pure accuracy. A child longer than the seed never passes; otherwise it
+    passes if it is more accurate on the minibatch, or shorter and within 0.01 per example of its parent."""
 
     def __init__(self, adapter):
         self.a = adapter
@@ -131,8 +135,10 @@ class NoAccuracyForLength:
         n = len(p.subsample_scores_after)
         before, after = sum(p.subsample_scores_before), sum(p.subsample_scores_after)
         parent = state.program_candidates[p.parent_program_ids[0]][self.a.component]
-        shorter = self.a.count(p.candidate[self.a.component]) < self.a.count(parent)
-        return after > before or (shorter and after >= before - 0.01 * n)
+        tokens = self.a.count(p.candidate[self.a.component])
+        if tokens > self.a.ref_tokens:
+            return False
+        return after > before or (tokens < self.a.count(parent) and after >= before - 0.01 * n)
 
 
 LENGTH_TEMPLATE = """I gave a small on-device model (Gemma) these instructions; they are {tokens} tokens long:
@@ -198,6 +204,18 @@ def claude(p):
     return r.stdout
 
 
+def front(pts):
+    """Indices of the (accuracy, tokens) Pareto front: no other point is as accurate and as short, and better at one."""
+    return [i for i, (s, t) in enumerate(pts)
+            if not any(s2 >= s and t2 <= t and (s2, t2) != (s, t) for s2, t2 in pts)]
+
+
+def pick(pts, f):
+    """The selection rule: the shortest front candidate within 0.01 val accuracy of the front's best."""
+    top = max(pts[i][0] for i in f)
+    return min((i for i in f if pts[i][0] >= top - 0.01 - 1e-9), key=lambda i: pts[i][1])
+
+
 def dry_run(comp, train, seed, count):
     """Checks the scoring, the length objective and the reflection prompt on fixed strings; prints its size."""
     c = {"id": "x", "kind": comp, "cat": "x", "transcript": "move the review to monday sorry i meant tuesday",
@@ -206,7 +224,11 @@ def dry_run(comp, train, seed, count):
         ("Move the review to Tuesday.", []), ("Move the review to Tuesday", ["not exact"]), ("Sure! Here it is.", ["not exact"])])
     assert score(ok, c) == 1.0 and 0.45 < score(near, c) < 0.5 and score(wrong, c) < 0.2, (score(near, c), score(wrong, c))
     ad = Adapter("dry-run", comp, count, count(seed))
-    assert ad.brevity(seed) == 1.0 and 0.45 < ad.brevity(seed + "\n" + seed) < 0.55
+    lengths = [seed + "\n" + seed, seed, seed[: 3 * len(seed) // 4], seed[: len(seed) // 2]]
+    b = [ad.brevity(t) for t in lengths]
+    assert b[1] == 1.0 and b == sorted(b) and len(set(b)) == 4, b  # uncapped: shorter is always better
+    assert front([(0.80, 900), (0.81, 905), (0.75, 600), (0.74, 650), (0.70, 1000)]) == [0, 1, 2]
+    assert pick([(0.80, 900), (0.81, 905), (0.75, 600)], [0, 1, 2]) == 0
     batch = EvaluationBatch(outputs=[ok, near], scores=[1.0, score(near, c)], trajectories=[{"case": c, "run": ok}, {"case": c, "run": near}])
     recs = reflective(batch, comp)
     assert recs[0]["Feedback"] == "Correct." and recs[1]["Feedback"].startswith("Wrong: not exact."), recs
@@ -236,7 +258,7 @@ def main():
     a = ap.parse_args()
     if a.length and a.reflector != "claude":
         sys.exit("--length reflects through claude -p only")
-    items =[json.loads(l) for l in open("training/out/items.jsonl")]
+    items = [json.loads(l) for l in open("training/out/items.jsonl")]
     items = [it for it in items if "vocabulary" not in it]  # saved vocabulary isn't wired into bench cases
     val = sample(items, a.val_per_cat, seed=1)
     seen = {c["id"] for c in val}
@@ -264,6 +286,7 @@ def main():
             best = res.best_idx
         else:
             ad = Adapter(a.model, comp, count, count(seed))
+            ad.val_ids = {c["id"] for c in va}
             # "hybrid" keeps per-example winners plus the best mean of each objective (most accurate, shortest)
             # as parents. No perfect-minibatch skip: a perfect minibatch can still be said in fewer tokens.
             res = gepa.optimize(seed_candidate={comp: seed}, trainset=tr, valset=va, adapter=ad,
@@ -272,12 +295,15 @@ def main():
                                 skip_perfect_score=False, reflection_minibatch_size=6,
                                 max_metric_calls=a.budget // len(comps), run_dir=str(a.out / f"run-{comp}"),
                                 cache_evaluation=True)
-            # The shortest candidate whose val accuracy is within 0.01 of the most accurate one's.
-            top = max(res.val_aggregate_scores)
-            best = min((i for i, s in enumerate(res.val_aggregate_scores) if s >= top - 0.01),
-                       key=lambda i: count(res.candidates[i][comp]))
-            print(f"{comp}: tokens " + ", ".join(f"#{i} {count(c[comp])} @ {res.val_aggregate_scores[i]:.3f}"
-                                                  for i, c in enumerate(res.candidates)), file=sys.stderr, flush=True)
+            # Pick from the (val accuracy, tokens) Pareto front: see pick().
+            pts = [(s, count(c[comp])) for s, c in zip(res.val_aggregate_scores, res.candidates)]
+            f = front(pts)
+            best = pick(pts, f)
+            print(f"{comp}: #  tokens  val-latency  accuracy  (* = Pareto front, > = pick)", file=sys.stderr)
+            for i, ((s, t), c) in enumerate(zip(pts, res.candidates)):
+                lat = ad.latency.get(c[comp])
+                print(f"{'>' if i == best else '*' if i in f else ' '} #{i:<3} {t:5}  {f'{lat:.3f}s' if lat else '   -  '}  "
+                      f"{s:.3f}", file=sys.stderr, flush=True)
         (a.out / f"{comp}.txt").write_text(res.candidates[best][comp])
         print(f"{comp}: best val {res.val_aggregate_scores[best]:.3f} (seed {res.val_aggregate_scores[0]:.3f}), "
               f"{res.num_candidates} candidates, {res.total_metric_calls} rollouts; wrote {a.out}/{comp}.txt",
