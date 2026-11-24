@@ -139,7 +139,7 @@ if let i = args.firstIndex(of: "--gate-eval") {
 }
 
 // History replay: runs dictation requests through Pipeline with an MLX cleanup model, as the app would.
-//   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID
+//   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID [--cleanup-timeout S]   (S: the base deadline, app default 4)
 // in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, seconds}.
 // Prints counts only: the inputs and outputs are history content and stay in the files.
 if let i = args.firstIndex(of: "--replay") {
@@ -161,7 +161,8 @@ if let i = args.firstIndex(of: "--replay") {
             // The prompt lists term texts only; aliases come from today's saved vocabulary.
             for t in r.vocabulary { try store.add(saved.terms.first { $0.text == t } ?? VocabTerm(text: t)) }
             let calls = ModelCallRecorder()
-            let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model)
+            let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
+                             cleanupTimeout: opt("--cleanup-timeout").flatMap(Double.init) ?? 4)
             let t = Date()
             let res = await p.run(Request(transcript: r.transcript, selection: nil,
                                           context: ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)))
