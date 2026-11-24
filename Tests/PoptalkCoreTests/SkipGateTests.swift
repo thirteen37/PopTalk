@@ -52,3 +52,22 @@ private func skips(_ said: String, screen: String = "") -> Bool {
         #expect(calls.n == (gate ? 0 : 1))
     }
 }
+
+// PoptalkBench --gate-eval: the gate on a history record, and how a reply differs from the transcript.
+@Test func gateEvalGatesAndClassifies() {
+    #expect(GateEval.gate(said: "Can you send me the report by Friday?", boost: [], screen: "", model: "m").skips)
+    let g = GateEval.gate(said: "Ask maheena about it.", boost: ["Mahina"], screen: "Mahina", model: "m")
+    #expect(!g.skips && g.transcript == "Ask maheena about it.")
+    let c = { (r: String) in GateEval.change(from: "So we ship it on Friday.", to: r, terms: ["Meal Prep", "FluidAudio"]) }
+    #expect(c("So we ship it on Friday.") == .same)
+    #expect(c(" So we ship it on Friday. ") == .trimmed)
+    #expect(c("so we ship it on friday.") == .casing)
+    #expect(c("So, we ship it on Friday!") == .punctuation)
+    #expect(c("so, we ship it on friday") == .casingAndPunctuation)
+    #expect(c("So we ship it.\nOn Friday.") == .formatting)
+    #expect(c("So we ship FluidAudio on Friday.") == .term)
+    #expect(c("We ship it on Friday.") == .removed)
+    #expect(c("So we ship it on Friday morning.") == .added)
+    #expect(c("So we send it on Friday.") == .replaced)
+    #expect(GateEval.change(from: "Open meal prep.", to: "Open Meal Prep.", terms: ["Meal Prep"]) == .term)
+}

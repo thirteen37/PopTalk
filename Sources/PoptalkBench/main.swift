@@ -77,6 +77,67 @@ if args.contains("--warmup-probe") {
     exit(0)
 }
 
+// Skip-gate eval (#75): runs `GateEval` on every dictation in history files (local and synced, deduped by id) and
+// compares the gate's decision with what the cleanup model replied. Prints counts only.
+//   PoptalkBench --gate-eval history.jsonl [history-*.jsonl …]
+if let i = args.firstIndex(of: "--gate-eval") {
+    struct Line: Decodable {
+        var type: String; var id: UUID
+        var transcript, selection, model, reply, outcome: String?
+        var boost: [String]?; var messages: [ChatMessage]?
+    }
+    var requests: [UUID: Line] = [:], events: [UUID: Set<String>] = [:]
+    for path in args[(i + 1)...] {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
+        for l in text.split(separator: "\n") {
+            guard let r = try? JSONDecoder().decode(Line.self, from: Data(l.utf8)) else { continue }
+            if r.type == "request" { if requests[r.id] == nil { requests[r.id] = r } } else { events[r.id, default: []].insert(r.type) }
+        }
+    }
+    func group(_ m: String?) -> String {
+        guard let m else { return "no LLM call" }
+        if let v = m.firstMatch(of: /poptalk-(v\d+)/) { return String(v.1) }
+        return m.lowercased().contains("e4b") ? "E4B" : "other"
+    }
+    // counts[group][row] where row is "skip|run" + "/" + a Change, "raw fallback", "events: …" etc.
+    var counts: [String: [String: Int]] = [:]
+    for r in requests.values where (r.selection ?? "").isEmpty {
+        guard let said = r.transcript, !Pipeline.stripHesitations(said).isEmpty else { continue }
+        let g = group(r.model)
+        let screen = (r.messages ?? []).filter { $0.role == "user" }.map(\.content).joined(separator: "\n")
+        let (skips, transcript) = GateEval.gate(said: said, boost: r.boost ?? [], screen: screen, model: r.model ?? "")
+        let d = skips ? "skip" : "run"
+        func add(_ row: String) { counts[g, default: [:]][row, default: 0] += 1 }
+        add("dictations")
+        add("gate \(d)")
+        var same = "no reply"
+        if let reply = r.reply {
+            let change = GateEval.change(from: transcript, to: reply, terms: r.boost ?? [])
+            same = change == .same || change == .trimmed ? "reply same" : "reply changed"
+            add("\(d) / \(change.rawValue)")
+            // Whether the model saw this transcript (the pre-pass or recaser may have changed since), and for
+            // added or replaced words, whether they all come from the prompt (screen or vocabulary) or are digits.
+            if !screen.contains(transcript) { add("\(d) / prompt lacks this transcript") }
+            if change == .added || change == .replaced {
+                func words(_ s: String) -> Set<String> { Set(s.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)) }
+                let new = words(reply).subtracting(words(transcript))
+                if !new.isEmpty, new.isSubset(of: words(screen)) { add("\(d) / \(change.rawValue): new words all in prompt") }
+                if new.contains(where: { $0.contains(where: \.isNumber) }) { add("\(d) / \(change.rawValue): digits") }
+            }
+            if r.outcome?.contains("(raw)") == true { add("\(d) / \(same), raw fallback inserted") }
+        } else if r.model != nil { add("\(d) / no reply") }
+        for e in events[r.id] ?? [] { add("\(d) / event \(e)") }
+        if !(events[r.id] ?? []).isDisjoint(with: ["undo", "correction", "typedCorrection", "redictation"]) {
+            add("\(d) / undone or corrected, \(same)")
+        }
+    }
+    for (g, rows) in counts.sorted(by: { $0.key < $1.key }) {
+        print("== \(g)")
+        for (k, v) in rows.sorted(by: { $0.key < $1.key }) { print("  \(k): \(v)") }
+    }
+    exit(0)
+}
+
 // History replay: runs dictation requests through Pipeline with an MLX cleanup model, as the app would.
 //   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID
 // in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, seconds}.
