@@ -8,7 +8,7 @@
   gen.py teach            → out/teach.jsonl       edit items whose target comes from the E4B teacher
   gen.py build            → out/items.jsonl       every item with its target, filtered and contamination-checked
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
-  gen.py check            → asserts the v5 and v6 families are registered and shaped right (writes nothing)
+  gen.py check            → asserts the v5, v6 and v7 families are registered and shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
@@ -887,6 +887,405 @@ def check_v6():
     print("v6 check ok: " + ", ".join(f"{cats[c]} {c}" for c in V6) + f"; {len(ids)} distinct, 0 contaminated")
 
 
+# ---------- v7: composable ASR-style mutations (#103) ----------
+# Real dictations (training/pool_profile.py, counts only) arrive punctuated and cased by Parakeet, with more "uh"/"um"
+# and fewer cues than the pool. v7 takes existing dictation items and applies 1–3 mutators (the items themselves are
+# the 0 case). A transcript is a token list; each mutator owns the tokens it adds or swaps, never touches owned
+# tokens or a cue phrase, and never inserts inside an owned span. `v7_sane` re-checks that after every step.
+
+V7_BASES = {"d-names-text", "d-names-vocab", "d-filler-text", "d-correction-text", "d-question-text", "d-keep-text",
+            "d-multi-text", "d-multi-screen", "d-terminal", "d-no-list", "d-keep-opener", "d-imperative",
+            "d-correct-later", "d-cancel", "d-restate", "d-instead"}
+V7_CUE_CATS = {"d-correction-text", "d-correct-later", "d-cancel", "d-restate", "d-instead"}
+
+
+def _phrases(ps):
+    alts = {r"\W+".join(map(re.escape, re.findall(r"[\w']+", p.lower()))) for p in ps}
+    return re.compile(r"(?<![\w'])(?:" + "|".join(sorted(alts, key=len, reverse=True)) + r")(?![\w'])", re.I)
+
+
+V7_FILLERS = _phrases(L.FILLERS)
+V7_CUE = _phrases(L.CUES + L.LATER_CUES + L.CANCEL_CUES + ["instead", "never mind", "nevermind", "forget it", "forget that",
+                                                           "scratch that", "rather", "I meant", "correction"])
+V7_PROPER = ({w for n, _ in L.PEOPLE + L.SURNAMES + L.TECH + L.SOUNDALIKE_TERMS for w in n.split()}
+             | set(L.DAYS + L.MONTHS + L.PROJECT_HEAD + L.COMPANY_TAIL))
+V7_TERMS = ([(n, a, "person", False) for n, a in L.PEOPLE + L.SURNAMES] + [(n, a, "product", False) for n, a in L.TECH]
+            + [(n, a, "product", True) for n, a in L.SOUNDALIKE_TERMS])
+V7_INVENTED = re.compile(rf"\b({'|'.join(L.PREFIX)})({'|'.join(s.capitalize() for s in L.SUFFIX if len(s) > 3)}|"
+                         rf"{'|'.join(s for s in L.SUFFIX if len(s) <= 3)})\b")
+V7_HOMOPHONES, V7_SWAPS = dict(L.HOMOPHONES), dict(L.FUNCTION_SWAPS)
+
+
+def decap(w):
+    """A sentence-start word as it reads mid-sentence: "The" → "the"; names, "I" and CamelCase stay."""
+    core = re.sub(r"\W+$", "", w)
+    if (not core[:1].isupper() or core == "I" or core.startswith("I'") or any(c.isupper() for c in core[1:])
+            or core in V7_PROPER or any(core.startswith(p) for p in L.PREFIX)):
+        return w
+    return w[0].lower() + w[1:]
+
+
+def v7_state(it):
+    t, toks = it["transcript"], []
+    for m in re.finditer(r"\S+", t):
+        toks.append({"w": m.group(), "own": None, "orig": m.group(), "at": (m.start(), m.end())})
+    # Cue phrases and the base's own fillers are locked: nothing lands inside "forget that" or "you know".
+    for k, m in enumerate([*V7_CUE.finditer(t), *V7_FILLERS.finditer(t)]):
+        for x in toks:
+            if x["at"][0] < m.end() and m.start() < x["at"][1]:
+                x["own"] = x["own"] or f"lock{k}"
+    for a, b in zip(toks, toks[1:]):  # "Um, Send the logs" (add_fillers keeps the capital) reads "Um, send the logs"
+        if a["w"].endswith(","):
+            b["w"] = decap(b["w"])
+    return {"toks": toks, "target": it["target"], "context": json.loads(json.dumps(it.get("context") or {})),
+            "vocabulary": json.loads(json.dumps(it.get("vocabulary"))) if it.get("vocabulary") else None,
+            "lower": t == t.lower(), "fillers": bool(V7_FILLERS.search(t)), "spans": {}, "log": []}
+
+
+def v7_text(st):
+    return re.sub(r"\s+", " ", " ".join(x["w"] for x in st["toks"])).strip()
+
+
+def gap_ok(toks, i):  # inserting before toks[i] doesn't split a span
+    return i in (0, len(toks)) or toks[i - 1]["own"] is None or toks[i - 1]["own"] != toks[i]["own"]
+
+
+def starts(toks):
+    return [i for i in range(len(toks)) if i == 0 or re.search(r"[.!?]$", toks[i - 1]["w"])]
+
+
+def claim(st, name, i, words=None, own=()):
+    """Opens a span for mutator `name`: inserts `words` before toks[i] and owns them plus toks at `own`."""
+    sid = f"{name}{len(st['spans'])}"
+    for j in own:
+        st["toks"][j]["own"] = sid
+    if words:
+        st["toks"][i:i] = [{"w": w, "own": sid, "orig": None} for w in words.split()]
+    st["spans"][sid] = None  # filled with the span's words by v7_apply
+    return sid
+
+
+def m_filler(r, st):  # "uh"/"um" where people pause: sentence starts or between words
+    toks, f = st["toks"], r.choices([f for f, _ in L.ASR_FILLERS], [w for _, w in L.ASR_FILLERS])[0]
+    gaps = [i for i in range(len(toks)) if gap_ok(toks, i)]
+    ss = [i for i in starts(toks) if i in gaps]
+    if not gaps or st["fillers"]:  # bases with fillers already run above the real rate
+        return None
+    i = r.choice(ss) if ss and r.random() < 0.5 else r.choice(gaps)
+    if not st["lower"] and i in ss:
+        toks[i]["w"] = decap(toks[i]["w"])
+        return claim(st, "filler", i, cap(f) + ",")
+    return claim(st, "filler", i, f)
+
+
+def m_stutter(r, st):  # "I, I think", "the the"
+    toks = st["toks"]
+    free = lambda j: j < 0 or j >= len(toks) or toks[j]["own"] is None  # not next to another span: "half of, of"
+    cand = [i for i, x in enumerate(toks[:-1]) if x["own"] is None and x["w"].lower() in L.STUTTER_WORDS
+            and free(i - 1) and free(i + 1)]
+    if not cand:
+        return None
+    i = r.choice(cand)
+    w = toks[i]["w"]
+    if not st["lower"]:
+        toks[i]["w"] = decap(w)
+    return claim(st, "stutter", i, w + ("," if not st["lower"] and r.random() < 0.5 else ""), own=[i])
+
+
+def m_false_start(r, st):
+    """A restart: the sentence's first words, abandoned ("send the, send the slides"), or another opening dropped
+    ("we should, let's just go"; punctuated transcripts only, the comma marks where it breaks off)."""
+    toks = st["toks"]
+    ss = [i for i in starts(toks) if gap_ok(toks, i) and toks[i]["own"] is None]
+    if not ss:
+        return None
+    i = r.choice(ss)
+    k = 2  # one word again would be a stutter
+    head = toks[i:i + k]
+    if (st["lower"] or r.random() < 0.5) and len(head) == k and all(x["own"] is None and re.fullmatch(r"[\w']+", x["w"]) for x in head) \
+            and i + k < len(toks):
+        words, own = " ".join(x["w"] for x in head), [i, i + 1]  # the restart is part of the span: no "of, of"
+    elif not st["lower"]:
+        words, own = r.choice(L.FALSE_STARTS), []
+    else:
+        return None
+    if st["lower"]:
+        return claim(st, "false_start", i, words.lower(), own)
+    toks[i]["w"] = decap(toks[i]["w"])
+    return claim(st, "false_start", i, cap(words) + ",", own)
+
+
+def m_cutoff(r, st):  # a word broken off and said again: "the pres presentation"
+    toks = st["toks"]
+    cand = [i for i, x in enumerate(toks) if x["own"] is None and re.fullmatch(r"[a-z]{6,}[,.?!]?", x["w"])]
+    if not cand:
+        return None
+    i = r.choice(cand)
+    core = re.match(r"[a-z]+", toks[i]["w"]).group()
+    k = max(r.randint(3, 4), next(j for j, c in enumerate(core) if c in "aeiouy") + 2)
+    return claim(st, "cutoff", i, core[:min(k, len(core) - 2)], own=[i])
+
+
+def m_runon(r, st):
+    """2–3 sentences run together: Parakeet drops the stop (or leaves a comma) and the next word goes lowercase;
+    sometimes the whole transcript comes out lowercase and unpunctuated. The target keeps its sentences."""
+    toks = st["toks"]
+    bounds = [i for i in starts(toks) if i > 0]
+    if not bounds or st["lower"]:
+        return None
+    if r.random() < 0.25:
+        for x in toks:
+            x["w"] = lower_transcript(x["w"])
+        st["lower"] = True
+        return "runon"
+    for i in r.sample(bounds, min(len(bounds), r.randint(1, 2))):
+        toks[i - 1]["w"] = re.sub(r"[.!?]+$", "," if r.random() < 0.35 else "", toks[i - 1]["w"])
+        toks[i]["w"] = decap(toks[i]["w"])
+    return "runon"
+
+
+def v7_find(toks, written):
+    """Index and length of free tokens spelling `written` (case and trailing punctuation aside), or None."""
+    want = norm(written)
+    for i in range(len(toks)):
+        for n in range(1, len(want) + 1):
+            span = toks[i:i + n]
+            if len(span) == n and all(x["own"] is None for x in span) and norm(" ".join(x["w"] for x in span)) == want:
+                return i, n
+    return None
+
+
+def ctx_has(st, term):
+    ctx, low = st["context"], term.lower()
+    return any(low in (s or "").lower() for s in (ctx.get("text"), ctx.get("ocrText"))) or \
+        any(v["text"].lower() == low for v in st["vocabulary"] or [])
+
+
+def v7_show(r, st, term, kind):
+    """Puts a mention of `term` on screen where the model sees it (inside Prompts.window), else adds it to the
+    vocabulary. Returns "screen" or "vocab"."""
+    ctx, line = st["context"], mention(r, (term, [], kind))
+    key = "ocrText" if ctx.get("ocrText") and r.random() < 0.5 else "text"
+    s = ctx.get(key) or ""
+    if s and r.random() < 0.75:
+        cur = len(s)
+        if key == "text" and ctx.get("cursorOffset") is not None:
+            cur = next((j for j in range(len(s) + 1) if utf16(s[:j]) >= ctx["cursorOffset"]), len(s))
+        nl = "\n" in s
+        cands = [m.end() for m in re.finditer(r"\n" if nl else r"(?<=[.!?]) ", s) if cur - 2500 <= m.end() <= cur]
+        if cands or len(s) < 2500:
+            pos = r.choice(cands) if cands else 0
+            ins = line + ("\n" if nl else " " if line[-1] in ".!?" else ". ")
+            ctx[key] = s[:pos] + ins + s[pos:]
+            if key == "text" and ctx.get("cursorOffset") is not None and pos <= cur:
+                ctx["cursorOffset"] += utf16(ins)
+            return "screen"
+    if not s and not ctx.get("ocrText") and r.random() < 0.5:
+        st["context"] = ctx | context(r, [(term, [], kind)])
+        return "screen"
+    st["vocabulary"] = (st["vocabulary"] or []) + [{"text": term, "aliases": [], "weight": 10}]
+    if r.random() < 0.5:
+        st["vocabulary"].insert(r.randint(0, len(st["vocabulary"])), {"text": distractors(r, 1)[0][0], "aliases": [], "weight": 10})
+    return "vocab"
+
+
+def v7_nth(s, word, k):
+    """Position of the k-th whole-word `word` in s (case-insensitive)."""
+    ms = list(re.finditer(rf"(?<![\w']){re.escape(word)}(?![\w'])", s, re.I))
+    return ms[k] if k < len(ms) else None
+
+
+def recase(heard, like):
+    return heard[0].upper() + heard[1:] if like[:1].isupper() else heard
+
+
+def m_soundalike(r, st):
+    """A sound-alike error where Parakeet makes them. Names and terms (misheard people, compound/brand splits and
+    merges): with the right term on screen or in the vocabulary the target fixes it; an invented term with no
+    context stays as heard. A homophone the sentence decides ("their"/"there") is fixed; a short-word swap that
+    leaves a fine sentence ("the"/"a") stays as heard."""
+    toks, tgt = st["toks"], st["target"]
+    kinds = ["term"] * 6 + ["homophone"] * 3 + ["function"]
+    r.shuffle(kinds)
+    for kind in [k for k in dict.fromkeys(kinds) if k != "function" or r.random() < 0.4]:
+        if kind == "term":
+            m, new = V7_INVENTED.search(tgt), None
+            if m and (re.search(rf"\b({'|'.join(L.PROJECT_HEAD)}) $", tgt[:m.start()])
+                      or re.match(rf" ({'|'.join(L.COMPANY_TAIL)})\b", tgt[m.end():])):
+                m = None  # "Project Kestrelbase", "Kestrelly Health": a brand-like re-fill reads oddly inside those
+            if m and r.random() < 0.8 and v7_find(toks, m.group()) and tgt.count(m.group()) == 1:
+                # Re-fill the invented slot with a brand-like term that blurs into words, everywhere it appears.
+                new = r.choice(L.SOUNDALIKE_TERMS)[0]
+                i, n = v7_find(toks, m.group())
+                tail, orig = re.search(r"[^\w']*$", toks[i + n - 1]["w"]).group(), " ".join(x["orig"] for x in toks[i:i + n])
+                toks[i:i + n] = [{"w": w, "own": None, "orig": orig if j == 0 else None} for j, w in enumerate(new.split())]
+                toks[i + len(new.split()) - 1]["w"] += tail
+                st["target"] = tgt = tgt.replace(m.group(), new)
+                if r.random() < 0.5:  # screen and vocabulary follow; else the old name stays there, unrelated
+                    for k in ("text", "ocrText", "windowTitle"):
+                        if st["context"].get(k):
+                            st["context"][k] = st["context"][k].replace(m.group(), new)
+                    for v in st["vocabulary"] or []:
+                        v["text"] = v["text"].replace(m.group(), new)
+            cands = [(n, a, k, keep) for n, a, k, keep in V7_TERMS
+                     if re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", tgt) and v7_find(toks, n)
+                     and any(norm(h) != norm(n) and not V7_CUE.search(h) for h in a)]
+            if not cands:
+                continue
+            n, aliases, k, keepable = next((c for c in cands if c[0] == new), None) or r.choice(cands)
+            heard = r.choice([h for h in aliases if norm(h) != norm(n) and not V7_CUE.search(h)])  # "eye no" reads as a cue
+            i, ln = v7_find(toks, n)
+            tail = re.search(r"[^\w']*$", toks[i + ln - 1]["w"]).group()
+            if not st["lower"]:
+                heard = " ".join(w.capitalize() for w in heard.split()) if k == "person" else recase(heard, toks[i]["w"])
+            orig = " ".join(x["orig"] for x in toks[i:i + ln] if x["orig"] is not None)
+            if ctx_has(st, n):
+                how = "vocab" if any(v["text"].lower() == n.lower() for v in st["vocabulary"] or []) else "screen"
+            elif keepable and r.random() < 0.5 and tgt.count(n) == 1 and not ctx_has(st, heard):
+                pos = tgt.index(n)  # as heard; the sentence start is capitalized as anywhere else
+                st["target"] = tgt[:pos] + (cap(heard) if pos == 0 else heard) + tgt[pos + len(n):]
+                how = "keep"
+            else:
+                how = v7_show(r, st, n, k)
+            sid = claim(st, f"soundalike_{how}", i)
+            toks[i:i + ln] = [{"w": w, "own": sid, "orig": orig if j == 0 else None} for j, w in enumerate(heard.split())]
+            toks[i + len(heard.split()) - 1]["w"] += tail
+            st["fix"] = (n, heard, how)
+            return sid
+        table = V7_HOMOPHONES if kind == "homophone" else V7_SWAPS
+        cand = []
+        for i, x in enumerate(toks):
+            core = re.match(r"[\w']*", x["w"]).group()
+            nxt = toks[i + 1]["w"][:1].lower() if i + 1 < len(toks) else ""
+            if x["own"] is None and core.lower() in table and not (table[core.lower()] == "a" and nxt in "aeiou"):
+                cand.append((i, core))
+        if kind == "function":  # the k-th occurrence must line up with the target's k-th
+            said = [x["w"] for x in toks]
+            cand = [(i, c) for i, c in cand if sum(norm(w) == [c.lower()] for w in said) == len(
+                list(re.finditer(rf"(?<![\w']){re.escape(c)}(?![\w'])", tgt, re.I)))]
+        if not cand:
+            continue
+        i, core = r.choice(cand)
+        heard = recase(table[core.lower()], core)
+        if kind == "function":
+            k = sum(norm(x["w"]) == [core.lower()] for x in toks[:i])
+            m = v7_nth(tgt, core, k)
+            st["target"] = tgt[:m.start()] + recase(heard, m.group()) + tgt[m.end():]
+        sid = claim(st, "homophone" if kind == "homophone" else "function_keep", i, own=[i])
+        toks[i]["w"] = heard + toks[i]["w"][len(core):]
+        return sid
+    return None
+
+
+# Weights: sound-alikes first (the errors that need context); fillers next ("uh"/"um" are common in real use);
+# stutters last (rare in real transcripts: Parakeet drops most repeats).
+V7_MUTATORS = {"soundalike": (m_soundalike, 50), "filler": (m_filler, 14), "false_start": (m_false_start, 12),
+               "runon": (m_runon, 10), "cutoff": (m_cutoff, 5), "stutter": (m_stutter, 2)}
+V7_SOUNDS = {n.lower() for n, _, _, _ in V7_TERMS if " " not in n} | set(V7_HOMOPHONES)
+
+
+def v7_sane(st, base):
+    """Why the mutated state breaks its base, or None: every cue phrase intact, every span whole and where its
+    mutator put it, and undoing the spans gives the base transcript back (so the base target still follows)."""
+    t = v7_text(st)
+    cues = lambda s: sorted(" ".join(norm(m.group())) for m in V7_CUE.finditer(s))
+    if cues(t) != cues(base["transcript"]):
+        return f"cue phrases changed: {cues(base['transcript'])} → {cues(t)}"
+    for sid, words in st["spans"].items():
+        idx = [k for k, x in enumerate(st["toks"]) if x["own"] == sid]
+        if words is None:  # still being filled by its mutator
+            continue
+        if not idx or idx != list(range(idx[0], idx[-1] + 1)):
+            return f"span {sid} split or gone"
+        if norm(" ".join(st["toks"][k]["w"] for k in idx)) != words:
+            return f"span {sid} changed"
+    undone = " ".join(x["orig"] for x in st["toks"] if x["orig"] is not None)
+    if norm(undone) != norm(base["transcript"]):
+        return "undoing the spans doesn't give the base transcript"
+    y = st["target"]
+    if not (y[0].isupper() and y[-1] in ".!?"):
+        return "target shape"
+    if (f := st.get("fix")):
+        n, heard, how = f
+        if how == "keep" and (heard.lower() not in y.lower() or ctx_has(st, n)):
+            return "kept term not as heard, or on screen"
+        if how != "keep" and (n not in y or not ctx_has(st, n)):
+            return "fixed term not in target and context"
+    return None
+
+
+def v7_apply(r, base, k, first=None):
+    """Draws k distinct mutators by weight (`first` first) and applies those that fit; a draw that doesn't fit is
+    skipped, not redrawn, so the weights stay the mix. None if `first` doesn't fit."""
+    st = v7_state(base)
+    names = list(V7_MUTATORS)
+    for step in range(k):
+        name = first if first and step == 0 else r.choices(names, [V7_MUTATORS[n][1] for n in names])[0]
+        names.remove(name)
+        if not (sid := V7_MUTATORS[name][0](r, st)):
+            if name == first:
+                return None
+            continue
+        if sid in st["spans"]:
+            st["spans"][sid] = norm(" ".join(x["w"] for x in st["toks"] if x["own"] == sid))
+        st["log"].append(sid.rstrip("0123456789"))
+        why = v7_sane(st, base)
+        assert not why, f"{base['id']} after {name}: {why}"
+    return st
+
+
+def v7_dictation(bases):
+    """Mutated copies of existing dictation items, clean of bench, held-out and prompt text."""
+    r, checker, out, seen = R("v7-mutate"), Checker(), [], set()
+    pool = [b for b in bases if b["cat"] in V7_BASES]
+    # Toward real use: punctuated, short, fewer cues; and bases a sound-alike can land in.
+    weights = [(3 if re.search(r"[.!?]", b["transcript"]) else 1) * (0.3 if b["cat"] in V7_CUE_CATS else 1)
+               * (4 if len(norm(b["transcript"])) <= 5 else 1)
+               * (3 if V7_INVENTED.search(b["target"]) or set(norm(b["transcript"])) & V7_SOUNDS else 1) for b in pool]
+    while len(out) < V7_N:
+        base = r.choices(pool, weights)[0]
+        st = v7_apply(r, base, r.choices([1, 2, 3], [35, 40, 25])[0], "soundalike" if r.random() < 0.5 else None)
+        if st is None:
+            continue
+        t = v7_text(st)
+        if not st["log"] or t in (base["transcript"], st["target"]) or (t, st["target"]) in seen:
+            continue
+        it = {"id": f"d-mutated-{len(out)}", "cat": "d-mutated", "transcript": t, "context": st["context"],
+              **({"vocabulary": st["vocabulary"]} if st["vocabulary"] else {}), "target": st["target"],
+              "mutators": st["log"], "base": base["id"]}
+        if not checker.reason(it):
+            seen.add((t, st["target"]))
+            out.append(it)
+    return out
+
+
+V7_N = 600
+
+
+def check_v7():
+    """`gen.py check`: v7 items are built, mutated as logged, shaped right and clean of bench/held-out/prompt text."""
+    # The sanity check catches a filler inside a cue (a v6 bug), and mutators never put one there.
+    base = {"id": "x", "transcript": "Book the train. Forget that, I'll drive you know.", "target": "I'll drive."}
+    st = v7_state(base)
+    st["toks"].insert(4, {"w": "um", "own": "filler9", "orig": None})
+    assert "cue phrases changed" in v7_sane(st, base)
+    for seed in range(300):
+        t = v7_text(v7_apply(random.Random(seed), base, 3)).lower()
+        assert "forget that" in t and "you know" in t, t
+    items = [it for it in program_items() if it["cat"] == "d-mutated"]
+    assert len(items) == V7_N, len(items)
+    checker, muts, combos = Checker(), Counter(), Counter()
+    for it in items:
+        assert not checker.reason(it), it
+        t, y = it["transcript"], it["target"]
+        assert y[0].isupper() and y[-1] in ".!?" and t != y and 1 <= len(it["mutators"]) <= 3, it
+        assert not re.search(r"\s{2}|^\s|\s$", t), it
+        muts.update(it["mutators"])
+        combos[len(it["mutators"])] += 1
+    print("v7 check ok: " + ", ".join(f"{n} {m}" for m, n in muts.most_common())
+          + f"; {dict(sorted(combos.items()))} mutators per item; {len(items)} d-mutated, 0 contaminated")
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -1062,14 +1461,16 @@ def prepass_mismatch(row, cat):
 
 def program_items():
     """Every item whose target is built here (no audio, no teacher)."""
-    return (text_dictation() + program_edits() + v3_dictation() + v3_edits() + v4_dictation() + v5_dictation() + v5_edits()
-            + v6_dictation())
+    t, v3, v4, v5, v6 = text_dictation(), v3_dictation(), v4_dictation(), v5_dictation(), v6_dictation()
+    return (t + program_edits() + v3 + v3_edits() + v4 + v5 + v5_edits() + v6
+            + v7_dictation([it for it in t + v3 + v4 + v5 + v6 if not it.get("selection")]))
 
 
 def main(cmd):
     if cmd == "check":
         check_v5()
         check_v6()
+        check_v7()
     elif cmd == "speak":
         write(OUT / "speak.jsonl", speak_items())
     elif cmd == "teach":
