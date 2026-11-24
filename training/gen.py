@@ -8,6 +8,7 @@
   gen.py teach            → out/teach.jsonl       edit items whose target comes from the E4B teacher
   gen.py build            → out/items.jsonl       every item with its target, filtered and contamination-checked
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
+  gen.py check            → asserts the v5 families are registered and shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
@@ -737,6 +738,63 @@ def v4_dictation():
     return out
 
 
+# ---------- v5: short lowercase imperatives ----------
+# On invented probes every model returned some lowercase commands ("send the slides to kwame") as heard, uncapitalized.
+
+def v5_dictation():
+    r, out = R("v5-imperative"), []
+    short = [t for t in L.IMPERATIVES if len(t.split()) <= 5]
+    while len(out) < 200:
+        if r.random() < 0.15:  # two commands in one breath: two sentences
+            (a, ea), (b, eb), j = fill(r, r.choice(short)), fill(r, r.choice(short)), r.choice(L.RUNON_JOIN)
+            spoken, ents = a + j + b, ea + eb
+            target = sentence(a) + " " + sentence((j.split()[-1] + " " if j.strip() else "") + b)
+        else:
+            c, ents = fill(r, r.choice(L.IMPERATIVES))
+            x = r.random()
+            if x < 0.2:
+                c += ", please"
+            elif x < 0.4:
+                c = r.choice(L.IMPERATIVE_LEADS) + " " + c
+            spoken = target = sentence(c)
+        if not 3 <= len(target.split()) <= 15:
+            continue
+        t = lower_transcript(add_fillers(r, spoken, 1) if r.random() < 0.1 else spoken)
+        ctx = context(r, ents) if ents and r.random() < 0.4 else r.choice([long_screen, agent_screen, unrelated_context])(r)
+        out.append({"id": f"d-imperative-{len(out)}", "cat": "d-imperative", "transcript": t, "context": ctx, "target": target})
+    return out
+
+
+def v5_edits():
+    """Inserted text said as a lowercase command comes back as a sentence."""
+    r, out = R("v5-imperative-edit"), []
+    for i in range(60):
+        x = fill(r, r.choice(L.IMPERATIVES))[0]
+        sel = r.choice(L.PLAIN) if r.random() < 0.6 else fill(r, r.choice(L.NAMED))[0]
+        if i % 5 < 3:
+            t, target = r.choice(L.INSERT_AFTER).format(x=lower_transcript(x)), ej("insertAfter", " " + sentence(x))
+        else:
+            t, target = r.choice(L.INSERT_BEFORE).format(x=lower_transcript(x)), ej("insertBefore", sentence(x) + " ")
+        out.append({"id": f"e-insert-imperative-{i}", "cat": "e-insert-imperative", "transcript": t, "selection": sel,
+                    "context": edit_ctx(r), "target": target})
+    return out
+
+
+def check_v5():
+    """`gen.py check`: the v5 families are built and shaped as intended (no GPU, writes nothing)."""
+    cats = Counter(it["cat"] for it in program_items())
+    assert cats["d-imperative"] == 200 and cats["e-insert-imperative"] == 60, cats
+    for it in v5_dictation():
+        t, y = it["transcript"], it["target"]
+        assert t == lower_transcript(t) and t[0].islower(), it
+        assert y[0].isupper() and y[-1] in ".!?" and 3 <= len(y.split()) <= 15, it
+        assert all(w in y for w in L.DAYS + L.MONTHS if w.lower() in t.split()), it
+    for it in v5_edits():
+        text = json.loads(it["target"])["text"].strip()
+        assert it["transcript"] == it["transcript"].lower() and text[0].isupper() and text[-1] == ".", it
+    print(f"v5 check ok: {cats['d-imperative']} d-imperative, {cats['e-insert-imperative']} e-insert-imperative")
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -910,8 +968,15 @@ def prepass_mismatch(row, cat):
     return None
 
 
+def program_items():
+    """Every item whose target is built here (no audio, no teacher)."""
+    return text_dictation() + program_edits() + v3_dictation() + v3_edits() + v4_dictation() + v5_dictation() + v5_edits()
+
+
 def main(cmd):
-    if cmd == "speak":
+    if cmd == "check":
+        check_v5()
+    elif cmd == "speak":
         write(OUT / "speak.jsonl", speak_items())
     elif cmd == "teach":
         write(OUT / "teach.jsonl", teach_items())
@@ -921,7 +986,7 @@ def main(cmd):
             items += audio_dictation(jl(OUT / "speak.jsonl"), {h["id"]: h for h in jl(OUT / "heard.jsonl")})
         else:  # the manifest says so, or its counts read as dropped *-audio categories
             skipped["audio"] = "no heard.jsonl (PoptalkDatagen transcribe not run)"
-        items += text_dictation() + program_edits() + v3_dictation() + v3_edits() + v4_dictation()
+        items += program_items()
         if not (OUT / "teach_out.jsonl").exists():  # SKIP_TEACH=1 make_data.zsh: build without teacher items
             n = len(jl(OUT / "teach.jsonl")) if (OUT / "teach.jsonl").exists() else 0
             print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)

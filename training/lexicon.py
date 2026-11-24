@@ -602,3 +602,37 @@ KEEP_OPENERS = ["So I think we should wait for the review.", "Well, the second d
                 "So what do we tell the client?", "Well, that took longer than expected.",
                 "Okay, I'll send the invite after lunch.", "So we're keeping the old logo after all.",
                 "Well, it works on the staging server.", "Okay, run it one more time."]
+
+# ---------- v5: short lowercase imperatives (every model left some uncapitalized) ----------
+# Clean commands without the capital or full stop; gen.py adds those. {P} person, {D} day, {M} month.
+IMPERATIVES = [
+    "call the bank", "fix the header", "book the vet", "open the spreadsheet", "delete the old drafts",
+    "run the backup tonight", "check the oven timer", "update the shared calendar", "move the boxes to the garage",
+    "send the slides to {P}", "add milk and eggs to the shopping list", "remind me to water the plants tomorrow",
+    "book a table for {D} night", "check the mailbox before you leave", "call {P} back after lunch",
+    "move the standup to {D} morning", "update the address on the order form", "delete the duplicate contacts",
+    "run the cleanup script on the staging box", "open a ticket for the broken projector",
+    "fix the typo in the second paragraph", "send {P} the signed lease by {D}", "add {P} to the planning thread",
+    "remind {P} about the dentist on {D}", "book the flights for {M} before prices go up",
+    "check whether the hotel includes breakfast", "update the team page with the new photos",
+    "delete the branch once it's merged", "run the export again with the new filters",
+    "open the window in the meeting room", "fix the wobbly leg on the kitchen table",
+    "send the meeting notes to everyone who missed it", "add a reminder for the car service in {M}",
+    "move my one on one with {P} to {D}", "check the budget before we order anything else",
+    "call the landlord about the leaking tap", "update the readme with the new install steps",
+    "cancel the gym membership", "archive the old project folders", "forward the receipt to {P}",
+    "rename the file to final version", "share the album with {P} and {P2}", "print two copies of the agenda",
+    "turn off the lights in the hallway", "reply to {P} and say I'll be there", "tell {P} I'm running late",
+    "order more printer paper", "clean up the downloads folder", "restart the router", "close the pull request",
+    "pick up the dry cleaning on {D}", "schedule the review for early {M}", "ask {P} for the updated numbers",
+    "grab a coffee for me on your way in", "merge the docs branch after the review",
+    "set a timer for twenty minutes", "invite {P} to the kickoff on {D}", "lock the front door",
+    "email the venue about parking", "write the release notes before {D}", "review the draft and leave comments",
+    "push the fix and let me know", "return the library books by {D}", "pay the water bill",
+    "save the form before you close it", "buy a birthday card for {P}", "start the dishwasher",
+    "text {P} the address", "post the photos in the group chat", "check in for the flight",
+]
+# Short commands joined in one breath: split into sentences in the target.
+RUNON_JOIN = [" ", " and then ", " then ", " and also ", " also "]
+IMPERATIVE_LEADS = ["please", "just", "go ahead and", "remember to", "don't forget to", "make sure to", "quickly",
+                    "okay,"]
