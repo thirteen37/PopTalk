@@ -8,7 +8,7 @@
   gen.py teach            → out/teach.jsonl       edit items whose target comes from the E4B teacher
   gen.py build            → out/items.jsonl       every item with its target, filtered and contamination-checked
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
-  gen.py check            → asserts the v5 families are registered and shaped right (writes nothing)
+  gen.py check            → asserts the v5 and v6 families are registered and shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
@@ -152,12 +152,15 @@ def add_fillers(r, s, k=None):
     return out[0].upper() + out[1:] if out else out
 
 
+def slot_pool(kind):
+    return {"day": L.DAYS, "time": L.TIMES, "num": L.NUMBERS, "place": L.PLACES, "month": L.MONTHS,
+            "person": [p for p, _ in L.PEOPLE if p.isascii()]}[kind]
+
+
 def correction(r):
     """(spoken, clean) for a self-correction like "on Tuesday, no, Thursday"."""
     tmpl, kind = r.choice(L.CORRECTABLE)
-    pool = {"day": L.DAYS, "time": L.TIMES, "num": L.NUMBERS, "place": L.PLACES, "month": L.MONTHS,
-            "person": [p for p, _ in L.PEOPLE if p.isascii()]}[kind]
-    a, b = r.sample(pool, 2)
+    a, b = r.sample(slot_pool(kind), 2)
     cue = r.choice(L.CUES)
     spoken = tmpl.replace("{X}", f"{a}, {cue}, {b}" if r.random() < 0.5 else f"{a} {cue} {b}")
     return spoken, tmpl.replace("{X}", b)
@@ -795,6 +798,91 @@ def check_v5():
     print(f"v5 check ok: {cats['d-imperative']} d-imperative, {cats['e-insert-imperative']} e-insert-imperative")
 
 
+# ---------- v6: self-corrections beyond "A no B" (#98 phase 2) ----------
+# Cross-sentence fixes, cancellations, restatements and "A no B instead", plus look-alikes that stay.
+
+def v6_later(r):  # a later sentence fixes an earlier value: change it in place, drop the correcting words
+    tmpl, kind = r.choice(L.CORRECTABLE)
+    a, b = r.sample(slot_pool(kind), 2)
+    mid = r.sample(L.BETWEEN, r.randint(0, 2))
+    said = " ".join([tmpl.replace("{X}", a)] + mid + [f"{r.choice(L.LATER_CUES)} {b}."])
+    return heard(r, said), " ".join([tmpl.replace("{X}", b)] + mid)
+
+
+def v6_cancel(r):  # "scratch that" / "never mind" / "forget it": the cancelled sentence goes, the rest stays
+    drop, keep = r.choice(L.CANCELS)
+    lead = [r.choice(L.PLAIN)] if r.random() < 0.3 else []
+    cue = r.choice(L.CANCEL_CUES)
+    said, target = (lead + [drop, cue], lead) if lead and r.random() < 0.4 else (lead + [drop, cue, keep], lead + [keep])
+    return heard(r, " ".join(said)), " ".join(target)
+
+
+def v6_restate(r):  # the same sentence again with one change, no cue: keep the second
+    tmpl, kind = r.choice(L.CORRECTABLE)
+    a, b = r.sample(slot_pool(kind), 2)
+    first = tmpl.replace("{X}", a) if r.random() < 0.5 else sentence(tmpl.split("{X}")[0] + a)  # or restarted after it
+    said = f"{first} {tmpl.replace('{X}', b)}"
+    return lower_transcript(said) if r.random() < 0.8 else said, tmpl.replace("{X}", b)
+
+
+def v6_instead(r):  # "A no B instead" swaps A for B; never "not A"
+    tmpl, kind, prep = r.choice(L.INSTEAD_T)
+    a, b = r.choice(kind) if isinstance(kind, list) else r.sample(slot_pool(kind), 2)
+    fix = f"{prep} {b}" if prep and r.random() < 0.4 else b
+    cue = r.choice(["no", "no", "no wait", "sorry no"])
+    said = tmpl.replace("{X}", f"{a}, {cue}, {fix} instead" if r.random() < 0.3 else f"{a} {cue} {fix} instead")
+    return lower_transcript(said) if r.random() < 0.7 else said, tmpl.replace("{X}", b)
+
+
+def v6_keep(r):  # the cue words as content: nothing to drop
+    s = r.choice(L.KEEP_CUES)
+    return heard(r, s), s
+
+
+V6 = {"d-correct-later": (150, v6_later), "d-cancel": (150, v6_cancel), "d-restate": (120, v6_restate),
+      "d-instead": (120, v6_instead), "d-keep-cue": (60, v6_keep)}
+
+
+def v6_dictation():
+    """Each family draws until it has n items clean of bench, held-out and prompt-E text."""
+    out, checker = [], Checker()
+    for cat, (n, make) in V6.items():
+        r, k = R(cat), 0
+        while k < n:
+            t, target = make(r)
+            it = {"id": f"{cat}-{k}", "cat": cat, "transcript": t, "context": unrelated_context(r), "target": target}
+            if not checker.reason(it):
+                out.append(it)
+                k += 1
+    return out
+
+
+def check_v6():
+    """`gen.py check`: the v6 families are built, shaped as intended and clean of bench/held-out/prompt text."""
+    cats = Counter(it["cat"] for it in program_items())
+    assert all(cats[c] == n for c, (n, _) in V6.items()), cats
+    has = lambda s, w: re.search(rf"(?<!\w){re.escape(w)}(?!\w)", s, re.I)
+    checker, hits, ids = Checker(), [], set()
+    for it in v6_dictation():
+        ids.add((it["transcript"], it["target"]))
+        t, y, cat = it["transcript"], it["target"], it["cat"]
+        assert y[0].isupper() and y[-1] in ".!?", it
+        if cat == "d-keep-cue":
+            assert norm(t) == norm(y) or len(norm(t)) > len(norm(y)), it  # only fillers added
+        else:
+            assert len(norm(y)) < len(norm(t)), it
+        if cat == "d-correct-later":
+            assert not has(y, "meant") and not has(y, "correction"), it
+        if cat == "d-cancel":
+            assert not any(has(y, w) for w in ("scratch", "never mind", "forget")), it
+        if cat == "d-instead":
+            assert not has(y, "instead") and not has(y, "not"), it
+        if (why := checker.reason(it)):
+            hits.append(f"{it['id']}: {why}")
+    assert not hits, "\n".join(hits)
+    print("v6 check ok: " + ", ".join(f"{cats[c]} {c}" for c in V6) + f"; {len(ids)} distinct, 0 contaminated")
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -970,12 +1058,14 @@ def prepass_mismatch(row, cat):
 
 def program_items():
     """Every item whose target is built here (no audio, no teacher)."""
-    return text_dictation() + program_edits() + v3_dictation() + v3_edits() + v4_dictation() + v5_dictation() + v5_edits()
+    return (text_dictation() + program_edits() + v3_dictation() + v3_edits() + v4_dictation() + v5_dictation() + v5_edits()
+            + v6_dictation())
 
 
 def main(cmd):
     if cmd == "check":
         check_v5()
+        check_v6()
     elif cmd == "speak":
         write(OUT / "speak.jsonl", speak_items())
     elif cmd == "teach":

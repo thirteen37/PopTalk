@@ -3,7 +3,8 @@
 # requires-python = ">=3.12"
 # ///
 """Keeps bench/cases.jsonl and training/heldout.jsonl held out (#21, #60): rejects training items that share
-names, sentences or near-paraphrases with any bench case, or with what a held-out case says or expects
+names, sentences or near-paraphrases with any bench case, with the examples prompt E (Prompts.e4bDictationSystem)
+quotes, or with what a held-out case says or expects
 (held-out screens and selections reuse the shared lexicon, see bench_texts). `./contamination.py` runs the self-test;
 `./contamination.py items.jsonl` checks a file and exits 1 on any hit."""
 import json
@@ -11,8 +12,10 @@ import re
 import sys
 from pathlib import Path
 
-BENCH = Path(__file__).resolve().parent.parent / "bench" / "cases.jsonl"
-HELDOUT = Path(__file__).resolve().parent / "heldout.jsonl"
+ROOT = Path(__file__).resolve().parent.parent
+BENCH = ROOT / "bench" / "cases.jsonl"
+HELDOUT = ROOT / "training" / "heldout.jsonl"
+PROMPTS = ROOT / "Sources" / "PoptalkCore" / "Prompts.swift"
 
 # Names and terms that only exist because the bench uses them. Word-boundary, case-insensitive.
 BLOCK = ["Priya", "Raman", "Marcus", "FluidAudio", "Fluid Audio", "Todoist", "Kubernetes", "TestFlight", "Test Flight",
@@ -21,6 +24,18 @@ BLOCK = ["Priya", "Raman", "Marcus", "FluidAudio", "Fluid Audio", "Todoist", "Ku
          "gpt-4o", "GPT 4o", "OKR", "OKRs", "Poptalk", "App Store Connect", "iOS 27", "Q3", "Q three", "Jira", "Helsinki",
          "oat milk", "Ana", "田中", "plumber", "electricity bill", "Ajay", "Arjee"]
 BLOCK_RE = re.compile("|".join(rf"(?<!\w){re.escape(b)}(?!\w)" for b in BLOCK), re.IGNORECASE)
+
+
+def swift_prompt(name: str) -> str:
+    """A system prompt's text as Swift builds it from its Prompts.swift literal (multi-line or raw)."""
+    m = re.search(rf'static var {name} = (#?)"""\n(.*?)\n    """\1', PROMPTS.read_text(), re.S)
+    body = "\n".join(l[4:] for l in m.group(2).split("\n"))
+    return body if m.group(1) else body.replace("\\\n", "").replace('\\"', '"')  # a trailing \ joins lines
+
+
+def prompt_examples(name: str = "e4bDictationSystem") -> list[str]:
+    """The quoted phrases (3+ words) in a prompt: its examples, kept out of training like bench text."""
+    return [q for q in re.findall(r'"([^"]+)"', swift_prompt(name)) if len(words(q)) >= 3]
 
 
 def words(s: str) -> list[str]:
@@ -56,6 +71,9 @@ class Checker:
             hl, hs = bench_texts(heldout, heldout=True)
             longs |= hl
             shorts += hs
+        for q in prompt_examples():  # what prompt E quotes, matched like what a held-out case says
+            longs.add(q)
+            shorts.append(q)
         self.n = n
         self.grams = set().union(*(ngrams(words(t), n) for t in longs))
         self.short_norm = {" ".join(words(t)) for t in longs if len(words(t)) < n}
@@ -99,7 +117,9 @@ def self_test():
     assert not c.reason({"transcript": "make this shorter", "selection": "The office will be closed next Friday."})
     assert not c.reason({"transcript": "ask siobhan to look at the terraform alerts before monday",
                          "context": {"text": "#ops — Siobhan: Terraform alerts are noisy"}})
-    print("contamination self-test ok")
+    assert c.reason({"transcript": "the vote is on tuesday bring the agenda"})  # prompt E's own example
+    assert swift_prompt("dictationSystem").startswith("You clean up dictated speech.")
+    print(f"contamination self-test ok ({len(prompt_examples())} prompt examples)")
 
 
 if __name__ == "__main__":
