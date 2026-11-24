@@ -45,6 +45,18 @@ private func one(_ json: String) throws -> BenchCase { try BenchCase.load(jsonl:
     #expect(e.failures == ["error: Couldn't reach the language model"])
 }
 
+@Test func reportsTheGuardThatRejectedTheReply() throws {  // GEPA scores these 0 (#103)
+    let c = try one(#"{"id":"x","kind":"dictation","transcript":"hello"}"#)
+    var r = PipelineResult(outcome: .insert(" hello there", label: "Dictated (raw)"))
+    r.rejectedBy = "length"
+    let run = c.score(r, seconds: 1)
+    #expect(run.rejectedBy == "length")
+    #expect(run.lengthLimit == Pipeline.maxCleanupLength("hello there"))
+    r.rejectedBy = "dropsContent"
+    #expect(c.score(r, seconds: 1).lengthLimit == nil)
+    #expect(c.score(PipelineResult(outcome: .insert("hello", label: "Dictated (raw)")), seconds: 1).rejectedBy == nil)
+}
+
 @Test func editChecks() throws {
     let c = try one(#"{"id":"t","kind":"edit","transcript":"Quarterly Review","selection":"Q3 Notes","expectAction":"replace","expectExact":"Quarterly Review","expectVocabOffer":null}"#)
     #expect(c.score(PipelineResult(outcome: .replaceSelection("Quarterly Review", label: "Replaced")), seconds: 1).failures == [])
