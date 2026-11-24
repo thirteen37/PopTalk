@@ -33,6 +33,9 @@ public struct PipelineResult: Equatable, Sendable {
     public var skippedLLM: Bool
     /// Screen or learned terms (not saved vocabulary) whose spelling the casing fix wrote (#87).
     public var recased: [String] = []
+    /// The guard that turned a dictation reply into a raw fallback: empty, length, dropsContent, dropsProtected
+    /// or echoesContext (replay counts); nil when there was no reply or it was used.
+    public var rejectedBy: String?
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
                 modelAction: String? = nil, skippedLLM: Bool = false) {
@@ -123,15 +126,20 @@ public struct Pipeline: Sendable {
                 return result(.insert(space + transcript, label: "Dictated (raw) · model loading"), degraded: true)
             }
             catch { reply = nil }
-            if let reply, case let cleaned = Self.restoreMarks(Self.stripChatter(reply), transcript: transcript), !cleaned.isEmpty,
-               cleaned.count <= limit,
-               !Self.dropsContent(cleaned, transcript: transcript),
-               !Self.dropsProtected(cleaned, transcript: transcript),
-               !Self.echoesContext(cleaned, transcript: transcript,
-                                   context: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context)) {
-                return result(.insert(space + cleaned, label: "Dictated"))
-            }
-            return result(.insert(space + transcript, label: "Dictated (raw)"))
+            guard let reply else { return result(.insert(space + transcript, label: "Dictated (raw)")) }
+            let cleaned = Self.restoreMarks(Self.stripChatter(reply), transcript: transcript)
+            let rejectedBy: String? =
+                cleaned.isEmpty ? "empty"
+                : cleaned.count > limit ? "length"
+                : Self.dropsContent(cleaned, transcript: transcript) ? "dropsContent"
+                : Self.dropsProtected(cleaned, transcript: transcript) ? "dropsProtected"
+                : Self.echoesContext(cleaned, transcript: transcript,
+                                     context: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context)) ? "echoesContext"
+                : nil
+            guard let rejectedBy else { return result(.insert(space + cleaned, label: "Dictated")) }
+            var res = result(.insert(space + transcript, label: "Dictated (raw)"))
+            res.rejectedBy = rejectedBy
+            return res
         }
 
         let ns = transcript as NSString

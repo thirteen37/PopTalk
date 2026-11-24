@@ -81,6 +81,22 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
 @Test func dictationFallsBackToRawWhenLLMFails() async {
     let r = await pipeline(reply: nil).run(req("hello there"))
     #expect(r.outcome == .insert("hello there", label: "Dictated (raw)"))
+    #expect(r.rejectedBy == nil)
+}
+
+@Test func rawFallbackNamesTheGuard() async {  // for the replay's per-guard counts
+    let said = "we need to finish the slides before the client call on friday afternoon"
+    let cases: [(String, String, ScreenSnapshot, String?)] = [
+        (said, "We need to finish the slides before the client call on Friday afternoon.", ScreenSnapshot(), nil),
+        (said, String(repeating: "Sure, here is the cleaned text. ", count: 10), ScreenSnapshot(), "length"),
+        (said, "Friday.", ScreenSnapshot(), "dropsContent"),
+        ("she said (not yet) and left", "She said and left.", ScreenSnapshot(), "dropsProtected"),
+        ("remind me to call priya about the okrs", todoist, ScreenSnapshot(text: todoist), "echoesContext"),
+    ]
+    for (t, reply, ctx, guardName) in cases {
+        let r = await pipeline(reply: reply).run(Request(transcript: t, selection: nil, context: ctx))
+        #expect(r.rejectedBy == guardName, "\(reply.prefix(20))")
+    }
 }
 
 @Test func literallyBypassesLLM() async {
