@@ -38,8 +38,6 @@ cp -R .build/release/mlx-swift_Cmlx.bundle $app/Contents/Resources/
 # Icons are pre-rendered and committed (regenerate: assets/icon/render.py). Assets.car holds the Liquid Glass
 # icon (CFBundleIconName, macOS 26+); AppIcon.icns is the CFBundleIconFile fallback.
 cp assets/icon/AppIcon.icns assets/icon/Assets.car assets/icon/MenuBar*.png $app/Contents/Resources/
-# LoRA adapters, fused into their base model at load (#36); relative model ids resolve here.
-cp -R adapters $app/Contents/Resources/
 version=${POPTALK_VERSION:-}
 if [[ -z $version ]]; then
   if tag=$(git describe --tags --match 'v*' --exact-match 2>/dev/null); then version=${tag#v}

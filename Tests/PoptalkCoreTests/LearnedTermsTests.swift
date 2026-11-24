@@ -24,7 +24,7 @@ private let day: TimeInterval = 86_400
     try? store.add(VocabTerm(text: "PopTalk"))
     func run(_ t: String, screen: String, learned: [VocabTerm] = []) async -> PipelineResult {
         await Pipeline(complete: { _, _, _, _ in "Ok." }, vocabulary: store, learned: learned,
-                       cleanupModel: ModelSettings.fineTune, editModel: ModelSettings.fineTune)
+                       cleanupModel: "adapters/gemma-4-e2b-poptalk-v4", editModel: "adapters/gemma-4-e2b-poptalk-v4")
             .run(Request(transcript: t, selection: nil, context: ScreenSnapshot(text: screen)))
     }
     #expect(await run("ship poptalk to meal prep.", screen: "Projects: Inbox, Meal Prep, Work.").recased == ["Meal Prep"])

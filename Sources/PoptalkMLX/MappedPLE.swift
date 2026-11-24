@@ -3,7 +3,7 @@ import MLX
 import MLXNN
 import PoptalkCore
 
-/// Gemma 4's per-layer embeddings (PLE, 1.26 GB at 4-bit in E2B) read from the safetensors file instead of
+/// Gemma 4's per-layer embeddings (PLE, 1.59 GB at 4-bit in E4B) read from the safetensors file instead of
 /// GPU memory (#52). Only the current tokens' rows are ever needed. The three PLE tensors are wrapped, without
 /// a copy, over private mappings of the file; each call gathers its rows on MLX's CPU stream and dequantizes
 /// them on the GPU: the same ops on the same bytes as `QuantizedEmbedding`, so the output is bit-identical.

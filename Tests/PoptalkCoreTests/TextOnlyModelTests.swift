@@ -64,8 +64,7 @@ import Testing
 
 @Test func textOnlyDirectoryIsForGemma4Bases() {
     let support = URL(fileURLWithPath: "/AS")
-    #expect(TextOnlyModel.directory(for: ModelSettings.e2b, appSupport: support)?.path
-            == "/AS/Poptalk/models/gemma-4-e2b-it-4bit-text")
+    #expect(TextOnlyModel.directory(for: "mlx-community/gemma-4-e2b-it-4bit", appSupport: support) == nil)  // #101
     #expect(TextOnlyModel.directory(for: ModelSettings.e4b, appSupport: support)?.path
             == "/AS/Poptalk/models/gemma-4-e4b-it-4bit-text")  // #72
     #expect(TextOnlyModel.directory(for: "/some/local/dir", appSupport: support) == nil)

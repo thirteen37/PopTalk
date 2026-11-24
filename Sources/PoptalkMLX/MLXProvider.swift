@@ -100,8 +100,8 @@ public enum MLXProvider {
             timing.info("text-only \(dir.lastPathComponent, privacy: .public) downloaded and stripped in \(Date().timeIntervalSince(start), format: .fixed(precision: 1))s")
         }
     }
-    /// Where relative adapter ids live: the app bundle's Resources (`scripts/install.zsh` copies `adapters/`
-    /// there), else the working directory (the repo, for `swift run`).
+    /// Where relative adapter ids live: the app bundle's Resources, else the working directory (the repo, for
+    /// `swift run` and `training/bench.zsh`).
     static let roots = [Bundle.main.resourceURL, URL(fileURLWithPath: FileManager.default.currentDirectoryPath)].compactMap { $0 }
     private static let models = Models()
     static let timing = Logger(subsystem: "io.lyx.poptalk", category: "timing")

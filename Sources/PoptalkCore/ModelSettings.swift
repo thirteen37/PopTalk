@@ -3,19 +3,10 @@ import Foundation
 /// Which language-model provider and models the app uses, stored per provider in UserDefaults
 /// so switching providers never hands one provider another's model ids.
 public enum ModelSettings {
-    public static let e2b = "mlx-community/gemma-4-e2b-it-4bit"
-    /// The E2B fine-tune (#21) as a LoRA adapter, fused into `e2b` at load (#36). Relative: see `adapter(_:roots:)`.
-    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v4"
-    public static let fineTuneV3 = "adapters/gemma-4-e2b-poptalk-v3"
-    public static let fineTuneV2 = "adapters/gemma-4-e2b-poptalk-v2"
     public static let e4b = "mlx-community/gemma-4-e4b-it-4bit"
 
     /// The MLX models offered by name in Settings; any other id is "Custom".
     public static let knownMLXModels: [(id: String, name: String)] = [
-        (fineTune, "Gemma 4 E2B · PopTalk fine-tune"),
-        (fineTuneV3, "Gemma 4 E2B · PopTalk fine-tune v3"),
-        (fineTuneV2, "Gemma 4 E2B · PopTalk fine-tune v2"),
-        (e2b, "Gemma 4 E2B"),
         (e4b, "Gemma 4 E4B"),
     ]
 
@@ -43,14 +34,21 @@ public enum ModelSettings {
         "speechModel": "v2",
         "provider": "mlx",  // mlx | lmstudio | apple
         "baseURL": "http://localhost:1234/v1",
-        "mlxCleanupModel": fineTune,
-        "mlxEditModel": fineTune,
+        "mlxCleanupModel": e4b,
+        "mlxEditModel": e4b,
         "lmstudioCleanupModel": "google/gemma-4-e4b",
         "lmstudioEditModel": "google/gemma-4-e4b",
     ]
 
     /// Before per-provider fields, `cleanupModel`/`editModel` held LM Studio ids: move them to the LM Studio fields.
+    /// #101: E2B and its bundled fine-tunes (`adapters/gemma-4-e2b-poptalk-*`, last in bd6b7ea) are gone: saved
+    /// ids for them fall back to the default, E4B.
     public static func migrate(_ d: UserDefaults) {
+        for key in ["mlxCleanupModel", "mlxEditModel"] {
+            guard let v = d.string(forKey: key),
+                  v == "mlx-community/gemma-4-e2b-it-4bit" || v.hasPrefix("adapters/gemma-4-e2b-poptalk-") else { continue }
+            d.removeObject(forKey: key)
+        }
         for (old, new) in [("cleanupModel", "lmstudioCleanupModel"), ("editModel", "lmstudioEditModel")] {
             guard let v = d.string(forKey: old) else { continue }
             // Unset (or the registered default): never overwrite an id saved in the new field.

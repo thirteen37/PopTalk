@@ -8,7 +8,7 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 ## Why PopTalk
 
-- Context changes what the speech recogniser hears. While you hold the key, PopTalk collects terms from the focused field, the text near it, the window title and the web domain, with OCR as a fallback when an app hides its text. Those terms and your vocabulary are used to boost recognition (CTC vocabulary boosting on Parakeet) and to fix the casing of matching words. A fine-tuned local language model then cleans up the text with the same context. Cloud dictation services can steer recognition like this on their servers. Other local apps tend to give screen context only to a cleanup model after recognition, or use it to set the tone per app.
+- Context changes what the speech recogniser hears. While you hold the key, PopTalk collects terms from the focused field, the text near it, the window title and the web domain, with OCR as a fallback when an app hides its text. Those terms and your vocabulary are used to boost recognition (CTC vocabulary boosting on Parakeet) and to fix the casing of matching words. A local language model (Gemma 4 E4B) then cleans up the text with the same context. Cloud dictation services can steer recognition like this on their servers. Other local apps tend to give screen context only to a cleanup model after recognition, or use it to set the tone per app.
 - You can fix a mistake by speaking or typing. Select a misheard word and say *"it's Todoist, capital T-O-D-O-I-S-T"*. If you correct it by typing instead, PopTalk offers to add the term to your vocabulary. There's also an opt-in setting to remember screen terms that fixed a dictation, so later dictations get them right when they're no longer on screen.
 - It edits selected text by voice: "make this more formal", "turn this into bullet points", "translate to Japanese". One model decides whether you're correcting a word, replacing the selection, editing it, or inserting text before or after it.
 - Esc undoes any result, terminals included (there it deletes the dictated text with backspaces).
@@ -16,15 +16,15 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 ## Accuracy
 
-PopTalk's speech benchmark, with Parakeet TDT v2 and the default v4 fine-tune (`adapters/gemma-4-e2b-poptalk-v4`):
+PopTalk's speech benchmark, with Parakeet TDT v2 and the default Gemma 4 E4B (`mlx-community/gemma-4-e4b-it-4bit`):
 
 | Stage | Word error rate | Screen and vocabulary terms right |
 | --- | --- | --- |
 | Parakeet alone | 21.5% | 56% |
 | With context boosting | 12.7% | 79% |
-| After cleanup with context | 8.2% | 100% |
+| After cleanup with context | 5.3% | 100% |
 
-This is 21 dictations read by macOS text-to-speech voices, most of them with screen context or vocabulary that the sentence uses. It's a small synthetic set, so treat the numbers as an indication rather than a rigorous evaluation. Results: [`bench/results/2026-11-24-093617-mlx-adapters_gemma-4-e2b-poptalk-v4-audio-s.json`](bench/results/2026-11-24-093617-mlx-adapters_gemma-4-e2b-poptalk-v4-audio-s.json).
+This is 21 dictations read by macOS text-to-speech voices, most of them with screen context or vocabulary that the sentence uses. It's a small synthetic set, so treat the numbers as an indication rather than a rigorous evaluation. Results: [`bench/results/2026-11-24-091444-mlx-mlx-community_gemma-4-e4b-it-4bit-audio-ctx96-all-on-s.json`](bench/results/2026-11-24-091444-mlx-mlx-community_gemma-4-e4b-it-4bit-audio-ctx96-all-on-s.json).
 
 ## Install
 
@@ -32,7 +32,7 @@ This is 21 dictations read by macOS text-to-speech voices, most of them with scr
 2. Open it and drag PopTalk to Applications, then launch it from there.
 3. Grant Microphone, Accessibility (to read and insert text) and Screen Recording (only used for the OCR fallback). The menu-bar icon shows what's missing.
 
-Models download on first use. The default language model is about 3.3 GB; PopTalk strips it to a 2.5 GB text-only copy in `~/Library/Application Support/Poptalk/models` and deletes the download. A model already in your Hugging Face cache is copied from there instead.
+Models download on first use. The default language model is about 4.8 GB; PopTalk strips it to a 3.9 GB text-only copy in `~/Library/Application Support/Poptalk/models` and deletes the download. A model already in your Hugging Face cache is copied from there instead.
 
 ### Build from source
 
@@ -58,8 +58,8 @@ The full details, including the overlay, the safety net when cleanup drops conte
 ## Limits
 
 - Needs an Apple Silicon Mac with macOS 14 or later. It's macOS only.
-- English first. The default speech model, Parakeet TDT v2, is English only. Parakeet TDT v3 and Parakeet Ultra (in Settings → Models) recognise 25 European languages, but the fine-tuned cleanup model and the benchmarks are English.
-- Uses about 1.5 GB of memory with the default models, and about 2.9 GB with the larger Gemma 4 E4B option.
+- English first. The default speech model, Parakeet TDT v2, is English only. Parakeet TDT v3 and Parakeet Ultra (in Settings → Models) recognise 25 European languages, but the cleanup prompts and the benchmarks are English.
+- Uses about 3 GB of memory with the default models. On a Mac with 8 GB or less, choose Apple's on-device model in Settings → Models (macOS 26 with Apple Intelligence): macOS runs it outside PopTalk.
 - Context comes from what apps expose through Accessibility, plus OCR. Fixing by typing only works in apps whose text fields PopTalk can read, and not in terminals.
 
 ## Privacy
@@ -71,11 +71,11 @@ PopTalk reads the focused field, nearby text, the window title, the web domain a
 ```sh
 swift build
 swift test                                   # PoptalkCore and PoptalkMLX tests (Swift Testing)
-swift build -c release && zsh training/bench.zsh adapters/gemma-4-e2b-poptalk-v4   # benchmark: dictation, edits, speech, held-out set
+swift build -c release && zsh training/bench.zsh mlx-community/gemma-4-e4b-it-4bit   # benchmark: dictation, edits, speech, held-out set
 ```
 
 The targets are `PoptalkCore` (prompts, pipeline, policies; pure and tested), `PoptalkSpeech` (speech recognition and boosting), `PoptalkMLX` (in-process models), `Poptalk` (the menu-bar app), and `PoptalkBench` and `PoptalkDatagen` (benchmark and training-data tools). `bench/` holds the benchmark cases and committed results; compare runs with `PoptalkBench --compare a.json b.json`. `training/` has the synthetic data generation and LoRA training (`mlx_lm.lora`, run with `uv`; see `training/make_data.zsh` and `training/lora.yaml`), and `training/gepa_prompts.py` tunes prompts for models without a fine-tune. The pipeline, diagrams and A/B environment variables are in [How PopTalk works](docs/how-it-works.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The bundled fine-tune adapter is a Gemma 4 derivative under Apache 2.0, see [adapters/gemma-4-e2b-poptalk-v4](adapters/gemma-4-e2b-poptalk-v4/README.md). Speech models are downloaded at runtime under their own licenses.
+MIT, see [LICENSE](LICENSE). Language and speech models are downloaded at runtime under their own licenses.

@@ -40,8 +40,8 @@ if let i = args.firstIndex(of: "--compare") {
 // long-context dictation and an edit. Prefill/gen splits are in the timing log (see Transcriber/MLXProvider).
 //   PoptalkBench --warmup-probe [--cleanup-model ID] [--edit-model ID]
 if args.contains("--warmup-probe") {
-    let cleanup = opt("--cleanup-model") ?? "mlx-community/gemma-4-e2b-it-4bit"
-    let edit = opt("--edit-model") ?? "mlx-community/gemma-4-e4b-it-4bit"
+    let cleanup = opt("--cleanup-model") ?? ModelSettings.e4b
+    let edit = opt("--edit-model") ?? ModelSettings.e4b
     func elapsed(_ start: Date) -> String { String(format: "%.2fs", Date().timeIntervalSince(start)) }
     do {
         let all = try BenchCase.load(jsonl: String(contentsOfFile: "bench/cases.jsonl", encoding: .utf8))

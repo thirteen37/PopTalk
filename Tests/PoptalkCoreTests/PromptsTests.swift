@@ -138,7 +138,7 @@ private func filler(_ n: Int) -> String { String(repeating: "a ", count: n / 2) 
     #expect(!Prompts.isS1Mini("adapters/gemma-4-e2b-poptalk-v2"))
 }
 
-// #74: only base E4B gets the GEPA-tuned prompts. The fine-tunes (and E2B, Apple, LM Studio) keep the exact
+// #74: only base E4B gets the GEPA-tuned prompts. Fine-tune adapters (and Apple, LM Studio) keep the exact
 // prompts the adapters were trained on: changing those needs a bench re-run and possibly a retrain.
 @Test func onlyBaseE4BGetsTheGEPAPrompts() {
     let ctx = snap("notes")
@@ -148,7 +148,7 @@ private func filler(_ n: Int) -> String { String(repeating: "a ", count: n / 2) 
     }
     #expect(systems(ModelSettings.e4b) == [Prompts.e4bDictationSystem, Prompts.e4bEditSystem])
     #expect(Prompts.e4bDictationSystem != Prompts.dictationSystem && Prompts.e4bEditSystem != Prompts.editSystem)
-    for model in [ModelSettings.fineTune, ModelSettings.fineTuneV2, ModelSettings.e2b, "google/gemma-4-e4b"] {
+    for model in ["adapters/gemma-4-e2b-poptalk-v4", "apple", "google/gemma-4-e4b"] {
         #expect(systems(model) == [Prompts.dictationSystem, Prompts.editSystem], "\(model)")
     }
     let sha = { (s: String) in SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined() }

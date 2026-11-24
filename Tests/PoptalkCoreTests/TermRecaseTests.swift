@@ -2,6 +2,9 @@ import Foundation
 import Testing
 @testable import PoptalkCore
 
+/// A local E2B fine-tune adapter (#101: no longer bundled), the kind of model the recaser is for.
+private let fineTune = "adapters/gemma-4-e2b-poptalk-v4"
+
 // #75: on-screen terms recased in the transcript before the LLM, up to case and spacing.
 private func recase(_ t: String, screen: String, saved: [String] = []) -> String {
     let terms = Pipeline.boostTerms(saved: saved.map { VocabTerm(text: $0) }, context: ScreenSnapshot(text: screen)).map(\.text)
@@ -57,7 +60,7 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     func dictate(_ t: String) async -> (prompt: String, calls: Int) {
         let seen = Seen()
         let p = Pipeline(complete: { _, m, _, _ in seen.calls += 1; seen.prompt = m.last!.content; return "Ok." },
-                         vocabulary: store, cleanupModel: ModelSettings.fineTune, editModel: ModelSettings.fineTune,
+                         vocabulary: store, cleanupModel: fineTune, editModel: fineTune,
                          features: DictationFeatures(d, environment: [:]))
         _ = await p.run(Request(transcript: t, selection: nil, context: screen))
         return (seen.prompt, seen.calls)
@@ -76,10 +79,11 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(DictationFeatures(UserDefaults(suiteName: "poptalk-test-\(UUID())")!, environment: ["POPTALK_SKIP_LLM": "1"]).skipGate)
 }
 
-// Gated per model: E4B fixes screen terms itself and regressed when they were pre-fixed (#75).
+// Gated per model: E4B fixes screen terms itself and regressed when they were pre-fixed (#75). E2B fine-tunes, now
+// only local adapter folders (#101), keep it.
 @Test func recaseIsOnForE2BAdaptersOnly() async {
     final class Seen: @unchecked Sendable { var prompt = "" }
-    for (model, recased) in [(ModelSettings.fineTune, true), (ModelSettings.fineTuneV2, true), (ModelSettings.e4b, false)] {
+    for (model, recased) in [(fineTune, true), ("/Users/me/out/gemma-4-e2b-poptalk-v5", true), (ModelSettings.e4b, false)] {
         let seen = Seen()
         let p = Pipeline(complete: { _, m, _, _ in seen.prompt = m.last!.content; return "ok" },
                          vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),

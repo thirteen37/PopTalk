@@ -213,10 +213,18 @@ struct SettingsView: View {
                 default:
                     MLXModelPicker(label: "Dictation cleanup model", id: $mlxCleanupModel)
                     MLXModelPicker(label: "Edit model", id: $mlxEditModel)
+                    // #101: E4B needs about 3 GB; Apple's model runs in the system, outside PopTalk's memory.
+                    if ProcessInfo.processInfo.physicalMemory <= 8 << 30 {
+                        Text("Gemma 4 E4B uses about 3 GB of memory. On this Mac, Apple on-device may be the better choice.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-                Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
-                Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                // Only E2B fine-tunes (local adapter folders since #101) use it.
+                if provider == "mlx" && Pipeline.recasesTerms(mlxCleanupModel) {
+                    Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
+                    Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Toggle("Skip cleanup for clean dictations (experimental)", isOn: $skipGate)
                 Text("Inserts a punctuated dictation with no fillers or corrections as heard, without the language model.")
                     .font(.footnote).foregroundStyle(.secondary)
