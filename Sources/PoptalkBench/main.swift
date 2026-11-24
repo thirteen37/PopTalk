@@ -18,7 +18,10 @@ import PoptalkSpeech
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
+//     [--audio-dir DIR]   (#99: DIR/<id>.wav, when there, replaces the case's audio; results go to bench/results-real/)
 //   swift run PoptalkBench --compare a.json b.json
+//   PoptalkBench --record [--filter 's-*'] [--out bench/audio-real] [--redo]   (#99: read each case's script into the mic;
+//     see docs/real-voice-bench.md. Cases already recorded are skipped unless --redo.)
 Transcriber.quietLogs()
 let args = CommandLine.arguments
 func opt(_ name: String) -> String? { args.firstIndex(of: name).flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } }
@@ -33,6 +36,65 @@ if let i = args.firstIndex(of: "--compare") {
     print("a: \(args[i + 1])\n\(a.table())\n\nb: \(args[i + 2])\n\(b.table())\n")
     let lines = BenchReport.compare(a, b)
     print(lines.isEmpty ? "no per-case changes" : lines.joined(separator: "\n"))
+    exit(0)
+}
+
+// Real-voice recording (#99): shows each case's script and context, records the default mic between two Enters,
+// writes DIR/<id>.wav (16 kHz mono). The recordings are the user's voice: DIR stays gitignored.
+if args.contains("--record") {
+    let dir = opt("--out") ?? "bench/audio-real"
+    let all: [BenchCase]
+    do {
+        all = try BenchCase.load(jsonl: String(contentsOfFile: opt("--cases") ?? "bench/cases.jsonl", encoding: .utf8))
+            .filter { fnmatch(opt("--filter") ?? "s-*", $0.id, 0) == 0 && $0.speak != nil }
+    } catch { fail(error) }
+    let todo = BenchCase.toRecord(all, dir: dir, redo: args.contains("--redo"))
+    print("\(todo.count) of \(all.count) cases to record into \(dir)/" + (todo.count < all.count ? " (\(all.count - todo.count) done; --redo records them again)" : ""))
+    guard !todo.isEmpty else { exit(0) }
+    guard await AudioRecorder.requestAccess() else {
+        fail("no microphone access: allow your terminal app in System Settings → Privacy & Security → Microphone, then rerun")
+    }
+    do { try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true) } catch { fail(error) }
+    func line(_ prompt: String) -> String {
+        print(prompt, terminator: "")
+        fflush(stdout)
+        guard let l = readLine() else { print(""); exit(0) }  // Ctrl-D: stop; what's kept so far stays
+        return l.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+    func brief(_ s: String?) -> String? {
+        guard let s, !s.isEmpty else { return nil }
+        let one = s.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return one.count > 110 ? one.prefix(110) + "…" : one
+    }
+    let recorder = AudioRecorder()
+    var kept = 0
+    for (n, c) in todo.enumerated() {
+        print("\n[\(n + 1)/\(todo.count)] \(c.id)")
+        if let s = brief(c.context) { print("  screen: \(s)") }
+        if let s = brief(c.ocr) { print("  ocr:    \(s)") }
+        if !c.vocabulary.isEmpty { print("  vocabulary: \(c.vocabulary.joined(separator: ", "))") }
+        print("\n  say:  \(c.speak!)\n")
+        take: while true {
+            _ = line("  Enter to start recording ")
+            do { try recorder.start(deviceUID: nil) } catch { fail("can't open the microphone: \(error)") }
+            _ = line("  ● recording… Enter to stop ")
+            let samples = recorder.stop()
+            let heard = AudioGate.hasSpeech(samples)
+            switch line(String(format: "  %.1fs%@. r = retake, s = skip, q = quit, Enter = keep: ", Double(samples.count) / 16_000,
+                               heard ? "" : " (no speech heard: check the input device and level)")) {
+            case "r": continue take
+            case "s": break take
+            case "q": print("\(kept) kept"); exit(0)
+            default:
+                do { try WAV.pcm16(samples).write(to: URL(fileURLWithPath: BenchCase.recording(c.id, dir: dir)), options: .atomic) }
+                catch { fail(error) }
+                kept += 1
+                break take
+            }
+        }
+    }
+    print("\n\(kept) kept in \(dir)/. Bench them: swift build -c release && .build/release/PoptalkBench --provider mlx "
+        + "--cleanup-model \(ModelSettings.fineTune) --runs 1 --filter 's-*' --audio-dir \(dir)")
     exit(0)
 }
 
@@ -255,6 +317,14 @@ let cbw = Float(opt("--cbw") ?? "0") ?? 0
 let minSimilarity = Float(opt("--min-similarity") ?? "0.7") ?? 0.7
 var transcriber: Transcriber?
 var samples: [String: [Float]] = [:]
+// --audio-dir (#99): real-voice recordings, where there, replace the synthesized or committed audio.
+let audioDir = audioCases.isEmpty ? nil : opt("--audio-dir")
+var sources: [String: BenchCase.AudioSource] = [:]
+for c in audioCases { sources[c.id] = c.audioSource(audioDir: audioDir) }
+if let audioDir {
+    meta["audioDir"] = audioDir
+    meta["realAudio"] = "\(sources.values.filter { $0.label == "real" }.count)/\(audioCases.count)"
+}
 if !audioCases.isEmpty {
     let speechModel = opt("--speech-model") ?? ModelSettings.defaults["speechModel"]!
     guard let version = Transcriber.version(speechModel) else {
@@ -267,8 +337,10 @@ if !audioCases.isEmpty {
     do {
         let cache = URL(fileURLWithPath: "bench/audio-cache")
         for c in audioCases {
-            samples[c.id] = try c.audio.map { try Speech.load(URL(fileURLWithPath: $0)) }
-                ?? Speech.synthesize(c.speak!, voice: c.voice, rate: c.rate, cache: cache)
+            samples[c.id] = switch sources[c.id]! {
+            case let .real(path), let .file(path): try Speech.load(URL(fileURLWithPath: path))
+            case .speak: try Speech.synthesize(c.speak!, voice: c.voice, rate: c.rate, cache: cache)
+            }
         }
         transcriber = try await Transcriber(version: version)
         // Warm up: the first pass compiles and loads the CoreML models.
@@ -276,15 +348,17 @@ if !audioCases.isEmpty {
     } catch { fail(error) }
 }
 
-let pipeline = { (calls: ModelCallRecorder?) in
-    Pipeline(complete: calls?.wrap(complete) ?? complete,
-             vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json")),
-             cleanupModel: cleanupModel, editModel: editModel, features: features)
+/// A pipeline whose saved vocabulary is `vocabulary` (a case's, #99), in a throwaway store.
+let pipeline = { (calls: ModelCallRecorder?, vocabulary: [String]) in
+    let store = VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json"))
+    for t in vocabulary { try? store.add(VocabTerm(text: t)) }
+    return Pipeline(complete: calls?.wrap(complete) ?? complete, vocabulary: store,
+                    cleanupModel: cleanupModel, editModel: editModel, features: features)
 }
 
 // Warm up (model load, caches), then time a trivial request: a slow one means the server is busy,
 // e.g. with orphaned generations from an earlier timed-out client (#4), and timings would be skewed.
-_ = await pipeline(nil).run(cases[0].request)
+_ = await pipeline(nil, cases[0].vocabulary).run(cases[0].request)
 let probeStart = Date()
 _ = try? await complete(cleanupModel, [ChatMessage(role: "user", content: "Reply with: ok")], false, 30)
 let probe = Date().timeIntervalSince(probeStart)
@@ -306,7 +380,8 @@ for c in cases {
         var heard: Transcription?
         var boost: [VocabTerm] = []
         if let transcriber, let audio = samples[c.id] {
-            boost = boostOn ? Pipeline.boostTerms(saved: [], context: request.context, fromScreen: !contextOff.contains("vocab")) : []
+            boost = boostOn ? Pipeline.boostTerms(saved: c.vocabulary.map { VocabTerm(text: $0) }, context: request.context,
+                                                  fromScreen: !contextOff.contains("vocab")) : []
             do { heard = try await transcriber.transcribeDetailed(audio, boost: boost, cbw: cbw, minSimilarity: minSimilarity) }
             catch { fail("\(c.id): \(error)") }
             request = Request(transcript: heard!.text, selection: request.selection, context: request.context)
@@ -326,7 +401,7 @@ for c in cases {
                 defer { previous = text }
                 guard LivePreview.shouldRun(text, lastRun: held?.request.transcript, previous: previous,
                                             paused: LivePreview.paused(prefix), edit: request.selection != nil) else { continue }
-                var p = pipeline(nil)
+                var p = pipeline(nil, c.vocabulary)
                 p.remembers = false
                 let spec = Request(transcript: text, selection: request.selection, context: request.context)
                 held = (spec, await LivePreview.$speculative.withValue(true) { await p.run(spec) })
@@ -339,7 +414,7 @@ for c in cases {
         }
         let start = Date()
         let calls = ModelCallRecorder()
-        let r = await pipeline(calls).run(request)
+        let r = await pipeline(calls, c.vocabulary).run(request)
         if hold, samples[c.id] != nil {
             let reused = held.flatMap { LivePreview.sameInput($0.request, request) ? LivePreview.reusable($0.result) : nil }
             holdStats.release.append((reused != nil, Date().timeIntervalSince(start), reused.map { $0 == r }))
@@ -351,14 +426,14 @@ for c in cases {
         }
         if provider == "raw" { run.failures.removeAll { $0 == "raw fallback" } }
         if let heard {
-            run.speech = SpeechRun(reference: c.transcript, terms: c.mustContain, raw: heard.raw, boosted: heard.text, final: run.output,
+            run.speech = SpeechRun(reference: c.transcript, finalReference: c.written, terms: c.mustContain, raw: heard.raw, boosted: heard.text, final: run.output,
                                    boostTerms: boost.count, asrSeconds: heard.asrSeconds, rescoreSeconds: heard.rescoreSeconds)
         }
         caseRuns.append(run)
     }
     print("\(caseRuns.allSatisfy(\.passed) ? "✓" : "✗") \(c.id)  \(caseRuns.filter(\.passed).count)/\(runs)"
         + (caseRuns[0].speech.map { "  heard \"\($0.raw)\"" + ($0.boosted == $0.raw ? "" : " → boosted \"\($0.boosted)\"") } ?? ""))
-    results.append(BenchCaseResult(id: c.id, kind: c.kind, runs: caseRuns))
+    results.append(BenchCaseResult(id: c.id, kind: c.kind, runs: caseRuns, audio: sources[c.id]?.label))
 }
 
 if hold, !holdStats.release.isEmpty {
@@ -384,8 +459,9 @@ if skipGate {
         + skipped.map { "\($0.id)\($0.runs.allSatisfy(\.passed) ? "" : " ✗")" }.joined(separator: ", "))
 }
 
-let model = (provider == "lmstudio" || provider == "mlx" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : "-audio")
-let dir = URL(fileURLWithPath: opt("--out") ?? "bench/results")
+let model = (provider == "lmstudio" || provider == "mlx" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : audioDir == nil ? "-audio" : "-real")
+// Real-voice results hold what the user said, ad-libs included: gitignored, commit counts only (#99).
+let dir = URL(fileURLWithPath: opt("--out") ?? (audioDir == nil ? "bench/results" : "bench/results-real"))
 let file = dir.appendingPathComponent(BenchReport.fileName(date: date, provider: provider, model: model, filter: opt("--filter")))
 do {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

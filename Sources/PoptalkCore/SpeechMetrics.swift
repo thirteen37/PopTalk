@@ -96,13 +96,14 @@ public struct SpeechRun: Codable, Sendable {
     }
 
     /// Scores raw and boosted recognition and the pipeline's `final` text against `reference`.
-    public init(reference: String, terms: [String], raw: String, boosted: String, final: String,
+    /// `finalReference` (`BenchCase.written`) scores `final` when the intended text differs from what was said.
+    public init(reference: String, finalReference: String? = nil, terms: [String], raw: String, boosted: String, final: String,
                 boostTerms: Int, asrSeconds: Double, rescoreSeconds: Double) {
         let changes = SpeechMetrics.boostChanges(reference: reference, raw: raw, boosted: boosted)
         self.init(raw: raw, boosted: boosted, boostTerms: boostTerms, asrSeconds: asrSeconds, rescoreSeconds: rescoreSeconds,
                   werRaw: SpeechMetrics.wer(reference: reference, hypothesis: raw),
                   werBoosted: SpeechMetrics.wer(reference: reference, hypothesis: boosted),
-                  werFinal: SpeechMetrics.wer(reference: reference, hypothesis: final),
+                  werFinal: SpeechMetrics.wer(reference: finalReference ?? reference, hypothesis: final),
                   recallRaw: SpeechMetrics.termRecall(terms, in: raw),
                   recallBoosted: SpeechMetrics.termRecall(terms, in: boosted),
                   recallFinal: SpeechMetrics.termRecall(terms, in: final),
@@ -130,8 +131,9 @@ func median(_ xs: [Double]) -> Double {
 }
 
 extension BenchReport {
-    public func speechSummary() -> SpeechSummary? {
-        let runs = cases.flatMap(\.runs).filter { $0.speech != nil }
+    /// - Parameter audio: only cases with this `BenchCaseResult.audio` source; nil for all.
+    public func speechSummary(audio: String? = nil) -> SpeechSummary? {
+        let runs = cases.filter { audio == nil || $0.audio == audio }.flatMap(\.runs).filter { $0.speech != nil }
         let s = runs.map { $0.speech! }
         guard !s.isEmpty else { return nil }
         func mean(_ xs: [Double]) -> Double { xs.reduce(0, +) / Double(xs.count) }
@@ -145,11 +147,19 @@ extension BenchReport {
             asrMedian: median(s.map(\.asrSeconds)), rescoreMedian: median(s.map(\.rescoreSeconds)), llmMedian: median(runs.map(\.seconds)))
     }
 
+    /// One block per audio source when a run mixes them (#99: real-voice recordings and synthesized `speak`).
     func speechTable() -> String? {
-        guard let s = speechSummary() else { return nil }
+        let sources = Set(cases.filter { $0.runs.contains { $0.speech != nil } }.compactMap(\.audio)).sorted()
+        guard sources.count > 1 else { return speechTable(audio: nil) }
+        return sources.compactMap { speechTable(audio: $0) }.joined(separator: "\n\n")
+    }
+
+    func speechTable(audio: String?) -> String? {
+        guard let s = speechSummary(audio: audio) else { return nil }
         func pct(_ x: Double?) -> String { x.map { String(format: "%5.1f%%", 100 * $0) } ?? "     -" }
+        let head = audio.map { "speech \($0.padding(toLength: 5, withPad: " ", startingAt: 0)) " } ?? "speech     "
         return """
-            speech     pass \(s.passed)/\(s.runs)   boost fixed \(s.boostFixed) broken \(s.boostBroken) lost \(s.termsLost.map(String.init) ?? "-") precision \(pct(s.boostPrecision))
+            \(head)pass \(s.passed)/\(s.runs)   boost fixed \(s.boostFixed) broken \(s.boostBroken) lost \(s.termsLost.map(String.init) ?? "-") precision \(pct(s.boostPrecision))
                          raw   boosted    final
             WER       \(pct(s.werRaw))    \(pct(s.werBoosted))   \(pct(s.werFinal))
             recall    \(pct(s.recallRaw))    \(pct(s.recallBoosted))   \(pct(s.recallFinal))

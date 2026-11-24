@@ -15,3 +15,6 @@ training/out/
 training/.venv/
 __pycache__/
 training/out/
+# Real-voice speech bench (#99): the user's recordings, and results that hold what they said. Commit counts only.
+bench/audio-real/
+bench/results-real/
