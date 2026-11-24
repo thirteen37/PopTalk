@@ -681,7 +681,7 @@ INSTEAD_T = [
     ("Hand the keys to {X} after the viewing.", "person", "to"), ("Seat {X} next to the window.", "person", None),
     ("Ship the samples on {X}.", "day", "on"), ("Move the team photo to {X}.", "day", "to"),
     ("Set the reminder for {X}.", "time", "for"), ("The bus picks us up at {X}.", "time", "at"),
-    ("We need {X} volunteers for the cleanup.", "num", None), ("Let's start the renovation in {X}.", "month", "in"),
+    ("Drop the parcel off at {X}.", "place", None), ("Let's start the renovation in {X}.", "month", "in"),
     # A list instead of a kind: the (A, B) pairs that fit that template.
     ("Let's rent {X} for the move.", [("the small van", "the big one"), ("a trailer", "a truck")], None),
     ("I'll wear {X} to the wedding.", [("the gray suit", "the navy one"), ("the red dress", "the green one")], None),

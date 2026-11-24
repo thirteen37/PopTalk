@@ -801,12 +801,16 @@ def check_v5():
 # ---------- v6: self-corrections beyond "A no B" (#98 phase 2) ----------
 # Cross-sentence fixes, cancellations, restatements and "A no B instead", plus look-alikes that stay.
 
+def plain_or_lower(r, s):  # as Parakeet punctuates it or bare; no fillers, which can land inside a cue ("no, I mean forget that")
+    return s if r.random() < 0.4 else lower_transcript(s)
+
+
 def v6_later(r):  # a later sentence fixes an earlier value: change it in place, drop the correcting words
     tmpl, kind = r.choice(L.CORRECTABLE)
     a, b = r.sample(slot_pool(kind), 2)
     mid = r.sample(L.BETWEEN, r.randint(0, 2))
     said = " ".join([tmpl.replace("{X}", a)] + mid + [f"{r.choice(L.LATER_CUES)} {b}."])
-    return heard(r, said), " ".join([tmpl.replace("{X}", b)] + mid)
+    return plain_or_lower(r, said), " ".join([tmpl.replace("{X}", b)] + mid)
 
 
 def v6_cancel(r):  # "scratch that" / "never mind" / "forget it": the cancelled sentence goes, the rest stays
@@ -814,7 +818,7 @@ def v6_cancel(r):  # "scratch that" / "never mind" / "forget it": the cancelled 
     lead = [r.choice(L.PLAIN)] if r.random() < 0.3 else []
     cue = r.choice(L.CANCEL_CUES)
     said, target = (lead + [drop, cue], lead) if lead and r.random() < 0.4 else (lead + [drop, cue, keep], lead + [keep])
-    return heard(r, " ".join(said)), " ".join(target)
+    return plain_or_lower(r, " ".join(said)), " ".join(target)
 
 
 def v6_restate(r):  # the same sentence again with one change, no cue: keep the second

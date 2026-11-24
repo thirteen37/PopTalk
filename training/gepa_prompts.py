@@ -78,9 +78,17 @@ def tokenizer(model):  # Gemma 4 E2B and E4B (v3's base) share one tokenizer; th
     return lambda s: len(t.encode(s, add_special_tokens=False).ids)
 
 
+def loose(s):  # commas and hyphens are style the targets don't pin down ("four-day week", "Okay, so")
+    return " ".join(s.replace(",", " ").replace("-", " ").split())
+
+
 def score(run, case):
-    """1 for a pass; partial credit for near misses, so one wrong comma still tells GEPA it was close."""
-    return 1.0 if not run["failures"] else 0.5 * difflib.SequenceMatcher(a=run["output"], b=case["expectExact"]).ratio()
+    """1 for a pass, 0.8 when only commas or hyphens differ, else partial credit for near misses (under 0.5)."""
+    if not run["failures"]:
+        return 1.0
+    if loose(run["output"]) == loose(case["expectExact"]):
+        return 0.8
+    return 0.5 * difflib.SequenceMatcher(a=run["output"], b=case["expectExact"]).ratio()
 
 
 class Adapter:
@@ -187,7 +195,7 @@ def reflective(eval_batch, component):
         if c["kind"] != component:
             continue
         inputs = {"screen": c["context"][-600:], "transcript": c["transcript"]} | ({"selection": c["selection"]} if "selection" in c else {})
-        fb = "Correct." if s == 1.0 else f"Wrong: {'; '.join(run['failures'])}. Expected exactly: {c['expectExact']!r}" + (
+        fb = "Correct." if s == 1.0 else f"Nearly: only commas or hyphens differ from {c['expectExact']!r}" if s == 0.8 else f"Wrong: {'; '.join(run['failures'])}. Expected exactly: {c['expectExact']!r}" + (
             f" with action {c['expectAction']}" if c["kind"] == "edit" else "")
         recs.append({"Inputs": inputs, "Generated Outputs": run["output"] + (f" [action {run['action']}]" if c["kind"] == "edit" else ""), "Feedback": fb})
     return recs
@@ -223,6 +231,9 @@ def dry_run(comp, train, seed, count):
     ok, near, wrong = ({"output": o, "failures": f, "action": "edit"} for o, f in [
         ("Move the review to Tuesday.", []), ("Move the review to Tuesday", ["not exact"]), ("Sure! Here it is.", ["not exact"])])
     assert score(ok, c) == 1.0 and 0.45 < score(near, c) < 0.5 and score(wrong, c) < 0.2, (score(near, c), score(wrong, c))
+    style = {"output": "Move the review to Tuesday, the four-day one.", "failures": ["not exact"]}
+    assert score(style, c | {"expectExact": "Move the review to Tuesday the four day one."}) == 0.8
+    assert score(style, c | {"expectExact": "move the review to Tuesday the four day one."}) < 0.5  # case still counts
     ad = Adapter("dry-run", comp, count, count(seed))
     lengths = [seed + "\n" + seed, seed, seed[: 3 * len(seed) // 4], seed[: len(seed) // 2]]
     b = [ad.brevity(t) for t in lengths]
@@ -253,6 +264,8 @@ def main():
     ap.add_argument("--component", choices=["dictation", "edit"], help="optimize only this prompt")
     ap.add_argument("--out", type=Path, default=Path("training/out/gepa"))
     ap.add_argument("--seed", type=Path, metavar="DIR", help="seed from DIR/<prompt>.txt (e.g. an earlier run's best)")
+    ap.add_argument("--baseline", type=Path, action="append", default=[], metavar="FILE",
+                    help="with --length: also score this prompt on val and put it on the front (repeatable)")
     ap.add_argument("--length", action="store_true", help="add prompt length (tokens) as an objective")
     ap.add_argument("--dry-run", action="store_true", help="write the pool and check the scoring; no model, no API")
     a = ap.parse_args()
@@ -265,6 +278,8 @@ def main():
     train = itn(sample([it for it in items if it["id"] not in seen], a.train_per_cat, seed=2))
     val = itn(val)
     a.out.mkdir(parents=True, exist_ok=True)
+    # No cache_evaluation: GEPA keys it by (candidate, list index) for train minibatches and val alike, so a child's
+    # val score would reuse train items' results (gepa 0.1.4). Minibatches rarely repeat, so it saved little anyway.
     for name, cases in (("train", train), ("val", val)):
         (a.out / f"pool-{name}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in cases))
     comps = [a.component] if a.component else ["dictation", "edit"]
@@ -282,11 +297,23 @@ def main():
             res = gepa.optimize(seed_candidate={comp: seed}, trainset=tr, valset=va, adapter=ad,
                                 reflection_lm=claude if a.reflector == "claude" else a.reflector,
                                 reflection_minibatch_size=6, max_metric_calls=a.budget // len(comps),
-                                run_dir=str(a.out / f"run-{comp}"), cache_evaluation=True)
+                                run_dir=str(a.out / f"run-{comp}"), cache_evaluation=False)
             best = res.best_idx
+            (a.out / f"{comp}.txt").write_text(res.candidates[best][comp])
+            print(f"{comp}: best val {res.val_aggregate_scores[best]:.3f} (seed {res.val_aggregate_scores[0]:.3f}), "
+                  f"{res.num_candidates} candidates, {res.total_metric_calls} rollouts; wrote {a.out}/{comp}.txt",
+                  file=sys.stderr, flush=True)
         else:
             ad = Adapter(a.model, comp, count, count(seed))
             ad.val_ids = {c["id"] for c in va}
+            # Baselines (e.g. a prompt GEPA can't take as a second seed): scored on val first, then on the front.
+            base = []
+            for f in a.baseline:
+                text = f.read_text()
+                ev = ad.evaluate(va, {comp: text})
+                base.append((f.name, text, sum(ev.scores) / len(ev.scores)))
+                print(f"{comp}: baseline {f.name}: {count(text)} tokens, val {base[-1][2]:.3f}, "
+                      f"{ad.latency[text]:.3f}s", file=sys.stderr, flush=True)
             # "hybrid" keeps per-example winners plus the best mean of each objective (most accurate, shortest)
             # as parents. No perfect-minibatch skip: a perfect minibatch can still be said in fewer tokens.
             res = gepa.optimize(seed_candidate={comp: seed}, trainset=tr, valset=va, adapter=ad,
@@ -294,20 +321,21 @@ def main():
                                 frontier_type="hybrid", acceptance_criterion=NoAccuracyForLength(ad),
                                 skip_perfect_score=False, reflection_minibatch_size=6,
                                 max_metric_calls=a.budget // len(comps), run_dir=str(a.out / f"run-{comp}"),
-                                cache_evaluation=True)
-            # Pick from the (val accuracy, tokens) Pareto front: see pick().
-            pts = [(s, count(c[comp])) for s, c in zip(res.val_aggregate_scores, res.candidates)]
+                                cache_evaluation=False)
+            # Pick from the (val accuracy, tokens) Pareto front of every candidate and baseline: see pick().
+            rows = [(f"#{i}", c[comp], s) for i, (c, s) in enumerate(zip(res.candidates, res.val_aggregate_scores))] + base
+            pts = [(s, count(text)) for _, text, s in rows]
             f = front(pts)
             best = pick(pts, f)
-            print(f"{comp}: #  tokens  val-latency  accuracy  (* = Pareto front, > = pick)", file=sys.stderr)
-            for i, ((s, t), c) in enumerate(zip(pts, res.candidates)):
-                lat = ad.latency.get(c[comp])
-                print(f"{'>' if i == best else '*' if i in f else ' '} #{i:<3} {t:5}  {f'{lat:.3f}s' if lat else '   -  '}  "
+            print(f"{comp}: candidate  tokens  val-latency  accuracy  (* = Pareto front, > = pick)", file=sys.stderr)
+            for i, ((name, text, s), (_, t)) in enumerate(zip(rows, pts)):
+                lat = ad.latency.get(text)
+                print(f"{'>' if i == best else '*' if i in f else ' '} {name:<14} {t:5}  {f'{lat:.3f}s' if lat else '   -  '}  "
                       f"{s:.3f}", file=sys.stderr, flush=True)
-        (a.out / f"{comp}.txt").write_text(res.candidates[best][comp])
-        print(f"{comp}: best val {res.val_aggregate_scores[best]:.3f} (seed {res.val_aggregate_scores[0]:.3f}), "
-              f"{res.num_candidates} candidates, {res.total_metric_calls} rollouts; wrote {a.out}/{comp}.txt",
-              file=sys.stderr, flush=True)
+            (a.out / f"{comp}.txt").write_text(rows[best][1])
+            print(f"{comp}: pick {rows[best][0]} val {rows[best][2]:.3f} (seed {res.val_aggregate_scores[0]:.3f}), "
+                  f"{res.num_candidates} candidates, {res.total_metric_calls} rollouts; wrote {a.out}/{comp}.txt",
+                  file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":

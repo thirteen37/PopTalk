@@ -3,8 +3,8 @@
 # requires-python = ">=3.12"
 # ///
 """Keeps bench/cases.jsonl and training/heldout.jsonl held out (#21, #60): rejects training items that share
-names, sentences or near-paraphrases with any bench case, with the examples prompt E (Prompts.e4bDictationSystem)
-quotes, or with what a held-out case says or expects
+names, sentences or near-paraphrases with any bench case, with the examples the E4B dictation prompt and the GEPA
+seeds quote, or with what a held-out case says or expects
 (held-out screens and selections reuse the shared lexicon, see bench_texts). `./contamination.py` runs the self-test;
 `./contamination.py items.jsonl` checks a file and exits 1 on any hit."""
 import json
@@ -33,9 +33,15 @@ def swift_prompt(name: str) -> str:
     return body if m.group(1) else body.replace("\\\n", "").replace('\\"', '"')  # a trailing \ joins lines
 
 
-def prompt_examples(name: str = "e4bDictationSystem") -> list[str]:
-    """The quoted phrases (3+ words) in a prompt: its examples, kept out of training like bench text."""
-    return [q for q in re.findall(r'"([^"]+)"', swift_prompt(name)) if len(words(q)) >= 3]
+# Prompt E (#98, #103): no longer live, but GEPA seeds from it, so its examples stay out of the pool too.
+GEPA_SEEDS = [ROOT / "training" / "gepa" / "e4b-dictation-E.txt"]
+
+
+def prompt_examples() -> list[str]:
+    """The quoted phrases (3+ words) in the live E4B dictation prompt and the GEPA seeds: their examples,
+    kept out of training like bench text."""
+    texts = [swift_prompt("e4bDictationSystem")] + [p.read_text() for p in GEPA_SEEDS]
+    return sorted({q for t in texts for q in re.findall(r'"([^"]+)"', t) if len(words(q)) >= 3})
 
 
 def words(s: str) -> list[str]:
@@ -71,7 +77,7 @@ class Checker:
             hl, hs = bench_texts(heldout, heldout=True)
             longs |= hl
             shorts += hs
-        for q in prompt_examples():  # what prompt E quotes, matched like what a held-out case says
+        for q in prompt_examples():  # what the prompts quote, matched like what a held-out case says
             longs.add(q)
             shorts.append(q)
         self.n = n
