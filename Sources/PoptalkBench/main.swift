@@ -138,8 +138,19 @@ if let i = args.firstIndex(of: "--gate-eval") {
     exit(0)
 }
 
+// Candidate system prompts (#74, GEPA): replace the dictation / edit system prompt, E4B's own included, for this run.
+var promptFiles: [String: String] = [:]
+for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-prompt-file", "editPrompt")] {
+    guard let path = opt(flag) else { continue }
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(flag): can't read \(path)") }
+    if key == "dictationPrompt" { Prompts.dictationSystem = text; Prompts.e4bDictationSystem = text }
+    else { Prompts.editSystem = text; Prompts.e4bEditSystem = text }
+    promptFiles[key] = path
+}
+
 // History replay: runs dictation requests through Pipeline with an MLX cleanup model, as the app would.
 //   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID [--cleanup-timeout S]   (S: the base deadline, app default 4)
+//     [--dictation-prompt-file F]   (scripts/replay.zsh: the ship check)
 // in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, seconds}.
 // Prints counts only: the inputs and outputs are history content and stay in the files.
 if let i = args.firstIndex(of: "--replay") {
@@ -190,15 +201,6 @@ let editModel = opt("--edit-model") ?? cleanupModel
 let runs = Int(opt("--runs") ?? "3") ?? 3
 let appleVariant = opt("--apple-variant")
 if provider == "apple", appleVariant == nil { fail("--provider apple needs --apple-variant core3|coreAdvanced3") }
-// Candidate system prompts (#74, GEPA): replace the dictation / edit system prompt, E4B's own included, for this run.
-var promptFiles: [String: String] = [:]
-for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-prompt-file", "editPrompt")] {
-    guard let path = opt(flag) else { continue }
-    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(flag): can't read \(path)") }
-    if key == "dictationPrompt" { Prompts.dictationSystem = text; Prompts.e4bDictationSystem = text }
-    else { Prompts.editSystem = text; Prompts.e4bEditSystem = text }
-    promptFiles[key] = path
-}
 
 let cases: [BenchCase]
 do {
