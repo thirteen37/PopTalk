@@ -353,9 +353,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let corrects = focused.flatMap { lastInsert?.corrected(by: request.selection, in: $0) }
         // The previous take, or one undone since (#95): an undo clears lastInsert. Never both.
         let repeats = focused.flatMap { f in (lastInsert ?? undone)?.redictated(raw: raw, selection: request.selection, in: f) }
+        let earlier = repeats != nil ? (lastInsert ?? undone)?.rawTranscript : nil
         undone = nil
         Timing.mark("release: provider ready", since: t0)
-        let result = if let reused { reused.result } else { await pipeline.run(request) }
+        var result = if let reused { reused.result } else { await pipeline.run(request) }
+        // #97: a redictation re-says a misheard term; offer it as the edit offers do, the earlier hearing as alias.
+        // Nothing when both takes heard it the same; the first qualifying change; the new take is taken as right.
+        if result.vocabularyOffer == nil, case .insert = result.outcome, let earlier {
+            result.vocabularyOffer = TypedCorrection(inserted: earlier, span: raw, transcript: earlier)?
+                .offer(known: store.terms, isWord: TypingWatch.isWord)
+        }
         Timing.mark("release: pipeline done", since: t0)
         let shown = if let cleanup { await replaceRaw(cleanup, with: result, id: id) } else {
             await apply(result, cursorKnown: request.context.cursorOffset != nil, id: id,
