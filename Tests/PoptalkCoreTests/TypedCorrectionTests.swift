@@ -163,3 +163,38 @@ private func notAWord(_ w: String) -> Bool { !["todoist", "kubectl"].contains(w.
     let long = try #require(fix("Ask about the todo list thing.", "Ask about Todoist Pro Max Ultra.", said: "ask about the todo list thing"))
     #expect(long.offer(known: [], isWord: { _ in false }) == nil)
 }
+
+// MARK: - Redictation offers
+
+/// What `AppDelegate` offers when a take re-says the previous one (#95): the earlier raw transcript as both the
+/// insert and the transcript, the new raw transcript as the user's version.
+private func resaid(_ earlier: String, _ again: String, known: [VocabTerm] = []) -> VocabTerm? {
+    TypedCorrection(inserted: earlier, span: again, transcript: earlier)?
+        .offer(known: known, isWord: { !["quillon", "kubectl"].contains($0.lowercased()) })
+}
+
+@Test func redictationOffersTheReSaidTermWithTheEarlierHearingAsAlias() {
+    #expect(resaid("Tell quill on the plan is ready.", "Tell Quillon the plan is ready.")
+        == VocabTerm(text: "Quillon", aliases: ["quill on"]))
+    #expect(resaid("Run cube cuddle.", "Run kubectl.") == VocabTerm(text: "kubectl", aliases: ["cube cuddle"]))
+}
+
+@Test func redictationOffersNothingWhenBothTakesHeardTheSame() {
+    #expect(resaid("Tell quill on the plan is ready.", "Tell quill on the plan is ready.") == nil)
+    // Only casing or punctuation differs: nothing was misheard.
+    #expect(resaid("tell quill on the plan is ready", "Tell quill on, the plan is ready.") == nil)
+}
+
+@Test func redictationOffersTheFirstChangeThatLooksLikeATerm() {
+    // A dictionary word, then the term, then another term.
+    #expect(resaid("tell bob that quill on is at cube cuddle", "Tell rob that Quillon is at kubectl")
+        == VocabTerm(text: "Quillon", aliases: ["quill on"]))
+}
+
+@Test func redictationOffersNoDictionaryWordsLongChangesOrSavedAliases() {
+    #expect(resaid("Tell quill on the plan is ready.", "Tell quilt on the plan is ready.") == nil)
+    #expect(resaid("Ask about the old plan.", "Ask about Quillon kubectl and more plan.") == nil)
+    #expect(resaid("Tell quill on hi.", "Tell Quillon hi.", known: [VocabTerm(text: "Quillon", aliases: ["quill on"])]) == nil)
+    #expect(resaid("Tell quill in hi.", "Tell Quillon hi.", known: [VocabTerm(text: "Quillon", aliases: ["quill on"])])
+        == VocabTerm(text: "Quillon", aliases: ["quill in"]))
+}
