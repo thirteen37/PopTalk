@@ -13,6 +13,7 @@ import PoptalkSpeech
 //     [--oracle-terms]   (#75: recase on-screen mustContain terms in the transcript before the LLM; a ceiling)
 //     [--recase-terms on|off]   (#75: force the label-free screen-term recaser on or off; default: per model)
 //     [--skip-gate on]   (#75: skip the cleanup LLM for clean, Parakeet-cased dictations; runs record skippedLLM)
+//     [--sound-alike on]   (#75 step 2, mlx: sound-alike screen terms the cleanup model confirms, written before it)
 //     [--hold]   (#43, audio cases: simulate holding the key with live cleanup; prints preview latency and reuse at release)
 //     [--context-off text,ocr,title,vocab]   (#96: blank those sources in every case, as an app profile turning them off)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
@@ -136,6 +137,31 @@ if args.contains("--warmup-probe") {
                          h.rescoreSeconds, ds, "\(dr.outcome)".contains("raw") ? "RAW" : "ok", elapsed(t), "\(er.outcome)".hasPrefix("error") ? "ERR" : "ok"))
         }
     } catch { fail(error) }
+    exit(0)
+}
+
+// #75 step 2: adds `candidate` to each line of a term_probe.py pairs file: the best `termShortlist` run of `heard`
+// for `term`, or null when the shortlist drops the pair. `--score MODEL` adds `score`, `MLXProvider.termScore` of
+// the whole pair, and prints ms per pair to stderr.
+//   PoptalkBench --term-shortlist training/term_pairs.jsonl [--score adapters/gemma-4-e2b-poptalk-v6] > pairs.jsonl
+if let path = opt("--term-shortlist") {
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
+    let model = opt("--score")
+    if let model { _ = try await MLXProvider.termScore(model, "warm up", "Warmup") }
+    var seconds = 0.0, n = 0
+    for l in text.split(separator: "\n") {
+        guard var o = (try? JSONSerialization.jsonObject(with: Data(l.utf8))) as? [String: Any],
+              let heard = o["heard"] as? String, let term = o["term"] as? String else { fail("bad line in \(path)") }
+        let all = Pipeline.termShortlist(heard, terms: [term]), whole = all.filter { $0.term == term }
+        o["candidate"] = (whole.isEmpty ? all : whole).max { $0.score < $1.score }?.heard ?? NSNull()
+        if let model {
+            let start = Date()
+            o["score"] = try await MLXProvider.termScore(model, heard, term)
+            seconds += Date().timeIntervalSince(start); n += 1
+        }
+        print(String(decoding: try JSONSerialization.data(withJSONObject: o, options: .sortedKeys), as: UTF8.self))
+    }
+    if n > 0 { FileHandle.standardError.write(Data(String(format: "%.0f ms per pair\n", seconds * 1000 / Double(n)).utf8)) }
     exit(0)
 }
 
@@ -290,6 +316,8 @@ let skipGate = opt("--skip-gate") == "on"
 var features = DictationFeatures()
 features.skipGate = skipGate
 if skipGate { meta["skipGate"] = "on" }
+features.soundAlikeTerms = opt("--sound-alike") == "on"
+if features.soundAlikeTerms { meta["soundAlike"] = "on" }
 // ponytail: "text" is focused and nearby text together; cases don't keep them apart.
 let contextOff = Set((opt("--context-off") ?? "").split(separator: ",").map(String.init))
 if !contextOff.isEmpty { meta["contextOff"] = contextOff.sorted().joined(separator: ",") }
@@ -352,8 +380,10 @@ if !audioCases.isEmpty {
 let pipeline = { (calls: ModelCallRecorder?, vocabulary: [String]) in
     let store = VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("poptalk-bench-\(UUID()).json"))
     for t in vocabulary { try? store.add(VocabTerm(text: t)) }
-    return Pipeline(complete: calls?.wrap(complete) ?? complete, vocabulary: store,
-                    cleanupModel: cleanupModel, editModel: editModel, features: features)
+    var p = Pipeline(complete: calls?.wrap(complete) ?? complete, vocabulary: store,
+                     cleanupModel: cleanupModel, editModel: editModel, features: features)
+    if provider == "mlx" { p.termScore = MLXProvider.termScore }
+    return p
 }
 
 // Warm up (model load, caches), then time a trivial request: a slow one means the server is busy,

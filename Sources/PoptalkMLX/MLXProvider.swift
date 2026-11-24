@@ -185,6 +185,30 @@ public enum MLXProvider {
         }
     }
 
+    /// `Pipeline.TermScore` (#75 step 2): one prefill of `Pipeline.termCheck`, log P(yes) − log P(no) at the first
+    /// reply token over the first token of each spelling ("yes", " Yes", …). No prefix cache: the shared head is
+    /// ~10 tokens and saved ~1 ms per pair in `training/term_probe.py --cache`.
+    public static let termScore: Pipeline.TermScore = { model, heard, term in
+        let (container, _) = try await models.container(model)
+        let input = UserInput(messages: Pipeline.termCheck(heard: heard, term: term).map { ["role": $0.role, "content": $0.content] },
+                              additionalContext: ["enable_thinking": false])
+        let lm = try await container.prepare(input: input)
+        let start = Date()
+        let score = try await container.perform(nonSendable: lm) { context, lm in
+            func ids(_ w: String) -> [Int32] {
+                Array(Set(["", " "].flatMap { p in [w, w.capitalized, w.uppercased()].compactMap {
+                    context.tokenizer.encode(text: p + $0, addSpecialTokens: false).first.map(Int32.init)
+                } }))
+            }
+            let logits = context.model(lm.text[.newAxis], cache: try context.model.newCache(parameters: nil), state: nil)
+                .logits[0, -1].asType(.float32)
+            let yes = logits[MLXArray(ids("yes"))].logSumExp(), no = logits[MLXArray(ids("no"))].logSumExp()
+            return (yes - no).item(Float.self)
+        }
+        timing.info("term-score \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+        return Double(score)
+    }
+
     /// Generation on top of a stored prompt prefix (#42): a copy of `entry`'s cache, cut back to the shared prefix,
     /// is prefilled up to `plan.snapshot` and stored again there; `generate` prefills the rest as usual. Stored
     /// caches are only ever copied, never generated into.
