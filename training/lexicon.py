@@ -636,3 +636,67 @@ IMPERATIVES = [
 RUNON_JOIN = [" ", " and then ", " then ", " and also ", " also "]
 IMPERATIVE_LEADS = ["please", "just", "go ahead and", "remember to", "don't forget to", "make sure to", "quickly",
                     "okay,"]
+
+# ---------- v6: self-corrections beyond "A no B" (#98) ----------
+# A later sentence fixes a value said earlier. Written as Parakeet punctuates it; gen.py lowercases most.
+LATER_CUES = ["Sorry, I meant", "Oh, I meant", "I meant", "Wait, it's", "Sorry, it's", "Actually, it's",
+              "Oh, sorry, I meant", "Actually, make that", "No wait, it's", "Correction, it's"]
+# Said between the value and its fix; kept. No days, times, numbers, months, places or names.
+BETWEEN = ["Bring your laptop.", "I'll send the link later.", "Let me know if that works.", "Don't forget your badge.",
+           "Can you tell the others?", "I'll book the room.", "Wear something warm.", "I'll bring snacks.",
+           "Reply when you can.", "Check the shared folder first.", "Thanks for organizing this.",
+           "The address is in the invite."]
+# (cancelled, kept): a cancellation cue drops the first, the rest of the utterance stays.
+CANCELS = [
+    ("Let's order pizza for everyone.", "Let's get sandwiches from the deli."),
+    ("Tell the client we can start next week.", "Tell them we need another week to plan."),
+    ("I'll drive us to the concert.", "Let's take a taxi so nobody has to park."),
+    ("Put the meeting notes in the wiki.", "Email them to the whole group."),
+    ("We should repair the fence this weekend.", "Let's wait until the weather is warmer."),
+    ("Add a section about pricing.", "Keep the pricing out of this draft."),
+    ("I'm bringing a salad to the potluck.", "I'll bring dessert."),
+    ("Let's move the sofa next to the window.", "Leave it where it is for now."),
+    ("Book the early train on the way back.", "Book the late one so we can stay for dinner."),
+    ("The report goes out tonight.", "It goes out first thing tomorrow."),
+    ("Use the blue template for the slides.", "Use the one with the company colors."),
+    ("Let's invite the whole floor.", "Keep it to our team."),
+    ("I'll water the garden before I leave.", "The neighbor is doing it this time."),
+    ("Let's buy a new kettle.", "The old one just needs descaling."),
+    ("Send the photos as attachments.", "Share the album link."),
+    ("We can meet at the cafe by the station.", "Let's just do a video call."),
+    ("Cancel the newspaper delivery.", "Pause it while we're away."),
+    ("Print the tickets at home.", "They're already on my phone."),
+    ("Let's hire a cleaner for the move.", "We can do it ourselves."),
+    ("Put the spare chairs in the hallway.", "Stack them in the storage room."),
+    ("The kids can have pasta tonight.", "Heat up the soup from yesterday."),
+    ("Turn the heating up a bit.", "Open a window for some air."),
+    ("I'll take the early shift on the weekend.", "I can only do the afternoon."),
+    ("Let's split the bill evenly.", "Everyone pays for their own order."),
+]
+CANCEL_CUES = ["Scratch that.", "Never mind.", "Never mind that.", "Forget that.", "Forget it.", "Actually, scratch that.",
+               "No, forget that.", "Actually, never mind.", "Wait, scratch that.", "Never mind, forget it."]
+# "‹A› no ‹B› instead": B replaces A, never "not A". (template, slot kind, preposition a speaker repeats or None)
+INSTEAD_T = [
+    ("Forward the contract to {X}.", "person", "to"), ("Assign the ticket to {X}.", "person", "to"),
+    ("Hand the keys to {X} after the viewing.", "person", "to"), ("Seat {X} next to the window.", "person", None),
+    ("Ship the samples on {X}.", "day", "on"), ("Move the team photo to {X}.", "day", "to"),
+    ("Set the reminder for {X}.", "time", "for"), ("The bus picks us up at {X}.", "time", "at"),
+    ("We need {X} volunteers for the cleanup.", "num", None), ("Let's start the renovation in {X}.", "month", "in"),
+    # A list instead of a kind: the (A, B) pairs that fit that template.
+    ("Let's rent {X} for the move.", [("the small van", "the big one"), ("a trailer", "a truck")], None),
+    ("I'll wear {X} to the wedding.", [("the gray suit", "the navy one"), ("the red dress", "the green one")], None),
+    ("Book {X} for the trip home.", [("the morning flight", "the evening one"), ("the window seat", "the aisle seat")], None),
+    ("Let's stay at {X} on the last night.", [("the cheap hotel", "the one by the beach")], "at"),
+    ("We'll print the flyers on {X}.", [("the matte paper", "the glossy paper"), ("thin card", "thick card")], "on"),
+]
+# Look-alikes: the cue words are content here and stay.
+KEEP_CUES = [
+    "Don't forget that the office closes early on Friday.", "I meant to call you yesterday but the day got away from me.",
+    "Never mind the mess, the movers come tomorrow.", "We chose the ferry instead of the bridge.",
+    "Wait until everyone has a seat.", "I always forget the code for the gate.",
+    "The cat likes to scratch the new sofa.", "That's not what I meant at all.",
+    "I thought the trip would be boring. Actually, it was the best week of the year.", "Make that call before lunch.",
+    "Never mind what the forecast says, we're going hiking.", "I'd rather walk than wait for the shuttle.",
+    "Wait, is the store open on Sunday?", "Let's play it by ear instead of planning every hour.",
+    "Sorry, it took me so long to answer.",
+]
