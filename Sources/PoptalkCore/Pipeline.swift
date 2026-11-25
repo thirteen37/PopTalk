@@ -262,6 +262,7 @@ extension Pipeline {
     public static let repairs: [(name: String, run: @Sendable (_ out: String, _ said: String) -> String)] = [
         ("stripChatter", { out, _ in stripChatter(out) }),
         ("restoreMarks", { restoreMarks($0, transcript: $1) }),
+        ("openingCue", { restoreOpeningCue($0, transcript: $1) }),  // #105
     ]
     /// What a reject sees besides the reply and the transcript: `maxCleanupLength`, and the screen the model saw.
     public struct ReplyCheck: Sendable { var limit: Int, screen: String }
@@ -393,6 +394,34 @@ extension Pipeline {
             from = g.range(at: 1).location + (br as NSString).length
         }
         return out
+    }
+
+    /// A cue word opening the transcript, after any hesitation.
+    nonisolated(unsafe) private static let openingCue = /^\W*(?:(?:u+m+|u+h+)\b\W*)?(no|sorry|wait|actually)\b/.ignoresCase()
+
+    /// Puts back a cue word that opens the transcript when an accepted cleanup lost it (#105): E2B v6 takes an opening
+    /// "no" or "sorry" for a self-correction with nothing before it. It goes back capitalized with ", ", and the output's
+    /// first word is lowercased unless it is "I" or an "I'" contraction, has more capitals (an acronym), or the transcript
+    /// capitalizes it mid-sentence (a name). Not after a spoken cancel ("never mind"), which can take the opener with it.
+    static func restoreOpeningCue(_ output: String, transcript: String) -> String {
+        let ns = transcript as NSString
+        guard let cue = transcript.firstMatch(of: openingCue)?.1, !isBlank(output),
+              cancelCue.firstMatch(in: transcript, range: NSRange(location: 0, length: ns.length)) == nil
+        else { return output }
+        let out = output.drop(while: \.isWhitespace)
+        let word = out.prefix(while: { $0.isLetter || "'’".contains($0) })
+        guard word.lowercased() != cue.lowercased() else { return output }
+        func named() -> Bool {
+            transcript.ranges(of: word).contains { r in
+                let before = transcript[..<r.lowerBound]
+                guard transcript[r.upperBound...].first?.isLetter != true, before.last?.isLetter != true,
+                      let p = before.last(where: { !$0.isWhitespace }) else { return false }
+                return !".!?\n".contains(p)
+            }
+        }
+        let keep = word.isEmpty || word == "I" || word.hasPrefix("I'") || word.hasPrefix("I’")
+            || word.dropFirst().contains(where: \.isUppercase) || named()
+        return cue.prefix(1).uppercased() + cue.dropFirst().lowercased() + ", " + (keep ? String(out) : out.prefix(1).lowercased() + out.dropFirst())
     }
 
     /// `- `, `* `, `• `, `– ` or `1. ` / `1) ` at the start of a line.

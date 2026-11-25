@@ -4,7 +4,7 @@ import Testing
 
 // #108: the dictation guards are named lists, run in order; PoptalkBench --guards turns steps off.
 @Test func guardNamesAreUniqueAndOrdered() {
-    #expect(Pipeline.guardNames == ["spokenFormatting", "spokenCancel", "spokenNumbers", "stripChatter", "restoreMarks",
+    #expect(Pipeline.guardNames == ["spokenFormatting", "spokenCancel", "spokenNumbers", "stripChatter", "restoreMarks", "openingCue",
                                     "empty", "length", "dropsContent", "dropsProtected", "echoesContext"])
     #expect(Set(Pipeline.guardNames).count == Pipeline.guardNames.count)
 }
