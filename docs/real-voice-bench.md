@@ -22,6 +22,6 @@ For each case it shows the screen context or vocabulary the case has, then the l
 .build/release/PoptalkBench --provider mlx --cleanup-model adapters/gemma-4-e2b-poptalk-v6 --runs 1 --filter 's-*' --audio-dir bench/audio-real
 ```
 
-Cases with a recording use it and the rest use the synthesized voice. The result JSON records each case's `audio` source (`real`, `file` or `speak`) and the count in `provider.realAudio`, and the speech table prints real and synthetic rows separately. Results go to `bench/results-real/`. `training/bench.zsh <model> --audio-dir bench/audio-real` passes the flag to every set; only the speech set uses it.
+Recognition uses Parakeet TDT v3, the bench's default speech model (#114) whatever the app's default is; add `--speech-model v2` (or another id from Settings → Models) to compare. Cases with a recording use it and the rest use the synthesized voice. The result JSON records the speech model in `provider.speechModel`, each case's `audio` source (`real`, `file` or `speak`) and the count in `provider.realAudio`, and the speech table prints real and synthetic rows separately. Results go to `bench/results-real/`. `training/bench.zsh <model> --audio-dir bench/audio-real` passes the flag to every set; only the speech set uses it.
 
 Real-voice results and `PoptalkBench --compare` output contain what you said, ad-libs included. Commit or post only counts (WER, term recall, pass counts), never the result files or transcripts.
