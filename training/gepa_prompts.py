@@ -270,7 +270,7 @@ def dry_run(comp, train, seed, count):
         ("Move the review to Tuesday.", []), ("Move the review to Tuesday", ["not exact"]), ("Sure! Here it is.", ["not exact"])])
     v = case({"id": "v", "cat": "d-x", "transcript": "hi", "context": {"text": ""}, "target": "Hi.",
               "vocabulary": [{"text": "Niamh", "aliases": [], "weight": 10}]})
-    assert v["vocabulary"] == ["Niamh"] and "vocabulary" not in case(c | {"context": {}, "target": "x"}), v
+    assert v["vocabulary"] == ["Niamh"] and "vocabulary" not in case({"id": "u", "cat": "d-x", "transcript": "hi", "context": {}, "target": "Hi."}), v
     w = case({"id": "w", "cat": "d-x", "transcript": "yes", "context": {"appName": "Ghostty", "windowTitle": "zsh — atlas",
               "text": "> "}, "target": "Yes."})
     assert (w["app"], w["window"]) == ("Ghostty", "zsh — atlas") and "app" not in v, w
