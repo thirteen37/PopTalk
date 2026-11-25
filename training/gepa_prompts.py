@@ -8,6 +8,7 @@
 
   training/gepa_prompts.py [--model mlx-community/gemma-4-e4b-it-4bit] [--budget 1500] [--reflector claude]
                            [--component dictation|edit] [--out training/out/gepa] [--seed DIR] [--length] [--dry-run]
+                           [--pool training/out/pool-v8]
 
 Candidates are scored through the real pipeline: PoptalkBench --dictation-prompt-file/--edit-prompt-file.
 Train/val come from the synthetic items only; bench and held-out stay out of the loop (test them after,
@@ -47,6 +48,7 @@ def case(it):
     c = {"id": it["id"], "transcript": it["transcript"], "context": ctx.get("text", ""), "cat": it["cat"]}
     if "cursorOffset" in ctx: c["cursor"] = ctx["cursorOffset"]
     if ctx.get("ocrText"): c["ocr"] = ctx["ocrText"]
+    if it.get("vocabulary"): c["vocabulary"] = [v["text"] for v in it["vocabulary"]]  # saved vocabulary (#99)
     if "selection" not in it:
         return c | {"kind": "dictation", "expectExact": it["target"]}
     t = json.loads(it["target"])
@@ -264,6 +266,9 @@ def dry_run(comp, train, seed, count):
          "context": "", "expectExact": "Move the review to Tuesday."} | ({"selection": "x", "expectAction": "edit"} if comp == "edit" else {})
     ok, near, wrong = ({"output": o, "failures": f, "action": "edit"} for o, f in [
         ("Move the review to Tuesday.", []), ("Move the review to Tuesday", ["not exact"]), ("Sure! Here it is.", ["not exact"])])
+    v = case({"id": "v", "cat": "d-x", "transcript": "hi", "context": {"text": ""}, "target": "Hi.",
+              "vocabulary": [{"text": "Niamh", "aliases": [], "weight": 10}]})
+    assert v["vocabulary"] == ["Niamh"] and "vocabulary" not in case(c | {"context": {}, "target": "x"}), v
     assert score(ok, c) == 1.0 and 0.45 < score(near, c) < 0.5 and score(wrong, c) < 0.2, (score(near, c), score(wrong, c))
     style = {"output": "Move the review to Tuesday, the four-day one.", "failures": ["not exact"]}
     assert score(style, c | {"expectExact": "Move the review to Tuesday the four day one."}) == 0.8
@@ -305,6 +310,8 @@ def main():
     ap.add_argument("--budget", type=int, default=1500, help="max rollouts (metric calls), split across the prompts")
     ap.add_argument("--train-per-cat", type=int, default=8)
     ap.add_argument("--val-per-cat", type=int, default=3)
+    ap.add_argument("--pool", type=Path, metavar="DIR", help="train/val are DIR/{train,val}.jsonl whole (gen.py v8: "
+                    "training/out/pool-v8) instead of a per-category sample of items.jsonl")
     ap.add_argument("--reflector", default="claude")
     ap.add_argument("--component", choices=["dictation", "edit"], help="optimize only this prompt")
     ap.add_argument("--out", type=Path, default=Path("training/out/gepa"))
@@ -316,12 +323,14 @@ def main():
     a = ap.parse_args()
     if a.length and a.reflector != "claude":
         sys.exit("--length reflects through claude -p only")
-    items = [json.loads(l) for l in open("training/out/items.jsonl")]
-    items = [it for it in items if "vocabulary" not in it]  # saved vocabulary isn't wired into bench cases
-    val = sample(items, a.val_per_cat, seed=1)
-    seen = {c["id"] for c in val}
-    train = itn(sample([it for it in items if it["id"] not in seen], a.train_per_cat, seed=2))
-    val = itn(val)
+    if a.pool:  # already split and matched to real use: taken whole
+        train, val = (itn([case(json.loads(l)) for l in open(a.pool / f"{n}.jsonl")]) for n in ("train", "val"))
+    else:
+        items = [json.loads(l) for l in open("training/out/items.jsonl")]
+        val = sample(items, a.val_per_cat, seed=1)
+        seen = {c["id"] for c in val}
+        train = itn(sample([it for it in items if it["id"] not in seen], a.train_per_cat, seed=2))
+        val = itn(val)
     a.out.mkdir(parents=True, exist_ok=True)
     # No cache_evaluation: GEPA keys it by (candidate, list index) for train minibatches and val alike, so a child's
     # val score would reuse train items' results (gepa 0.1.4). Minibatches rarely repeat, so it saved little anyway.
