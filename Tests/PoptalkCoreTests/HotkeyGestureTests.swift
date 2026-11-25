@@ -88,3 +88,51 @@ private func run(_ events: [Event]) -> [HotkeyGesture.Release?] {
     let r = g.release(at: t0 + 0.2)
     #expect(r == .hold)
 }
+
+// #111: a tap accepts a showing offer only once the double-tap window has passed with nothing else pressed.
+@Test func singleTapWithOfferAcceptsAfterTheWindow() {
+    var g = HotkeyGesture()
+    g.press(at: t0)
+    let tap = g.release(at: t0 + 0.1)
+    let (early, settled, again) = (g.tapSettled(at: t0 + 0.3), g.tapSettled(at: t0 + 0.6), g.tapSettled(at: t0 + 0.7))
+    #expect(tap == .tap)
+    #expect(!early && settled && !again)  // once
+}
+
+@Test func doubleTapWithOfferUndoesWithoutAccepting() {
+    var g = HotkeyGesture()
+    g.press(at: t0)
+    _ = g.release(at: t0 + 0.1)
+    g.press(at: t0 + 0.3)
+    let settled = g.tapSettled(at: t0 + 0.6)
+    let second = g.release(at: t0 + 0.4)
+    let later = g.tapSettled(at: t0 + 1)
+    #expect(!settled && second == .doubleTap && !later)
+}
+
+@Test func tapThenHoldWithOfferEditsWithoutAccepting() {
+    var g = HotkeyGesture()
+    g.press(at: t0)
+    _ = g.release(at: t0 + 0.1)
+    g.press(at: t0 + 0.3)
+    let settled = g.tapSettled(at: t0 + 0.6)
+    let second = g.release(at: t0 + 2)
+    let later = g.tapSettled(at: t0 + 3)
+    #expect(!settled && second == .editHold && !later)
+}
+
+@Test func singleTapCancelsAtOnce() {
+    var g = HotkeyGesture()
+    g.press(at: t0)
+    let tap = g.release(at: t0 + 0.1)  // decided at the release: the cancel doesn't wait for the window
+    #expect(tap == .tap)
+}
+
+@Test func otherKeyAfterTapDropsTheAccept() {
+    var g = HotkeyGesture()
+    g.press(at: t0)
+    _ = g.release(at: t0 + 0.1)
+    _ = g.otherKey()
+    let settled = g.tapSettled(at: t0 + 0.6)
+    #expect(!settled)
+}

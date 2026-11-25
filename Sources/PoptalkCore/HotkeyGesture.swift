@@ -51,4 +51,12 @@ public struct HotkeyGesture {
         tappedAt = now
         return .tap
     }
+
+    /// Whether the last tap stands alone (#111): the double-tap window has passed with no press or other key since,
+    /// so it may accept a showing offer without a double tap also doing so. True once.
+    public mutating func tapSettled(at now: Date) -> Bool {
+        guard let t = tappedAt, now.timeIntervalSince(t) >= Self.doubleTapGap else { return false }
+        tappedAt = nil
+        return true
+    }
 }

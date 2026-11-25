@@ -125,12 +125,11 @@ enum TextIO {
 
     /// Deletes `n` characters before the cursor, then pastes `s` if any: PopTalk's edit of its insert in a terminal (#79).
     /// #89: one backspace of the burst got lost (Ghostty, plain zsh). So: wait (≤300 ms) for right ⌥ to be up, then
-    /// space the deletes, which also lets the overlay's own key tap pass each one on before the "Undone" state tears
-    /// that tap down. The undo was Esc, held as it fired; it's now a right-⌥ double tap that fires on the release
+    /// space the deletes. The undo was Esc, held as it fired; it's now a right-⌥ double tap that fires on the release
     /// (#109), so the key is normally up already and this returns at once. Kept for a quick third press, which would
     /// make the deletes ⌥⌫ (delete a word).
-    /// ponytail: cause not pinned (a held key, a delete in flight through PopTalk's tap at teardown, or the app
-    /// dropping a burst). If one still goes missing, drop the overlay's tap before undoing (`Overlay.doubleTapped`).
+    /// ponytail: cause not pinned (the held Esc, a delete in flight through the overlay's key tap as it was torn
+    /// down, which #111 removed, or the app dropping a burst). If one still goes missing, slow the deletes.
     static func retype(deleting n: Int, then s: String) async {
         let start = ContinuousClock.now
         while CGEventSource.keyState(.hidSystemState, key: 61), ContinuousClock.now - start < .milliseconds(300) {

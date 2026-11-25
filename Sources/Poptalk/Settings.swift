@@ -120,7 +120,10 @@ struct SettingsView: View {
     private var general: some View {
         Form {
             Section {
-                Text("Hold Right ⌥ to talk. With text selected, what you say edits the selection. Tap, then hold, to edit what PopTalk just inserted.")
+                Text("""
+                    Hold Right ⌥ to talk. With text selected, what you say edits the selection. Tap to accept an offer, \
+                    double-tap to undo, and tap, then hold, to edit what PopTalk just inserted.
+                    """)
             }
             Section("Microphone") {
                 Picker("Input", selection: $inputDeviceUID) {
@@ -130,7 +133,7 @@ struct SettingsView: View {
             }
             Section {
                 Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
-                    .help("How long the result stays up, with a right-⌥ double tap to undo and Return to add a suggested word.")
+                    .help("How long the result stays up, with a right-⌥ double tap to undo and a tap to add a suggested word.")
                 Toggle("Live cleanup preview", isOn: $liveCleanup)
                 Text("Shows the cleanup or edit while you talk, so release can insert it at once. Uses the GPU at each pause.")
                     .font(.footnote).foregroundStyle(.secondary)

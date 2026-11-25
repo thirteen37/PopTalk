@@ -74,7 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed(afterTap: $0) },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() },
-                        onTap: { [weak self] in self?.tapped() },
+                        // A tap cancels at once; it accepts a showing offer only once it can't be a double tap (#111).
+                        onTap: { [weak self] in self?.cancelled() },
+                        onTapSettled: { [weak self] in self?.overlay.tapped() },
                         onDoubleTap: { [weak self] in self?.overlay.doubleTapped() })
         installHotkeyWhenTrusted()  // also checks permissions
         if let tab = status.value.launchTab { openSettings(at: tab) }
@@ -280,12 +282,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if shown { overlay.hide() }
     }
 
-    /// A right-⌥ tap: cancels, and accepts a showing typed-correction offer (#86), taken before `cancelled` hides it.
-    private func tapped() {
-        let accept = overlay.takeTapAccept()
-        cancelled()
-        accept?()
-    }
 
     private func released() {
         guard recording else { return }
@@ -715,7 +711,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         typing = TypingWatch(field: field, pasted: pasted, transcript: transcript, known: { store.terms },
             typed: { [weak self] in
                 guard let self, !busy, !recording else { return }
-                overlay.releaseKeys()  // this dictation's Return would land on the user's typing, its undo ⌘Z it
+                overlay.userTyped()  // this dictation's undo would ⌘Z their typing, its offer is stale
             },
             offer: { [weak self] term in
                 guard let self, !busy, !recording else { return }

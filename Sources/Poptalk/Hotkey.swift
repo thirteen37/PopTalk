@@ -3,26 +3,28 @@ import CoreGraphics
 import PoptalkCore
 
 /// Hold-to-talk on Right Option (keycode 61) via a CGEventTap. Events always pass through.
-/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap under 150 ms calls `onTap`, which cancels too
-/// (and accepts a typed-correction offer, #86). A second tap soon after (`HotkeyGesture`) calls `onTap` and then
-/// `onDoubleTap` (undo, #109), on its release so ⌥ is up before any keystrokes are sent. A press soon after a tap
-/// is `onPress(true)`: held, it's a tap-then-hold, which edits the last insert (#110).
+/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap under 150 ms calls `onTap`, which cancels too,
+/// and once the double-tap window passes with nothing else pressed, `onTapSettled`, which accepts a showing offer
+/// (#111). A second tap soon after (`HotkeyGesture`) calls `onTap` and then `onDoubleTap` (undo, #109), on its
+/// release so ⌥ is up before any keystrokes are sent. A press soon after a tap is `onPress(true)`: held, it's a
+/// tap-then-hold, which edits the last insert (#110).
 @MainActor
 final class Hotkey {
     private static let rightOption: Int64 = 61
     private let onPress: (_ afterTap: Bool) -> Void, onRelease: () -> Void, onCancel: () -> Void, onTap: () -> Void
-    private let onDoubleTap: () -> Void
+    private let onTapSettled: () -> Void, onDoubleTap: () -> Void
     private var tap: CFMachPort?
     private var gesture = HotkeyGesture()
     /// Key-downs seen from other processes: an insert in a terminal is only taken back if none came since (#79).
     private(set) var keyDowns = 0
 
     init(onPress: @escaping (_ afterTap: Bool) -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void,
-         onTap: @escaping () -> Void, onDoubleTap: @escaping () -> Void) {
+         onTap: @escaping () -> Void, onTapSettled: @escaping () -> Void, onDoubleTap: @escaping () -> Void) {
         self.onPress = onPress
         self.onRelease = onRelease
         self.onCancel = onCancel
         self.onTap = onTap
+        self.onTapSettled = onTapSettled
         self.onDoubleTap = onDoubleTap
     }
 
@@ -63,7 +65,13 @@ final class Hotkey {
                 onPress(gesture.press(at: Date()))
             } else if !rightDown {
                 switch gesture.release(at: Date()) {
-                case .tap: onTap()
+                case .tap:
+                    onTap()
+                    // A little past the window, so the check after it sees the window passed.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + HotkeyGesture.doubleTapGap + 0.01) { [weak self] in
+                        guard let self, gesture.tapSettled(at: Date()) else { return }
+                        onTapSettled()
+                    }
                 case .doubleTap: onTap(); onDoubleTap()
                 case .hold, .editHold: onRelease()
                 case nil: break

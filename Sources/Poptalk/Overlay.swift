@@ -2,7 +2,7 @@ import AppKit
 import PoptalkCore
 
 /// Small non-activating HUD at the bottom of the screen ("glyph capsule", #63). While an outcome is shown,
-/// a right-⌥ double tap undoes it (#109) and bare Return accepts a vocabulary or cleanup offer; Return is consumed only then.
+/// a right-⌥ double tap undoes it (#109) and a tap accepts a vocabulary or cleanup offer (#111). It catches no keys.
 /// It moves off the focused field, and can be dragged elsewhere (remembered per display; right-click resets, #78).
 @MainActor
 final class Overlay {
@@ -10,7 +10,6 @@ final class Overlay {
     /// Holds the current `Capsule` view, inside the glass (macOS 26+) or the HUD material.
     private let container = NSView()
     private var hideWork: DispatchWorkItem?
-    private var keys: KeyCatcher?
     /// Bumped on every show/hide, so a fade-out that finishes after a newer show doesn't hide it.
     private var generation = 0
     /// The focused field or caret (AppKit coordinates), read once per press when the overlay first shows.
@@ -107,45 +106,52 @@ final class Overlay {
     func showError(_ msg: String) { show(Self.errorHUD(msg), for: 3) }
     func showNotice(_ msg: String) { show(Self.noticeHUD(msg), for: 2) }
 
-    /// "⏎ clean up now" after a raw insert. Return runs `onAccept` if `isValid()` still holds; any other
-    /// key, or Return once invalid, passes through and dismisses the offer.
+    /// "Clean up now" after a raw insert. A right-⌥ tap (`tapAccept`) runs `onAccept` if `isValid()` still holds;
+    /// once invalid it just dismisses the offer.
     func showCleanupOffer(isValid: @escaping () -> Bool, onAccept: @escaping () -> Void) {
         let seconds = max(Self.outcomeSeconds, 6)
         show(Self.cleanupOfferHUD(seconds: seconds), for: seconds)
-        keys = KeyCatcher { [weak self] code, flags in
-            if OutcomeKeys.accepts(code: code, flags: flags.rawValue), isValid() {
-                DispatchQueue.main.async { onAccept() }
-                return true
-            }
-            DispatchQueue.main.async { self?.hide() }
-            return false
-        }
+        tapAccept = { [weak self] in if isValid() { onAccept() } else { self?.hide() } }
+        hidesOnTyping = true
     }
 
-    /// What a right-⌥ tap does while a typed-correction offer shows (#86); cleared by every other show and hide.
+    /// What a right-⌥ tap accepts in the showing offer (vocabulary, cleanup or typed correction, #111); cleared by
+    /// every other show and hide.
     private var tapAccept: (() -> Void)?
+    /// What a right-⌥ double tap does while an outcome shows (#109); cleared likewise.
+    private var tapUndo: (() -> Void)?
+    /// Whether typing in the field hides this state (`userTyped`).
+    private var hidesOnTyping = false
 
-    /// A term learned from the user's typed fix (#86). Catches no keys, since the user is typing: a right-⌥ tap
-    /// (`takeTapAccept`) runs `onAccept`; otherwise it times out.
+    /// A term learned from the user's typed fix (#86). Stays up while they type; a right-⌥ tap runs `onAccept`,
+    /// otherwise it times out.
     func showTypedOffer(_ term: VocabTerm, onAccept: @escaping () -> Void) {
         let seconds = max(Self.outcomeSeconds, 6)
         show(Self.typedOfferHUD(term, seconds: seconds), for: seconds)
         tapAccept = { [weak self] in onAccept(); self?.show(Self.confirmHUD("Added “\(term.text)”"), for: 1.5) }
     }
 
-    /// The showing typed-correction offer's accept, once; nil when none is up.
-    func takeTapAccept() -> (() -> Void)? {
-        defer { tapAccept = nil }
-        return tapAccept
+    /// A right-⌥ tap that stood alone (#111): accepts the showing offer, if any.
+    func tapped() {
+        let accept = tapAccept
+        tapAccept = nil
+        accept?()
     }
 
-    /// The user started typing in the field (#86): hides a state that catches Return, which would otherwise take
-    /// keys meant for the field, or whose undo would ⌘Z their typing. Hidden rather than redrawn without its keycaps, which would lie.
-    func releaseKeys() {
-        if keys != nil { hide() }
+    /// A right-⌥ double tap: undoes the showing outcome, if it has an undo.
+    func doubleTapped() {
+        let undo = tapUndo
+        tapUndo = nil
+        undo?()
     }
 
-    /// How long an outcome (and its undo/accept keys) stays up: the "Undo window" setting, read per show.
+    /// The user started typing in the field (#86): hides an outcome or cleanup offer, whose undo would ⌘Z their
+    /// typing and whose offer they have typed past. Hidden rather than redrawn without its keycaps, which would lie.
+    func userTyped() {
+        if hidesOnTyping { hide() }
+    }
+
+    /// How long an outcome (and its undo and offer) stays up: the "Undo window" setting, read per show.
     static var outcomeSeconds: TimeInterval { OutcomeKeys.undoWindow(.standard) }
 
     /// `heard`/`result`: the transcript and the text applied, shown above the label (#56); `edit` puts the label
@@ -159,28 +165,15 @@ final class Overlay {
         tapUndo = undo.map { undo in
             { [weak self] () -> Void in Task { if await undo() { self?.show(Self.confirmHUD("Undone"), for: 1) } } }
         }
-        keys = KeyCatcher { [weak self] code, flags in
-            guard let offer = vocabularyOffer, OutcomeKeys.accepts(code: code, flags: flags.rawValue) else { return false }
-            // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
-            DispatchQueue.main.async { onAccept(); self?.show(Self.confirmHUD("Added “\(offer.text)”"), for: 1.5) }
-            return true
+        tapAccept = vocabularyOffer.map { offer in
+            { [weak self] in onAccept(); self?.show(Self.confirmHUD("Added “\(offer.text)”"), for: 1.5) }
         }
-    }
-
-    /// What a right-⌥ double tap does while an outcome shows (#109); cleared by every other show and hide.
-    private var tapUndo: (() -> Void)?
-
-    /// A right-⌥ double tap: undoes the showing outcome, if it has an undo.
-    func doubleTapped() {
-        let undo = tapUndo
-        tapUndo = nil
-        undo?()
+        hidesOnTyping = true
     }
 
     func hide() {
         hideWork?.cancel()
-        keys = nil
-        (tapAccept, tapUndo) = (nil, nil)
+        (tapAccept, tapUndo, hidesOnTyping) = (nil, nil, false)
         preview = nil
         fieldRead = false
         sparkles = .init()
@@ -259,7 +252,8 @@ final class Overlay {
     static func confirmHUD(_ msg: String) -> HUD { HUD(glyph: .symbol("checkmark"), act: msg) }
 
     static func cleanupOfferHUD(seconds: TimeInterval) -> HUD {
-        HUD(glyph: .symbol("sparkle"), tint: .systemGreen, act: "Model ready", keys: [("⏎", "clean up now")], timer: seconds)
+        HUD(glyph: .symbol("sparkle"), tint: .systemGreen, act: "Model ready", keys: [("right ⌥", "tap to clean up now")],
+            timer: seconds)
     }
 
     static func typedOfferHUD(_ term: VocabTerm, seconds: TimeInterval) -> HUD {
@@ -281,7 +275,7 @@ final class Overlay {
             (h.glyph, h.tint, h.act) = (.symbol("arrow.uturn.backward"), .systemTeal, text)
         }
         if undo { h.keys.append(("right ⌥", "double-tap to undo")) }
-        if let v = vocabulary { h.keys.append(("⏎", "add “\(v)” to vocabulary")) }
+        if let v = vocabulary { h.keys.append(("right ⌥", "tap to add “\(v)” to vocabulary")) }
         if undo || vocabulary != nil { h.timer = seconds }
         return h
     }
@@ -290,8 +284,7 @@ final class Overlay {
 
     private func show(_ hud: HUD, for seconds: TimeInterval?) {
         hideWork?.cancel()
-        keys = nil
-        (tapAccept, tapUndo) = (nil, nil)
+        (tapAccept, tapUndo, hidesOnTyping) = (nil, nil, false)
         generation += 1
         let view = Capsule.view(hud)
         let size = view.frame.size
@@ -585,7 +578,7 @@ enum Capsule {
         return (f, size)
     }
 
-    /// "⏎ clean up now": a small rounded key, then what it does.
+    /// "right ⌥ double-tap to undo": a small rounded key, then what it does.
     private static func keycap(_ key: (cap: String, text: String)) -> (NSView, CGSize) {
         let cap = NSTextField(labelWithAttributedString: attr(key.cap, 10.5, .semibold, .labelColor))
         let capFit = cap.fittingSize
@@ -751,40 +744,5 @@ private final class Material: NSVisualEffectView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         effectiveAppearance.performAsCurrentDrawingAppearance { layer?.borderColor = NSColor.separatorColor.cgColor }
-    }
-}
-
-/// Active key-down tap that lets `handler` consume specific keys; torn down on deinit.
-@MainActor
-private final class KeyCatcher {
-    private var tap: CFMachPort?
-    private var source: CFRunLoopSource?
-    private let handler: (Int64, CGEventFlags) -> Bool
-
-    init(handler: @escaping (Int64, CGEventFlags) -> Bool) {
-        self.handler = handler
-        tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
-            callback: { _, type, event, ctx in
-                let me = Unmanaged<KeyCatcher>.fromOpaque(ctx!).takeUnretainedValue()
-                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    MainActor.assumeIsolated { if let tap = me.tap { CGEvent.tapEnable(tap: tap, enable: true) } }
-                }
-                guard type == .keyDown else { return Unmanaged.passUnretained(event) }
-                let code = event.getIntegerValueField(.keyboardEventKeycode)
-                let consumed = MainActor.assumeIsolated { me.handler(code, event.flags) }
-                return consumed ? nil : Unmanaged.passUnretained(event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque())
-        guard let tap else { return }
-        source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-    }
-
-    isolated deinit {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
-        if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
     }
 }
