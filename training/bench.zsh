@@ -7,7 +7,7 @@
 #    stays, it shapes the model's input), so no repair or raw fallback hides what the model did. Its result files end
 #    in -model: compare them with other -model files only.
 # Then a summary line per set and pass: cases passing every run, and runs passed.
-# The speech set hears Parakeet TDT v3, the bench default (#114), not the app default; `--speech-model v2` overrides it.
+# The speech set hears the app's default speech model (Parakeet TDT v2); `--speech-model v3` overrides it.
 # Real voice (#99, docs/real-voice-bench.md): add `--audio-dir bench/audio-real`. Only the speech set uses it, and its
 # results go to the gitignored bench/results-real/: they hold what you said, so commit or post only counts
 # (WER, recall, pass counts), never the files or transcripts.
