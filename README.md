@@ -18,13 +18,14 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 
 PopTalk's speech benchmark, with Parakeet TDT v2 and the default model (PopTalk's Gemma 4 E2B v6 fine-tune):
 
-| Stage | Word error rate | Screen and vocabulary terms right |
-| --- | --- | --- |
-| Parakeet alone | 21.5% | 56% |
-| With context boosting | 12.7% | 79% |
-| After cleanup with context | 5.3% | 100% |
+| Stage | Word error rate, real voice | Word error rate, synthetic | Terms right, real voice | Terms right, synthetic |
+| --- | --- | --- | --- | --- |
+| Parakeet alone | 15.1% | 14.5% | 58% | 73% |
+| With context boosting | 11.5% | 7.4% | 71% | 94% |
+| After cleanup with context | 12.8% | 9.5% | 86% | 98% |
+| Dictations fully right | 34 of 50 | 46 of 50 | | |
 
-This is 21 dictations read by macOS text-to-speech voices, most of them with screen context or vocabulary that the sentence uses. It's a small synthetic set, so treat the numbers as an indication rather than a rigorous evaluation. Results: [`bench/results/2026-11-24-224406-mlx-adapters_gemma-4-e2b-poptalk-v6-audio-s.json`](bench/results/2026-11-24-224406-mlx-adapters_gemma-4-e2b-poptalk-v6-audio-s.json).
+These are 50 invented dictations, most of them using screen context or vocabulary terms. They cover names, spoken formatting, numbers, self-corrections and a few long dictations. "Real voice" is one person reading them naturally, not word for word. "Synthetic" is macOS text-to-speech voices, averaged over 3 runs. Terms right counts screen and vocabulary terms with any casing. Cleanup can raise word error rate over boosting alone: it removes fillers, resolves self-corrections and rewords, and the reference text doesn't always match those choices. Treat the numbers as an indication: one speaker, 50 cases. Synthetic results: [`bench/results/parakeet-114/v2-mlx/`](bench/results/parakeet-114/v2-mlx/). The real-voice recordings and results stay local (see [real-voice bench](docs/real-voice-bench.md)).
 
 ## Install
 
