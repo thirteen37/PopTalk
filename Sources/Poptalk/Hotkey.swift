@@ -3,7 +3,7 @@ import CoreGraphics
 import PoptalkCore
 
 /// Hold-to-talk on Right Option (keycode 61) via a CGEventTap. Events always pass through.
-/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap (under `HotkeyGesture.tap`) calls `onTap`, which cancels too,
+/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap (under `GestureTiming.tap`) calls `onTap`, which cancels too,
 /// and once the double-tap window passes with nothing else pressed, `onTapSettled`, which accepts a showing offer
 /// (#111). A second tap soon after (`HotkeyGesture`) calls `onTap` and then `onDoubleTap` (undo, #109), on its
 /// release so ⌥ is up before any keystrokes are sent. A press soon after a tap is `onPress(true)`: held, it's a
@@ -62,6 +62,8 @@ final class Hotkey {
             // NX_DEVICERALTKEYMASK: right ⌥ specifically, so a held left ⌥ can't mask the release.
             let rightDown = event.flags.rawValue & 0x40 != 0
             if rightDown, !gesture.isPressed {
+                // Read at each press, so a change in Settings applies to the next one (#112).
+                (gesture.tap, gesture.doubleTapGap) = (GestureTiming.tap(.standard), GestureTiming.doubleTapGap(.standard))
                 onPress(gesture.press(at: Date()))
             } else if !rightDown {
                 let now = Date(), held = gesture.pressedAt.map { now.timeIntervalSince($0) }
@@ -74,7 +76,7 @@ final class Hotkey {
                 case .tap:
                     onTap()
                     // A little past the window, so the check after it sees the window passed.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + HotkeyGesture.doubleTapGap + 0.01) { [weak self] in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + gesture.doubleTapGap + 0.01) { [weak self] in
                         guard let self, gesture.tapSettled(at: Date()) else { return }
                         onTapSettled()
                     }

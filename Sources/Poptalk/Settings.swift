@@ -71,6 +71,8 @@ struct SettingsView: View {
     @AppStorage("lmstudioEditModel") private var lmstudioEditModel = ModelSettings.defaults["lmstudioEditModel"]!
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
     @AppStorage(OutcomeKeys.undoWindowKey) private var undoWindow = OutcomeKeys.undoWindowDefault
+    @AppStorage(GestureTiming.tapKey) private var tapMs = GestureTiming.tapDefault
+    @AppStorage(GestureTiming.doubleTapGapKey) private var doubleTapGapMs = GestureTiming.doubleTapGapDefault
     @AppStorage(ContextSources.Key.focusedText) private var ctxFocusedText = true
     @AppStorage(ContextSources.Key.nearbyText) private var ctxNearbyText = true
     @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
@@ -151,6 +153,10 @@ struct SettingsView: View {
                 Section("Advanced") {
                     Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
                         .help("How long the result stays up, with a right-⌥ double tap to undo and a tap to add a suggested word.")
+                    Stepper("Longest tap: \(tapMs) ms", value: $tapMs, in: GestureTiming.tapRange, step: 25)
+                    Stepper("Double-tap speed: \(doubleTapGapMs) ms", value: $doubleTapGapMs, in: GestureTiming.doubleTapGapRange, step: 50)
+                    Text("A right-⌥ press shorter than the longest tap is a tap; a longer setting also delays the recording bubble. Double-tap speed is the most time between two taps.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
             Section {

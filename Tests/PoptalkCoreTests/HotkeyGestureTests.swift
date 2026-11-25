@@ -7,8 +7,8 @@ private let t0 = Date(timeIntervalSince1970: 1000)
 private enum Event { case down(TimeInterval), up(TimeInterval), key }
 
 /// Feeds right-⌥ presses, releases and other keys; returns what each release was (nil: cancelled).
-private func run(_ events: [Event]) -> [HotkeyGesture.Release?] {
-    var g = HotkeyGesture()
+private func run(_ events: [Event], _ gesture: HotkeyGesture = HotkeyGesture()) -> [HotkeyGesture.Release?] {
+    var g = gesture
     var out: [HotkeyGesture.Release?] = []
     for e in events {
         switch e {
@@ -147,4 +147,35 @@ private func run(_ events: [Event]) -> [HotkeyGesture.Release?] {
     _ = g.otherKey()
     let settled = g.tapSettled(at: t0 + 0.6)
     #expect(!settled)
+}
+
+// #112: both times are settings, in ms, clamped to a sane range.
+@Test func gestureTimingDefaultsAndClamps() {
+    let d = UserDefaults(suiteName: "poptalk-test-\(UUID())")!
+    #expect(GestureTiming.tap(d) == 0.3 && GestureTiming.doubleTapGap(d) == 0.4)
+    d.set(200, forKey: GestureTiming.tapKey); d.set(600, forKey: GestureTiming.doubleTapGapKey)
+    #expect(GestureTiming.tap(d) == 0.2 && GestureTiming.doubleTapGap(d) == 0.6)
+    d.set(0, forKey: GestureTiming.tapKey); d.set(0, forKey: GestureTiming.doubleTapGapKey)
+    #expect(GestureTiming.tap(d) == 0.15 && GestureTiming.doubleTapGap(d) == 0.25)
+    d.set(9999, forKey: GestureTiming.tapKey); d.set(9999, forKey: GestureTiming.doubleTapGapKey)
+    #expect(GestureTiming.tap(d) == 0.5 && GestureTiming.doubleTapGap(d) == 0.8)
+}
+
+@Test func longerTapAndGap() {
+    let slow = HotkeyGesture(tap: 0.5, doubleTapGap: 0.7)
+    #expect(run([.down(0), .up(0.45)], slow) == [.tap])  // a hold at the default 300 ms
+    #expect(run([.down(0), .up(0.1), .down(0.75), .up(0.85)], slow) == [.tap, .doubleTap])  // too late at 0.4 s
+    #expect(run([.down(0), .up(0.1), .down(0.75), .up(1.3)], slow) == [.tap, .editHold])
+    var g = slow
+    g.press(at: t0)
+    _ = g.release(at: t0 + 0.1)
+    let (early, settled) = (g.tapSettled(at: t0 + 0.6), g.tapSettled(at: t0 + 0.9))
+    #expect(!early && settled)
+}
+
+@Test func shorterTapAndGap() {
+    let quick = HotkeyGesture(tap: 0.15, doubleTapGap: 0.25)
+    #expect(run([.down(0), .up(0.2)], quick) == [.hold])  // a tap at the default 300 ms
+    #expect(run([.down(0), .up(0.1), .down(0.4), .up(0.5)], quick) == [.tap, .tap])  // a double tap at 0.4 s
+    #expect(run([.down(0), .up(0.1), .down(0.4), .up(2)], quick) == [.tap, .hold])
 }

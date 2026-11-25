@@ -236,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recording = true
         (editLast, editTarget) = (afterTap, nil)
         targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        // A release before `HotkeyGesture.tap` is a tap, which cancels; only then read the selection (may post ⌘C), OCR and show the HUD.
+        // A release before `GestureTiming.tap` is a tap, which cancels; only then read the selection (may post ⌘C), OCR and show the HUD.
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             // Tap-then-hold: the last insert is the selection, for the live preview (#43) and the final pass; with
@@ -261,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
         startWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + HotkeyGesture.tap, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + GestureTiming.tap(.standard), execute: work)
     }
 
     private func cancelled() {
@@ -285,7 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func released() {
         guard recording else { return }
-        // Released right at `HotkeyGesture.tap`, before the delayed start ran: run it now and stop the scheduled copy. It may
+        // Released right at `GestureTiming.tap`, before the delayed start ran: run it now and stop the scheduled copy. It may
         // stop the recording itself (nothing to edit, #110).
         if let work = startWork, !work.isCancelled, contextTask == nil { work.perform(); work.cancel() }
         guard recording else { return }
