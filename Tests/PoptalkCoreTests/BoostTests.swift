@@ -107,6 +107,25 @@ import Testing
     #expect(Pipeline.applyBoosts("call Pria, then", [(span: "Pria,", term: "Priya")], terms: priya) == "call Priya, then")
 }
 
+// #99: tuned on real-voice and synthetic s-* (flat region minSimilarity 0.7–0.75, cbw 0.75–1.25; cbw ≥ 1.5 breaks words).
+@Test func boostThresholdDefaults() {
+    #expect(Pipeline.boostCbw == 1 && Pipeline.boostMinSimilarity == 0.7)
+}
+
+// #99: with cbw > 0 the rescorer proposes part of a split term ("fluid" for FluidAudio), which left
+// "FluidAudio audio". Neighbouring words that complete the term go too, not across punctuation.
+@Test func applyBoostsAbsorbsNeighboursThatCompleteTheTerm() {
+    let fa = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidAudio")], context: ScreenSnapshot(), fromScreen: false)
+    #expect(Pipeline.applyBoosts("review the PR for fluid audio this afternoon", [(span: "fluid", term: "FluidAudio")], terms: fa)
+        == "review the PR for FluidAudio this afternoon")
+    #expect(Pipeline.applyBoosts("the fluid audio.", [(span: "audio.", term: "FluidAudio")], terms: fa) == "the FluidAudio.")
+    #expect(Pipeline.applyBoosts("it's fluid. Audio next", [(span: "fluid.", term: "FluidAudio")], terms: fa)
+        == "it's FluidAudio. Audio next")
+    // An unrelated neighbour stays.
+    let priya = [VocabTerm(text: "Priya")]
+    #expect(Pipeline.applyBoosts("call Pria about it", [(span: "Pria", term: "Priya")], terms: priya) == "call Priya about it")
+}
+
 @Test func applyBoostsRejectsDigitSpansUnlessTheTermHasDigits() {
     #expect(Pipeline.applyBoosts("at 3.30 p.m.", [(span: "3.30", term: "Pop")], terms: []) == "at 3.30 p.m.")
     #expect(Pipeline.applyBoosts("meet at 10", [(span: "10", term: "Tenn")], terms: []) == "meet at 10")

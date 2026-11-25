@@ -1997,7 +1997,7 @@ def heldout(train_keys):
                       "mustContain": [b], "mustNotContain": [a], "maxLengthRatio": 1.3})
     for i, s in enumerate(HO_KEEP + HO_ASK):
         cases.append({"id": f"h-d-keep-{i}", "kind": "dictation", "transcript": lower_transcript(s),
-                      **ctx_fields(unrelated_context(r) or {"text": ""}), "mustContain": [s[:-1]], "maxLengthRatio": 1.3})
+                      **ctx_fields(unrelated_context(r) or {"text": ""}), "mustContain": s[:-1].split(", "), "maxLengthRatio": 1.3})  # opener kept, its comma optional (#105)
     for i, s in enumerate(HO_PLAIN):  # screen with a look-alike term: don't echo or "fix" toward it
         w = re.findall(r"[a-z]{5,}", s)[0]
         trap = w.capitalize() + "ly"

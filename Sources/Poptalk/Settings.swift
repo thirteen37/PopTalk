@@ -78,6 +78,7 @@ struct SettingsView: View {
     @State private var learnedTerms: [LearnedTerm] = []
     @AppStorage(DictationFeatures.Key.recaseTerms) private var recaseTerms = true
     @AppStorage(DictationFeatures.Key.skipGate) private var skipGate = false
+    @AppStorage(DictationFeatures.Key.soundAlikeTerms) private var soundAlikeTerms = false
     @AppStorage(LivePreview.key) private var liveCleanup = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var terms: [VocabTerm] = []
@@ -224,6 +225,12 @@ struct SettingsView: View {
                     Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
                     Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    // #75: runs only where the casing fix does.
+                    if recaseTerms {
+                        Toggle("Match sound-alike terms (experimental)", isOn: $soundAlikeTerms)
+                        Text("Asks the model whether words that sound like a screen or vocabulary term (\"core vanta\") are that term, and gives them its spelling.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Toggle("Skip cleanup for clean dictations (experimental)", isOn: $skipGate)
                 Text("Inserts a punctuated dictation with no fillers or corrections as heard, without the language model.")
