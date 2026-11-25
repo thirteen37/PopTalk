@@ -48,6 +48,8 @@ def case(it):
     c = {"id": it["id"], "transcript": it["transcript"], "context": ctx.get("text", ""), "cat": it["cat"]}
     if "cursorOffset" in ctx: c["cursor"] = ctx["cursorOffset"]
     if ctx.get("ocrText"): c["ocr"] = ctx["ocrText"]
+    for k, f in (("app", "appName"), ("window", "windowTitle")):  # the <screen> tag's app and window, as in the app
+        if ctx.get(f): c[k] = ctx[f]
     if it.get("vocabulary"): c["vocabulary"] = [v["text"] for v in it["vocabulary"]]  # saved vocabulary (#99)
     if "selection" not in it:
         return c | {"kind": "dictation", "expectExact": it["target"]}
@@ -269,6 +271,9 @@ def dry_run(comp, train, seed, count):
     v = case({"id": "v", "cat": "d-x", "transcript": "hi", "context": {"text": ""}, "target": "Hi.",
               "vocabulary": [{"text": "Niamh", "aliases": [], "weight": 10}]})
     assert v["vocabulary"] == ["Niamh"] and "vocabulary" not in case(c | {"context": {}, "target": "x"}), v
+    w = case({"id": "w", "cat": "d-x", "transcript": "yes", "context": {"appName": "Ghostty", "windowTitle": "zsh — atlas",
+              "text": "> "}, "target": "Yes."})
+    assert (w["app"], w["window"]) == ("Ghostty", "zsh — atlas") and "app" not in v, w
     assert score(ok, c) == 1.0 and 0.45 < score(near, c) < 0.5 and score(wrong, c) < 0.2, (score(near, c), score(wrong, c))
     style = {"output": "Move the review to Tuesday, the four-day one.", "failures": ["not exact"]}
     assert score(style, c | {"expectExact": "Move the review to Tuesday the four day one."}) == 0.8

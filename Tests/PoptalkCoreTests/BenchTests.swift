@@ -17,6 +17,13 @@ private func one(_ json: String) throws -> BenchCase { try BenchCase.load(jsonl:
     #expect(cases[1].request.selection == "x")
 }
 
+@Test func appAndWindowReachTheScreenTag() throws {  // GEPA's v8 pool sets them, like a real dictation (#103)
+    let c = try one(#"{"id":"a","kind":"dictation","transcript":"yes","context":"> ","app":"Ghostty","window":"zsh — atlas"}"#)
+    #expect(c.request.context.appName == "Ghostty")
+    #expect(c.request.context.windowTitle == "zsh — atlas")
+    #expect(try one(#"{"id":"b","kind":"dictation","transcript":"yes"}"#).request.context.appName == "")
+}
+
 @Test func badLineReportsItsNumber() {
     #expect(throws: (any Error).self) { try BenchCase.load(jsonl: "{\"id\":\"a\",\"kind\":\"dictation\",\"transcript\":\"x\"}\n{oops") }
     do { _ = try BenchCase.load(jsonl: "\n{oops") } catch { #expect("\(error)".contains("line 2")) }

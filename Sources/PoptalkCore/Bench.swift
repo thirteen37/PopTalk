@@ -15,6 +15,8 @@ public struct BenchCase: Decodable, Sendable {
     public var cursor: Int?
     /// OCR'd window text, as captured when the AX text is thin.
     public var ocr: String?
+    /// The frontmost app and window title, as in the prompt's <screen> tag.
+    public var app: String?, window: String?
     public var expectAction: String?
     public var expectExact: String?
     public var expectAnyOf: [String]?
@@ -40,7 +42,7 @@ public struct BenchCase: Decodable, Sendable {
     public var hasAudio: Bool { speak != nil || audio != nil }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, transcript, selection, context, cursor, ocr, expectAction, expectExact, expectAnyOf
+        case id, kind, transcript, selection, context, cursor, ocr, app, window, expectAction, expectExact, expectAnyOf
         case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio, speak, voice, rate, audio, vocabulary, written
     }
 
@@ -59,6 +61,8 @@ public struct BenchCase: Decodable, Sendable {
         context = try c.decodeIfPresent(String.self, forKey: .context)
         cursor = try c.decodeIfPresent(Int.self, forKey: .cursor)
         ocr = try c.decodeIfPresent(String.self, forKey: .ocr)
+        app = try c.decodeIfPresent(String.self, forKey: .app)
+        window = try c.decodeIfPresent(String.self, forKey: .window)
         expectAction = try c.decodeIfPresent(String.self, forKey: .expectAction)
         expectExact = try c.decodeIfPresent(String.self, forKey: .expectExact)
         expectAnyOf = try c.decodeIfPresent([String].self, forKey: .expectAnyOf)
@@ -81,7 +85,8 @@ public struct BenchCase: Decodable, Sendable {
 
     public var request: Request {
         Request(transcript: transcript, selection: selection,
-                context: ScreenSnapshot(text: context ?? "", cursorOffset: cursor, ocrText: ocr ?? ""))
+                context: ScreenSnapshot(appName: app ?? "", windowTitle: window ?? "", text: context ?? "", cursorOffset: cursor,
+                                        ocrText: ocr ?? ""))
     }
 
     public func score(_ r: PipelineResult, seconds: Double) -> BenchRun {
