@@ -1,0 +1,636 @@
+{
+  "cases" : [
+    {
+      "id" : "e-todoist-spelled",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Todoist",
+          "seconds" : 0.0005630254745483398,
+          "vocabOffer" : "Todoist"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Todoist",
+          "seconds" : 0.0005419254302978516,
+          "vocabOffer" : "Todoist"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Todoist",
+          "seconds" : 0.00020205974578857422,
+          "vocabOffer" : "Todoist"
+        }
+      ]
+    },
+    {
+      "id" : "e-formal-keeps-deck",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "Could you please send the deck as soon as possible?",
+          "seconds" : 0.4232170581817627
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "Could you please send the deck as soon as possible?",
+          "seconds" : 0.3497430086135864
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "Could you please send the deck as soon as possible?",
+          "seconds" : 0.3315669298171997
+        }
+      ]
+    },
+    {
+      "id" : "e-insert-after-no-repeat",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertAfter",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "See you Thursday.",
+          "seconds" : 0.28898799419403076
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "See you Thursday.",
+          "seconds" : 0.29050302505493164
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "See you Thursday.",
+          "seconds" : 0.3001899719238281
+        }
+      ]
+    },
+    {
+      "id" : "e-insert-explicit-end",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "insertAfter",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "Bring a reusable cup.",
+          "seconds" : 0.30750906467437744
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "Bring a reusable cup.",
+          "seconds" : 0.30619895458221436
+        },
+        {
+          "action" : "insertAfter",
+          "failures" : [
+
+          ],
+          "modelAction" : "insertAfter",
+          "modelActionOK" : true,
+          "output" : "Bring a reusable cup.",
+          "seconds" : 0.3085669279098511
+        }
+      ]
+    },
+    {
+      "id" : "e-replace-bare-phrase",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "modelActionOK" : true,
+          "output" : "Debounce period",
+          "seconds" : 0.26951491832733154
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "modelActionOK" : true,
+          "output" : "Debounce period",
+          "seconds" : 0.2684239149093628
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "modelActionOK" : true,
+          "output" : "Debounce period",
+          "seconds" : 0.2700819969177246
+        }
+      ]
+    },
+    {
+      "id" : "e-replace-title",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Quarterly Review",
+          "seconds" : 0.2728760242462158
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Quarterly Review",
+          "seconds" : 0.27329206466674805
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "modelAction" : "replace",
+          "output" : "Quarterly Review",
+          "seconds" : 0.27702295780181885
+        }
+      ]
+    },
+    {
+      "id" : "e-shorter",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The meeting has been moved to next Tuesday afternoon.",
+          "seconds" : 0.3663759231567383
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The meeting is now on next Tuesday afternoon.",
+          "seconds" : 0.33673202991485596
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "The meeting is now on next Tuesday afternoon.",
+          "seconds" : 0.31957101821899414
+        }
+      ]
+    },
+    {
+      "id" : "e-bullets",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- milk\n- eggs\n- bread\n- call the plumber\n- pay the electricity bill",
+          "seconds" : 0.5090129375457764
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- milk\n- eggs\n- bread\n- call the plumber\n- pay the electricity bill",
+          "seconds" : 0.4921419620513916
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "- milk\n- eggs\n- bread\n- call the plumber\n- pay the electricity bill",
+          "seconds" : 0.4704509973526001
+        }
+      ]
+    },
+    {
+      "id" : "e-japanese",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "また明日ね",
+          "seconds" : 0.26982903480529785
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "また明日ね",
+          "seconds" : 0.2640420198440552
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "また明日ね",
+          "seconds" : 0.2694559097290039
+        }
+      ]
+    },
+    {
+      "id" : "e-priya-spelled",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Priya",
+          "seconds" : 0.0024530887603759766,
+          "vocabOffer" : "Priya"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Priya",
+          "seconds" : 0.0016679763793945312,
+          "vocabOffer" : "Priya"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Priya",
+          "seconds" : 0.00010693073272705078,
+          "vocabOffer" : "Priya"
+        }
+      ]
+    },
+    {
+      "id" : "e-grammar",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "output" : "He and I went to the store yesterday.",
+          "seconds" : 0.340425968170166
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "output" : "He and I went to the store yesterday.",
+          "seconds" : 0.34793102741241455
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "modelAction" : "correct",
+          "output" : "He and I went to the store yesterday.",
+          "seconds" : 0.34525203704833984
+        }
+      ]
+    },
+    {
+      "id" : "e-literally",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "output" : "Hello, World!",
+          "seconds" : 0.00020396709442138672
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "output" : "Hello, World!",
+          "seconds" : 0.002274036407470703
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "output" : "Hello, World!",
+          "seconds" : 0.0018630027770996094
+        }
+      ]
+    },
+    {
+      "id" : "e-literally-alone-keeps-selection",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "nothing",
+          "failures" : [
+
+          ],
+          "output" : "",
+          "seconds" : 0.0004870891571044922
+        },
+        {
+          "action" : "nothing",
+          "failures" : [
+
+          ],
+          "output" : "",
+          "seconds" : 7.49826431274414e-05
+        },
+        {
+          "action" : "nothing",
+          "failures" : [
+
+          ],
+          "output" : "",
+          "seconds" : 6.401538848876953e-05
+        }
+      ]
+    },
+    {
+      "id" : "e-long-correct-far-name",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+            "not exactly \"Brightwater Analytica\""
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Brightwater Analytics",
+          "seconds" : 0.48290395736694336,
+          "vocabOffer" : "Brightwater Analytics"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+            "not exactly \"Brightwater Analytica\""
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Brightwater Analytics",
+          "seconds" : 0.49084699153900146,
+          "vocabOffer" : "Brightwater Analytics"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+            "not exactly \"Brightwater Analytica\""
+          ],
+          "modelAction" : "correct",
+          "modelActionOK" : true,
+          "output" : "Brightwater Analytics",
+          "seconds" : 0.4114229679107666,
+          "vocabOffer" : "Brightwater Analytics"
+        }
+      ]
+    },
+    {
+      "id" : "e-replace-this-with",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "output" : "Clippy",
+          "seconds" : 0.0021309852600097656
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "output" : "Clippy",
+          "seconds" : 0.00032699108123779297
+        },
+        {
+          "action" : "replace",
+          "failures" : [
+
+          ],
+          "output" : "Clippy",
+          "seconds" : 9.799003601074219e-05
+        }
+      ]
+    },
+    {
+      "id" : "e-replace-commas-edit",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "red; green; blue",
+          "seconds" : 0.30476999282836914
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "red; green; blue",
+          "seconds" : 0.301192045211792
+        },
+        {
+          "action" : "edit",
+          "failures" : [
+
+          ],
+          "modelAction" : "edit",
+          "modelActionOK" : true,
+          "output" : "red; green; blue",
+          "seconds" : 0.30306899547576904
+        }
+      ]
+    },
+    {
+      "id" : "e-spelled-spaced-misheard-name",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Ajay",
+          "seconds" : 0.00024497509002685547,
+          "vocabOffer" : "Ajay"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Ajay",
+          "seconds" : 0.0001729726791381836,
+          "vocabOffer" : "Ajay"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Ajay",
+          "seconds" : 0.00012195110321044922,
+          "vocabOffer" : "Ajay"
+        }
+      ]
+    },
+    {
+      "id" : "e-spelled-hyphen-name",
+      "kind" : "edit",
+      "runs" : [
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Priya",
+          "seconds" : 0.00047206878662109375,
+          "vocabOffer" : "Priya"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Priya",
+          "seconds" : 0.00029397010803222656,
+          "vocabOffer" : "Priya"
+        },
+        {
+          "action" : "correct",
+          "failures" : [
+
+          ],
+          "output" : "Priya",
+          "seconds" : 8.606910705566406e-05,
+          "vocabOffer" : "Priya"
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-26-001627",
+  "provider" : {
+    "cleanupModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "editModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "footprintMB" : "1577",
+    "footprintMBAfterRun" : "1619",
+    "guards" : "-dropsContent,-dropsProtected,-echoesContext,-empty,-length,-openingCue,-restoreMarks,-stripChatter",
+    "hwModel" : "Mac17,9",
+    "loadSeconds" : "1.17",
+    "macOS" : "Version 27.2.1 (Build 26B131)",
+    "promptCache" : "on",
+    "promptCacheBudgetMB" : "200",
+    "promptCacheMinReuse" : "256",
+    "provider" : "mlx",
+    "recaseTerms" : "on",
+    "runs" : "3"
+  }
+}
