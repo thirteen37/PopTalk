@@ -186,9 +186,11 @@ With the default model, PopTalk uses about 1.6 GB of memory (about 3 GB with Gem
 
 ## Settings
 
-- **General:** input device, undo window (2–15 s, default 5), live cleanup preview (on by default; it uses the GPU at each pause), reset overlay position, launch at login, version.
+"Show advanced options" (General, off by default) reveals an Advanced section on General and Models with tuning details and experimental features. Hidden settings keep their values and still apply.
+
+- **General:** input device, live cleanup preview (on by default; it uses the GPU at each pause), reset overlay position, launch at login, version. Advanced: the undo window (2–15 s, default 5).
 - **Context:** which context sources are read, and whether to remember screen terms that fix dictations (off by default; stored on this Mac only, never synced; turning it off offers to forget them). Below that, opt-in local usage history, for training better models: off by default, audio optional, wiped with one button. History can also sync through iCloud Drive (`PopTalk/history`, audio excluded) to merge your Macs' history; turning it off offers to delete this Mac's synced copy, and the wipe can cover this Mac or all of them.
-- **Models:** the speech model (Parakeet TDT v2, v3, Ultra, Bark 3.0 Clean, Phonon-2); the language-model provider (MLX, LM Studio, Apple) and the model for each role (cleanup and edit), including a custom Hugging Face id or local folder; "Fix screen-term casing before cleanup" (on; shown only for an E2B fine-tune adapter), and under it "Match sound-alike terms" (experimental, off); "Skip cleanup for clean dictations" (experimental, off: inserts a dictation with no fillers or corrections as heard, without the model); load status.
+- **Models:** the speech model (Parakeet TDT v2, v3, Ultra, Bark 3.0 Clean, Phonon-2); the language-model provider (MLX, LM Studio, Apple, with LM Studio's server and models); load status. Advanced: the MLX model for each role (cleanup and edit), including a custom Hugging Face id or local folder; "Fix screen-term casing before cleanup" (on; shown only for an E2B fine-tune adapter), and under it "Match sound-alike terms" (experimental, off); "Skip cleanup for clean dictations" (experimental, off: inserts a dictation with no fillers or corrections as heard, without the model).
 - **Permissions:** live status of each permission.
 - **Vocabulary:** saved terms. Add, edit (double-click or the pencil) or delete them, each with optional "heard as" forms the recognizer should map to it. PopTalk offers to remember a correction; it never saves one silently. Imports from FluidVoice. Below, "Learned from screen" lists remembered screen terms (up to 200, newest first): move one to your vocabulary, delete it, or forget all.
 

@@ -12,6 +12,9 @@ enum Settings {
         ModelSettings.migrate(.standard)
     }
 
+    /// #113: off hides tuning details and experimental features; hidden settings keep their values and still apply.
+    static let showAdvancedKey = "showAdvancedSettings"
+
     static var baseURL: URL { URL(string: UserDefaults.standard.string(forKey: "baseURL")!) ?? URL(string: ModelSettings.defaults["baseURL"]!)! }
     static var selection: ModelSettings.Selection { ModelSettings.selection(.standard) }
     static var speechModel: String { ModelSettings.speechModel(UserDefaults.standard.string(forKey: "speechModel")) }
@@ -80,6 +83,7 @@ struct SettingsView: View {
     @AppStorage(DictationFeatures.Key.skipGate) private var skipGate = false
     @AppStorage(DictationFeatures.Key.soundAlikeTerms) private var soundAlikeTerms = false
     @AppStorage(LivePreview.key) private var liveCleanup = true
+    @AppStorage(Settings.showAdvancedKey) private var showAdvanced = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var terms: [VocabTerm] = []
     @State private var vocabMessage: String?
@@ -132,10 +136,9 @@ struct SettingsView: View {
                 }
             }
             Section {
-                Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
-                    .help("How long the result stays up, with a right-⌥ double tap to undo and a tap to add a suggested word.")
                 Toggle("Live cleanup preview", isOn: $liveCleanup)
-                Text("Shows the cleanup or edit while you talk, so release can insert it at once. Uses the GPU at each pause.")
+                Text("Shows the cleanup or edit while you talk, so release can insert it at once."
+                     + (showAdvanced ? " Uses the GPU at each pause." : ""))
                     .font(.footnote).foregroundStyle(.secondary)
                 Button("Reset Overlay Position") { UserDefaults.standard.removeObject(forKey: OverlayPlacement.anchorsKey) }
                     .help("Drag the overlay to move it on a display; right-click it to reset that display. This resets all.")
@@ -143,6 +146,17 @@ struct SettingsView: View {
                     .onChange(of: launchAtLogin) { _, on in
                         try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
                     }
+            }
+            if showAdvanced {
+                Section("Advanced") {
+                    Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
+                        .help("How long the result stays up, with a right-⌥ double tap to undo and a tap to add a suggested word.")
+                }
+            }
+            Section {
+                Toggle("Show advanced options", isOn: $showAdvanced)
+                Text("Tuning details and experimental features, on every tab. Hidden ones keep their values and still apply.")
+                    .font(.footnote).foregroundStyle(.secondary)
             } footer: {
                 Text(versionLabel(Bundle.main.infoDictionary))
                     .font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
@@ -215,29 +229,35 @@ struct SettingsView: View {
                 case "apple":
                     LabeledContent("Model", value: appleModel)
                 default:
-                    MLXModelPicker(label: "Dictation cleanup model", id: $mlxCleanupModel)
-                    MLXModelPicker(label: "Edit model", id: $mlxEditModel)
                     // #101: E4B needs about 3 GB (the default fine-tune about 1.6); Apple's model runs in the system.
                     if ProcessInfo.processInfo.physicalMemory <= 8 << 30, [mlxCleanupModel, mlxEditModel].contains(ModelSettings.e4b) {
                         Text("Gemma 4 E4B uses about 3 GB of memory. On this Mac, Apple on-device may be the better choice.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                // Only E2B fine-tunes (the default, #103, and local adapter folders) use it.
-                if provider == "mlx" && Pipeline.recasesTerms(mlxCleanupModel) {
-                    Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
-                    Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    // #75: runs only where the casing fix does.
-                    if recaseTerms {
-                        Toggle("Match sound-alike terms (experimental)", isOn: $soundAlikeTerms)
-                        Text("Asks the model whether words that sound like a screen or vocabulary term (\"core vanta\") are that term, and gives them its spelling.")
-                            .font(.footnote).foregroundStyle(.secondary)
+            }
+            if showAdvanced {
+                Section("Advanced") {
+                    if provider == "mlx" {
+                        MLXModelPicker(label: "Dictation cleanup model", id: $mlxCleanupModel)
+                        MLXModelPicker(label: "Edit model", id: $mlxEditModel)
                     }
+                    // Only E2B fine-tunes (the default, #103, and local adapter folders) use it.
+                    if provider == "mlx" && Pipeline.recasesTerms(mlxCleanupModel) {
+                        Toggle("Fix screen-term casing before cleanup", isOn: $recaseTerms)
+                        Text("For the PopTalk fine-tuned models: \"meal prep\" becomes \"Meal Prep\" when the screen shows it.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        // #75: runs only where the casing fix does.
+                        if recaseTerms {
+                            Toggle("Match sound-alike terms (experimental)", isOn: $soundAlikeTerms)
+                            Text("Asks the model whether words that sound like a screen or vocabulary term (\"core vanta\") are that term, and gives them its spelling.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    Toggle("Skip cleanup for clean dictations (experimental)", isOn: $skipGate)
+                    Text("Inserts a punctuated dictation with no fillers or corrections as heard, without the language model.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                Toggle("Skip cleanup for clean dictations (experimental)", isOn: $skipGate)
-                Text("Inserts a punctuated dictation with no fillers or corrections as heard, without the language model.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Status") {
                 statusRow("Speech model", status.value.speech)
