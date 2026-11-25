@@ -16,6 +16,8 @@ import PoptalkSpeech
 //     [--sound-alike on]   (#75 step 2, mlx: sound-alike screen terms the cleanup model confirms, written before it)
 //     [--hold]   (#43, audio cases: simulate holding the key with live cleanup; prints preview latency and reuse at release)
 //     [--context-off text,ocr,title,vocab]   (#96: blank those sources in every case, as an app profile turning them off)
+//     [--guards -name,…]   (#108: turn off Pipeline.guardNames steps, or -prepass/-repairs/-rejects. Result files get
+//       a -guards suffix, -model with every repair and reject off: training/bench.zsh's model-only pass)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
@@ -27,12 +29,15 @@ Transcriber.quietLogs()
 let args = CommandLine.arguments
 func opt(_ name: String) -> String? { args.firstIndex(of: name).flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } }
 func fail(_ msg: Any) -> Never { FileHandle.standardError.write(Data("\(msg)\n".utf8)); exit(1) }
-/// `--guards -a,-b`: `Pipeline.guardNames` steps turned off for this run (#108), in bench and `--replay` modes.
-let guardsOff: Set<String> = Set((opt("--guards") ?? "").split(separator: ",").map { g in
-    guard g.hasPrefix("-"), Pipeline.guardNames.contains(String(g.dropFirst())) else {
-        fail("--guards takes -name,… of: " + Pipeline.guardNames.joined(separator: ", "))
+/// `--guards -a,-b`: `Pipeline.guardNames` steps turned off for this run (#108), in bench and `--replay` modes;
+/// `-prepass`, `-repairs` and `-rejects` name a whole list.
+let guardGroups = ["prepass": Pipeline.prepass.map(\.name), "repairs": Pipeline.repairs.map(\.name), "rejects": Pipeline.rejects.map(\.name)]
+let guardsOff: Set<String> = Set((opt("--guards") ?? "").split(separator: ",").flatMap { g in
+    let name = String(g.dropFirst())
+    guard g.hasPrefix("-"), Pipeline.guardNames.contains(name) || guardGroups[name] != nil else {
+        fail("--guards takes -name,… of: " + (guardGroups.keys.sorted() + Pipeline.guardNames).joined(separator: ", "))
     }
-    return String(g.dropFirst())
+    return guardGroups[name] ?? [name]
 })
 func load(_ path: String) -> BenchReport {
     do { return try JSONDecoder().decode(BenchReport.self, from: Data(contentsOf: URL(fileURLWithPath: path))) } catch { fail("\(path): \(error)") }
@@ -501,6 +506,7 @@ if skipGate {
 }
 
 let model = (provider == "lmstudio" || provider == "mlx" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : audioDir == nil ? "-audio" : "-real")
+    + (guardsOff.isEmpty ? "" : guardsOff.isSuperset(of: guardGroups["repairs"]! + guardGroups["rejects"]!) ? "-model" : "-guards")
 // Real-voice results hold what the user said, ad-libs included: gitignored, commit counts only (#99).
 let dir = URL(fileURLWithPath: opt("--out") ?? (audioDir == nil ? "bench/results" : "bench/results-real"))
 let file = dir.appendingPathComponent(BenchReport.fileName(date: date, provider: provider, model: model, filter: opt("--filter")))
