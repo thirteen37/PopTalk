@@ -1,6 +1,6 @@
 import Foundation
 
-/// Apps whose ⌘Z doesn't take PopTalk's paste back out (#93), so Esc deletes the insert itself: selected over AX
+/// Apps whose ⌘Z doesn't take PopTalk's paste back out (#93), so undo deletes the insert itself: selected over AX
 /// (checked by reading it back), else by backspaces under the terminal guard (#79). Listed per app, not per framework:
 /// what ⌘Z does is the app's own editor code (Beeper's composer binds ⌘Z and ⇧⌘Z to its own actions; Slack, also
 /// Electron, undoes the paste fine).

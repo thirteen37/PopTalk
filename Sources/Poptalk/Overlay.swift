@@ -2,7 +2,7 @@ import AppKit
 import PoptalkCore
 
 /// Small non-activating HUD at the bottom of the screen ("glyph capsule", #63). While an outcome is shown,
-/// bare Esc undoes it and bare Return accepts a vocabulary or cleanup offer; those keys are consumed only then.
+/// a right-⌥ double tap undoes it (#109) and bare Return accepts a vocabulary or cleanup offer; Return is consumed only then.
 /// It moves off the focused field, and can be dragged elsewhere (remembered per display; right-click resets, #78).
 @MainActor
 final class Overlay {
@@ -113,7 +113,7 @@ final class Overlay {
         let seconds = max(Self.outcomeSeconds, 6)
         show(Self.cleanupOfferHUD(seconds: seconds), for: seconds)
         keys = KeyCatcher { [weak self] code, flags in
-            if OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: false, canAccept: true) == .accept, isValid() {
+            if OutcomeKeys.accepts(code: code, flags: flags.rawValue), isValid() {
                 DispatchQueue.main.async { onAccept() }
                 return true
             }
@@ -139,8 +139,8 @@ final class Overlay {
         return tapAccept
     }
 
-    /// The user started typing in the field (#86): hides a state that catches Esc/Return, which would otherwise take
-    /// keys meant for the field (or ⌘Z their typing). Hidden rather than redrawn without its keycaps, which would lie.
+    /// The user started typing in the field (#86): hides a state that catches Return, which would otherwise take
+    /// keys meant for the field, or whose undo would ⌘Z their typing. Hidden rather than redrawn without its keycaps, which would lie.
     func releaseKeys() {
         if keys != nil { hide() }
     }
@@ -155,25 +155,32 @@ final class Overlay {
         show(Self.outcomeHUD(text, heard: heard, result: result, edit: edit, undo: undo != nil,
                              vocabulary: vocabularyOffer?.text, strip: statusStrip(), seconds: Self.outcomeSeconds),
              for: Self.outcomeSeconds)
-        keys = KeyCatcher { [weak self] code, flags in
-            switch OutcomeKeys.action(code: code, flags: flags.rawValue, canUndo: undo != nil, canAccept: vocabularyOffer != nil) {
-            // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
-            case .undo:
-                // False: it couldn't be undone safely and has said so (#79).
-                DispatchQueue.main.async { Task { if await undo?() == true { self?.show(Self.confirmHUD("Undone"), for: 1) } } }
-                return true
-            case .accept:
-                DispatchQueue.main.async { onAccept(); self?.show(Self.confirmHUD("Added “\(vocabularyOffer!.text)”"), for: 1.5) }
-                return true
-            case nil: return false
-            }
+        // False: it couldn't be undone safely and has said so (#79).
+        tapUndo = undo.map { undo in
+            { [weak self] () -> Void in Task { if await undo() { self?.show(Self.confirmHUD("Undone"), for: 1) } } }
         }
+        keys = KeyCatcher { [weak self] code, flags in
+            guard let offer = vocabularyOffer, OutcomeKeys.accepts(code: code, flags: flags.rawValue) else { return false }
+            // Defer: showing a new state tears down this tap, which mustn't happen inside its callback.
+            DispatchQueue.main.async { onAccept(); self?.show(Self.confirmHUD("Added “\(offer.text)”"), for: 1.5) }
+            return true
+        }
+    }
+
+    /// What a right-⌥ double tap does while an outcome shows (#109); cleared by every other show and hide.
+    private var tapUndo: (() -> Void)?
+
+    /// A right-⌥ double tap: undoes the showing outcome, if it has an undo.
+    func doubleTapped() {
+        let undo = tapUndo
+        tapUndo = nil
+        undo?()
     }
 
     func hide() {
         hideWork?.cancel()
         keys = nil
-        tapAccept = nil
+        (tapAccept, tapUndo) = (nil, nil)
         preview = nil
         fieldRead = false
         sparkles = .init()
@@ -273,7 +280,7 @@ final class Overlay {
         } else {
             (h.glyph, h.tint, h.act) = (.symbol("arrow.uturn.backward"), .systemTeal, text)
         }
-        if undo { h.keys.append(("esc", "undo")) }
+        if undo { h.keys.append(("right ⌥", "double-tap to undo")) }
         if let v = vocabulary { h.keys.append(("⏎", "add “\(v)” to vocabulary")) }
         if undo || vocabulary != nil { h.timer = seconds }
         return h
@@ -284,7 +291,7 @@ final class Overlay {
     private func show(_ hud: HUD, for seconds: TimeInterval?) {
         hideWork?.cancel()
         keys = nil
-        tapAccept = nil
+        (tapAccept, tapUndo) = (nil, nil)
         generation += 1
         let view = Capsule.view(hud)
         let size = view.frame.size
@@ -578,7 +585,7 @@ enum Capsule {
         return (f, size)
     }
 
-    /// "esc undo": a small rounded key, then what it does.
+    /// "⏎ clean up now": a small rounded key, then what it does.
     private static func keycap(_ key: (cap: String, text: String)) -> (NSView, CGSize) {
         let cap = NSTextField(labelWithAttributedString: attr(key.cap, 10.5, .semibold, .labelColor))
         let capFit = cap.fittingSize

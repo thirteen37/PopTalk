@@ -4,10 +4,10 @@ The detailed reference: what each key does, how a dictation flows through the pi
 
 ## Using it, in detail
 
-- **Hold and talk.** A tap under 150 ms, or pressing another key while ⌥ is down (⌥E and the like), cancels. A tap also accepts a typed-fix offer (below).
+- **Hold and talk.** A tap under 150 ms, or pressing another key while ⌥ is down (⌥E and the like), cancels. A tap also accepts a typed-fix offer (below). Two taps, the second pressed within 0.4 s of the first one's release, undo the showing result; the undo runs on the second release, so ⌥ is up before any backspaces go out.
 - **Live preview.** While you hold the key, the overlay shows the transcript and, at each pause, the cleaned-up text or the planned edit, with changed words marked. If you pause before letting go, release inserts that result without running the model again.
-- **Overlay.** After a result, the overlay shows what was heard above what was inserted. **Esc** undoes it and **Return** accepts an offer, such as remembering a corrected word as vocabulary. Both keys work only while the overlay is up (the undo window, 5 s by default); typing in the field closes it, so they reach your text. The overlay moves above the field you're typing in if it would cover it. Drag it to move it; the position is remembered per display, and right-clicking it resets that display. A row of small icons shows anything inactive: a model still loading, a missing permission, a context source turned off, history recording on.
-- **Fix it by typing.** Instead of dictating a correction, fix the dictated text in the field. About 2 s after you stop typing, PopTalk compares your version with what it inserted. If you replaced words speech recognition misheard with a name or term ("todo list" → Todoist), the overlay offers to add it to your vocabulary, with what was heard as an alias: tap **right ⌥** to add it, or ignore it. The offer leaves Esc and Return to your field. With history on, your version is recorded with the dictation. PopTalk stops watching when you leave the field, dictate again or undo, or after 3 minutes. Not in terminals or password fields, and only in apps whose text fields PopTalk can read.
+- **Overlay.** After a result, the overlay shows what was heard above what was inserted. A **double tap of right ⌥** undoes it and **Return** accepts an offer, such as remembering a corrected word as vocabulary. Both work only while the overlay is up (the undo window, 5 s by default); typing in the field closes it, so Return reaches your text and undo can't take back your typing. Esc always goes to the app. The overlay moves above the field you're typing in if it would cover it. Drag it to move it; the position is remembered per display, and right-clicking it resets that display. A row of small icons shows anything inactive: a model still loading, a missing permission, a context source turned off, history recording on.
+- **Fix it by typing.** Instead of dictating a correction, fix the dictated text in the field. About 2 s after you stop typing, PopTalk compares your version with what it inserted. If you replaced words speech recognition misheard with a name or term ("todo list" → Todoist), the overlay offers to add it to your vocabulary, with what was heard as an alias: tap **right ⌥** to add it, or ignore it. The offer leaves Return to your field. With history on, your version is recorded with the dictation. PopTalk stops watching when you leave the field, dictate again or undo, or after 3 minutes. Not in terminals or password fields, and only in apps whose text fields PopTalk can read.
 - **Terminals.** In Ghostty, Terminal, iTerm2, kitty, WezTerm, Alacritty, Warp, Hyper and Tabby, apps built on Ghostty's library (such as Herdr), and any app that registers as a shell for Unix executables, undo removes the dictated text with backspaces, since ⌘Z isn't a text undo there. It only works if you haven't typed since, and not for dictations containing a line break.
 - **Spoken formatting.** "quote … unquote", "open paren … close paren", "new line" and "new paragraph" are applied in code. Spoken numbers become digits where unambiguous ("twenty five percent" → 25%, "three thirty pm" → 3:30 PM); zero to nine stay words in prose.
 - **While models load.** If the language model isn't ready yet, dictation inserts the raw transcript, and the overlay offers **⏎ clean up now** once it is. Edits need the model: until it's ready they leave the selection unchanged.
@@ -27,7 +27,7 @@ stateDiagram-v2
 
     [*] --> Idle
     Idle --> Arming: right ⌥ down
-    Arming --> Idle: released (accepts a typed-fix offer), or another key, cancels
+    Arming --> Idle: released (accepts a typed-fix offer), or another key, cancels; a second tap within 0.4 s undoes a showing outcome
     Arming --> Recording: still held at 150 ms
     Arming --> Notice: speech model loading
     Recording --> Idle: another key, cancels
@@ -36,7 +36,7 @@ stateDiagram-v2
     Working --> Outcome: result applied
     Working --> Notice: error
     Notice --> Idle
-    Outcome --> Idle: Esc undoes, Return accepts an offer, or 5 s pass
+    Outcome --> Idle: double-tap right ⌥ undoes, Return accepts an offer, or 5 s pass
     Idle --> Offer: you fixed a misheard term by typing, 2 s pause
     Offer --> Arming: right ⌥ down
     Offer --> Idle: 6 s pass
@@ -150,12 +150,12 @@ sequenceDiagram
         Note over App: safety net, raw transcript if content was dropped
     end
     App->>Field: paste
-    App->>Overlay: heard and inserted, Esc to undo
+    App->>Overlay: heard and inserted, double-tap right ⌥ to undo
     opt history on
         App->>History: request, reply and outcome
     end
-    opt Esc within the undo window
-        User->>App: Esc
+    opt double tap within the undo window
+        User->>App: tap right ⌥ twice
         App->>Field: ⌘Z, or backspaces in a terminal
     end
     opt you fix it by typing

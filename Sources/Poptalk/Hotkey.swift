@@ -1,25 +1,28 @@
 import AppKit
 import CoreGraphics
+import PoptalkCore
 
 /// Hold-to-talk on Right Option (keycode 61) via a CGEventTap. Events always pass through.
 /// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap under 150 ms calls `onTap`, which cancels too
-/// (and accepts a typed-correction offer, #86).
+/// (and accepts a typed-correction offer, #86). A second tap soon after (`HotkeyGesture`) calls `onTap` and then
+/// `onDoubleTap` (undo, #109), on its release so ⌥ is up before any keystrokes are sent.
 @MainActor
 final class Hotkey {
     private static let rightOption: Int64 = 61
     private let onPress: () -> Void, onRelease: () -> Void, onCancel: () -> Void, onTap: () -> Void
+    private let onDoubleTap: () -> Void
     private var tap: CFMachPort?
-    private var pressedAt: Date?
-    private var cancelled = false
+    private var gesture = HotkeyGesture()
     /// Key-downs seen from other processes: an insert in a terminal is only taken back if none came since (#79).
     private(set) var keyDowns = 0
 
     init(onPress: @escaping () -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void,
-         onTap: @escaping () -> Void) {
+         onTap: @escaping () -> Void, onDoubleTap: @escaping () -> Void) {
         self.onPress = onPress
         self.onRelease = onRelease
         self.onCancel = onCancel
         self.onTap = onTap
+        self.onDoubleTap = onDoubleTap
     }
 
     /// Returns false until Accessibility is granted.
@@ -46,24 +49,25 @@ final class Hotkey {
     private func handle(_ type: CGEventType, _ event: CGEvent) {
         // Ignore keystrokes PopTalk itself posts (⌘C fallback while the key is held).
         if event.getIntegerValueField(.eventSourceUnixProcessID) == Int64(getpid()) { return }
-        if type == .keyDown { keyDowns += 1 }
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-        case .keyDown where pressedAt != nil && !cancelled:
-            cancelled = true
-            onCancel()
+        case .keyDown:
+            keyDowns += 1
+            if gesture.otherKey() { onCancel() }
         case .flagsChanged where event.getIntegerValueField(.keyboardEventKeycode) == Self.rightOption:
             // NX_DEVICERALTKEYMASK: right ⌥ specifically, so a held left ⌥ can't mask the release.
             let rightDown = event.flags.rawValue & 0x40 != 0
-            if rightDown, pressedAt == nil {
-                pressedAt = Date()
-                cancelled = false
+            if rightDown, !gesture.isPressed {
+                gesture.press(at: Date())
                 onPress()
-            } else if !rightDown, let start = pressedAt {
-                pressedAt = nil
-                if cancelled { return }
-                if Date().timeIntervalSince(start) < 0.15 { onTap() } else { onRelease() }
+            } else if !rightDown {
+                switch gesture.release(at: Date()) {
+                case .tap: onTap()
+                case .doubleTap: onTap(); onDoubleTap()
+                case .hold: onRelease()
+                case nil: break
+                }
             }
         default:
             break

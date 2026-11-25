@@ -53,7 +53,7 @@ public final class LearnedTerms: @unchecked Sendable {
         }
     }
 
-    /// Esc undo: puts back what `request` changed, if it was the latest `record`. Returns how many terms that was.
+    /// Undo: puts back what `request` changed, if it was the latest `record`. Returns how many terms that was.
     @discardableResult
     public func forget(request: UUID) -> Int {
         lock.withLock {

@@ -130,7 +130,7 @@ struct SettingsView: View {
             }
             Section {
                 Stepper("Undo window: \(undoWindow) s", value: $undoWindow, in: OutcomeKeys.undoWindowRange)
-                    .help("How long the result stays up, with Esc to undo and Return to add a suggested word.")
+                    .help("How long the result stays up, with a right-⌥ double tap to undo and Return to add a suggested word.")
                 Toggle("Live cleanup preview", isOn: $liveCleanup)
                 Text("Shows the cleanup or edit while you talk, so release can insert it at once. Uses the GPU at each pause.")
                     .font(.footnote).foregroundStyle(.secondary)

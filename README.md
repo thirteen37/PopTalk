@@ -11,7 +11,7 @@ Hold right ⌥, talk, let go. PopTalk types what you said at the cursor, with fi
 - Context changes what the speech recogniser hears. While you hold the key, PopTalk collects terms from the focused field, the text near it, the window title and the web domain, with OCR as a fallback when an app hides its text. Those terms and your vocabulary are used to boost recognition (CTC vocabulary boosting on Parakeet) and to fix the casing of matching words. A local language model (a PopTalk fine-tune of Gemma 4 E2B) then cleans up the text with the same context. Cloud dictation services can steer recognition like this on their servers. Other local apps tend to give screen context only to a cleanup model after recognition, or use it to set the tone per app.
 - You can fix a mistake by speaking or typing. Select a misheard word and say *"it's Todoist, capital T-O-D-O-I-S-T"*. If you correct it by typing instead, PopTalk offers to add the term to your vocabulary. There's also an opt-in setting to remember screen terms that fixed a dictation, so later dictations get them right when they're no longer on screen.
 - It edits selected text by voice: "make this more formal", "turn this into bullet points", "translate to Japanese". One model decides whether you're correcting a word, replacing the selection, editing it, or inserting text before or after it.
-- Esc undoes any result, terminals included (there it deletes the dictated text with backspaces).
+- A double tap of right ⌥ undoes any result, terminals included (there it deletes the dictated text with backspaces).
 - It's free and MIT licensed, with no account. Audio, text and screen content stay on your Mac.
 
 ## Accuracy
@@ -48,7 +48,7 @@ scripts/install.zsh        # builds, signs, installs to /Applications and launch
 
 - To dictate, hold right ⌥, talk and release. A tap shorter than 150 ms, or pressing another key while ⌥ is down, cancels. While you hold the key, the overlay shows the live transcript and, at each pause, the cleaned-up text.
 - To edit, select text, hold right ⌥ and say what to do with it.
-- Press Esc while the overlay is showing (5 s by default) to undo. In terminals (Terminal, iTerm2, Ghostty and apps built on it such as Herdr, and others) this works only if you haven't typed since and the dictation has no line break.
+- Double-tap right ⌥ while the overlay is showing (5 s by default) to undo. In terminals (Terminal, iTerm2, Ghostty and apps built on it such as Herdr, and others) this works only if you haven't typed since and the dictation has no line break.
 - You can also correct the inserted text by typing. About 2 s after you stop, if you replaced a misheard name or term, the overlay offers to add it to your vocabulary; tap right ⌥ to accept.
 - Settings → Vocabulary lists your terms, each with optional "heard as" forms. PopTalk never adds one without asking.
 - "New line", "new paragraph", "quote … unquote" and "open paren … close paren" are applied as formatting, and spoken numbers become digits where that's unambiguous.

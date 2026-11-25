@@ -74,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkey = Hotkey(onPress: { [weak self] in self?.pressed() },
                         onRelease: { [weak self] in self?.released() },
                         onCancel: { [weak self] in self?.cancelled() },
-                        onTap: { [weak self] in self?.tapped() })
+                        onTap: { [weak self] in self?.tapped() },
+                        onDoubleTap: { [weak self] in self?.overlay.doubleTapped() })
         installHotkeyWhenTrusted()  // also checks permissions
         if let tab = status.value.launchTab { openSettings(at: tab) }
     }
@@ -257,8 +258,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         speculation?.task.cancel()
         speculation = nil
         // Don't cancel selectionTask: its clipboard guard must finish waiting before it restores.
+        // A context capture means the delayed start ran and the recording HUD is up. A tap never gets there: it
+        // leaves a showing outcome up, so a second tap can still undo it (#109).
+        let shown = contextTask != nil
         contextTask?.cancel()
-        overlay.hide()
+        contextTask = nil
+        if shown { overlay.hide() }
     }
 
     /// A right-⌥ tap: cancels, and accepts a showing typed-correction offer (#86), taken before `cancelled` hides it.
@@ -493,14 +498,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return true
     }
 
-    /// Whether Esc may take `inserted` back: in a terminal only by backspaces, since ⌘Z there is window undo (#79).
+    /// Whether undo may take `inserted` back: in a terminal only by backspaces, since ⌘Z there is window undo (#79).
     /// In an `AXUndo` app (#93) not without a field to delete it from.
     private func undoable(_ inserted: LastInsert<AXUIElement>?) -> Bool {
         inserted.map { $0.terminal == nil || backspaces($0) != nil } ?? (terminalStamp() == nil && axUndoStamp() == nil)
     }
 
-    /// Esc on an outcome: takes `inserted` back out, putting back `previous` (what it replaced, "" for a dictation).
-    /// ⌘Z, except in a terminal (#79): `replaceLast`, and in an `AXUndo` app (#93): `takeBack`; either returns false
+    /// Undo (a right-⌥ double tap, #109) on an outcome: takes `inserted` back out, putting back `previous` (what it
+    /// replaced, "" for a dictation). ⌘Z, except in a terminal (#79): `replaceLast`, and in an `AXUndo` app (#93): `takeBack`; either returns false
     /// (having said so, nothing changed) once that isn't safe. Every undo goes through here.
     private func undo(_ inserted: LastInsert<AXUIElement>?, previous: String = "", id: UUID) async -> Bool {
         if let inserted, inserted.terminal != nil {
@@ -662,7 +667,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         typing = TypingWatch(field: field, pasted: pasted, transcript: transcript, known: { store.terms },
             typed: { [weak self] in
                 guard let self, !busy, !recording else { return }
-                overlay.releaseKeys()  // this dictation's Esc/Return would land on the user's typing
+                overlay.releaseKeys()  // this dictation's Return would land on the user's typing, its undo ⌘Z it
             },
             offer: { [weak self] term in
                 guard let self, !busy, !recording else { return }
