@@ -1,0 +1,426 @@
+{
+  "cases" : [
+    {
+      "id" : "d-num-correction-tens-up",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"40 paper cups\""
+          ],
+          "output" : "Please grab forty paper cups for the picnic.",
+          "seconds" : 0.1518930196762085
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"40 paper cups\""
+          ],
+          "output" : "Please grab forty paper cups for the picnic.",
+          "seconds" : 0.15105104446411133
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"40 paper cups\""
+          ],
+          "output" : "Please grab forty paper cups for the picnic.",
+          "seconds" : 0.15128493309020996
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-tens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"30 seats\""
+          ],
+          "output" : "Save us thirty seats near the stage.",
+          "seconds" : 0.13929498195648193
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"30 seats\""
+          ],
+          "output" : "Save us thirty seats near the stage.",
+          "seconds" : 0.13931798934936523
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"30 seats\""
+          ],
+          "output" : "Save us thirty seats near the stage.",
+          "seconds" : 0.14238405227661133
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-tens-to-teen",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"16 minutes\""
+          ],
+          "output" : "The bus ride takes sixteen minutes.",
+          "seconds" : 0.1311720609664917
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"16 minutes\""
+          ],
+          "output" : "The bus ride takes sixteen minutes.",
+          "seconds" : 0.1281909942626953
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"16 minutes\""
+          ],
+          "output" : "The bus ride takes sixteen minutes.",
+          "seconds" : 0.128059983253479
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-teens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"14 boxes\""
+          ],
+          "output" : "There are fourteen boxes left in the garage.",
+          "seconds" : 0.15097594261169434
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"14 boxes\""
+          ],
+          "output" : "There are fourteen boxes left in the garage.",
+          "seconds" : 0.1526240110397339
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"14 boxes\""
+          ],
+          "output" : "There are fourteen boxes left in the garage.",
+          "seconds" : 0.15406596660614014
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-bigger",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"300 people\""
+          ],
+          "output" : "The hall seats three hundred people.",
+          "seconds" : 0.12831902503967285
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"300 people\""
+          ],
+          "output" : "The hall seats three hundred people.",
+          "seconds" : 0.12838399410247803
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"300 people\""
+          ],
+          "output" : "The hall seats three hundred people.",
+          "seconds" : 0.12886500358581543
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-percent",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"25%\""
+          ],
+          "output" : "The sale takes twenty five percent off every jacket.",
+          "seconds" : 0.16362905502319336
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"25%\""
+          ],
+          "output" : "The sale takes twenty five percent off every jacket.",
+          "seconds" : 0.16352605819702148
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"25%\""
+          ],
+          "output" : "The sale takes twenty five percent off every jacket.",
+          "seconds" : 0.16276097297668457
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-down",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"20 kilometers\""
+          ],
+          "output" : "The Trail Loop is about twenty kilometers long.",
+          "seconds" : 0.15139901638031006
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"20 kilometers\""
+          ],
+          "output" : "The Trail Loop is about twenty kilometers long.",
+          "seconds" : 0.15079593658447266
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"20 kilometers\""
+          ],
+          "output" : "The Trail Loop is about twenty kilometers long.",
+          "seconds" : 0.15066802501678467
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-control-tens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"40 paper plates\"",
+            "missing \"16 cups\"",
+            "contains \"forty\"",
+            "contains \"sixteen\""
+          ],
+          "output" : "We bought forty paper plates and sixteen cups for the picnic.",
+          "seconds" : 0.18655097484588623
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"40 paper plates\"",
+            "missing \"16 cups\"",
+            "contains \"forty\"",
+            "contains \"sixteen\""
+          ],
+          "output" : "We bought forty paper plates and sixteen cups for the picnic.",
+          "seconds" : 0.19035601615905762
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"40 paper plates\"",
+            "missing \"16 cups\"",
+            "contains \"forty\"",
+            "contains \"sixteen\""
+          ],
+          "output" : "We bought forty paper plates and sixteen cups for the picnic.",
+          "seconds" : 0.19273090362548828
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-control-small",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"20 minutes\"",
+            "contains \"twenty\""
+          ],
+          "output" : "The ferry has four decks and the crossing takes twenty minutes.",
+          "seconds" : 0.18827903270721436
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"20 minutes\"",
+            "contains \"twenty\""
+          ],
+          "output" : "The ferry has four decks and the crossing takes twenty minutes.",
+          "seconds" : 0.18728101253509521
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"20 minutes\"",
+            "contains \"twenty\""
+          ],
+          "output" : "The ferry has four decks and the crossing takes twenty minutes.",
+          "seconds" : 0.18822705745697021
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-teen",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"15 sandwiches\""
+          ],
+          "output" : "Pack fifteen sandwiches for the road trip.",
+          "seconds" : 0.14152002334594727
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"15 sandwiches\""
+          ],
+          "output" : "Pack fifteen sandwiches for the road trip.",
+          "seconds" : 0.14132988452911377
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"15 sandwiches\""
+          ],
+          "output" : "Pack fifteen sandwiches for the road trip.",
+          "seconds" : 0.14129197597503662
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-tens-same",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"90 spaces\"",
+            "contains \"nine\""
+          ],
+          "output" : "The parking lot has ninety spaces.",
+          "seconds" : 0.12943708896636963
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"90 spaces\"",
+            "contains \"nine\""
+          ],
+          "output" : "The parking lot has ninety spaces.",
+          "seconds" : 0.12902605533599854
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"90 spaces\"",
+            "contains \"nine\""
+          ],
+          "output" : "The parking lot has ninety spaces.",
+          "seconds" : 0.12848401069641113
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-tens-sorry",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"70 name tags\""
+          ],
+          "output" : "Please print seventy name tags for the fair.",
+          "seconds" : 0.15411007404327393
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"70 name tags\""
+          ],
+          "output" : "Please print seventy name tags for the fair.",
+          "seconds" : 0.15711402893066406
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+            "missing \"70 name tags\""
+          ],
+          "output" : "Please print seventy name tags for the fair.",
+          "seconds" : 0.15626800060272217
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-teen-to-unit",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We have five minutes before the train leaves.",
+          "seconds" : 0.1570301055908203
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We have five minutes before the train leaves.",
+          "seconds" : 0.15416395664215088
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We have five minutes before the train leaves.",
+          "seconds" : 0.152662992477417
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-25-235146",
+  "provider" : {
+    "cleanupModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "editModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "footprintMB" : "1562",
+    "footprintMBAfterRun" : "1538",
+    "guards" : "-spokenNumbers",
+    "hwModel" : "Mac17,9",
+    "loadSeconds" : "0.93",
+    "macOS" : "Version 27.2.1 (Build 26B131)",
+    "promptCache" : "on",
+    "promptCacheBudgetMB" : "200",
+    "promptCacheMinReuse" : "256",
+    "provider" : "mlx",
+    "recaseTerms" : "on",
+    "runs" : "3"
+  }
+}

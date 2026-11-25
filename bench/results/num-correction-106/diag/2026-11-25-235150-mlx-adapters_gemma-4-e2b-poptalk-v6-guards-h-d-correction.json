@@ -1,0 +1,261 @@
+{
+  "cases" : [
+    {
+      "id" : "h-d-correction-0",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for eight tomorrow.",
+          "seconds" : 0.1292790174484253
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for eight tomorrow.",
+          "seconds" : 0.1289280652999878
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for eight tomorrow.",
+          "seconds" : 0.1286320686340332
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-1",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius.",
+          "seconds" : 0.12019205093383789
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius.",
+          "seconds" : 0.11826598644256592
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Darius.",
+          "seconds" : 0.11984598636627197
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-2",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.13340091705322266
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.1285569667816162
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Saturday evening.",
+          "seconds" : 0.12964200973510742
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-3",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need five extra chairs.",
+          "seconds" : 0.12213599681854248
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need five extra chairs.",
+          "seconds" : 0.12399697303771973
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need five extra chairs.",
+          "seconds" : 0.1222529411315918
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-4",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.13044095039367676
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.12967002391815186
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Set the alarm for noon tomorrow.",
+          "seconds" : 0.12954699993133545
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-5",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Mateus.",
+          "seconds" : 0.13077497482299805
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Mateus.",
+          "seconds" : 0.13000190258026123
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Send the draft to Mateus.",
+          "seconds" : 0.13019299507141113
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-6",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Sunday evening.",
+          "seconds" : 0.1278080940246582
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Sunday evening.",
+          "seconds" : 0.1310110092163086
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The party is on Sunday evening.",
+          "seconds" : 0.1298389434814453
+        }
+      ]
+    },
+    {
+      "id" : "h-d-correction-7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need twenty extra chairs.",
+          "seconds" : 0.12041699886322021
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need twenty extra chairs.",
+          "seconds" : 0.11610293388366699
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need twenty extra chairs.",
+          "seconds" : 0.12808096408843994
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-25-235150",
+  "provider" : {
+    "cleanupModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "editModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "footprintMB" : "1560",
+    "footprintMBAfterRun" : "1536",
+    "guards" : "-spokenNumbers",
+    "hwModel" : "Mac17,9",
+    "loadSeconds" : "0.93",
+    "macOS" : "Version 27.2.1 (Build 26B131)",
+    "promptCache" : "on",
+    "promptCacheBudgetMB" : "200",
+    "promptCacheMinReuse" : "256",
+    "provider" : "mlx",
+    "recaseTerms" : "on",
+    "runs" : "3"
+  }
+}

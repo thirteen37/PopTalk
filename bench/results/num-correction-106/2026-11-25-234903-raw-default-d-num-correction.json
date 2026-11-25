@@ -1,0 +1,205 @@
+{
+  "cases" : [
+    {
+      "id" : "d-num-correction-tens-up",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"four\"",
+            "contains \"actually\""
+          ],
+          "output" : "please grab four actually 40 paper cups for the picnic",
+          "seconds" : 0.0008770227432250977
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-tens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"two\"",
+            "contains \"make that\""
+          ],
+          "output" : "save us two make that 30 seats near the stage",
+          "seconds" : 0.0005060434341430664
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-tens-to-teen",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"60\"",
+            "contains \"no wait\""
+          ],
+          "output" : "the bus ride takes 60 no wait 16 minutes",
+          "seconds" : 0.0006990432739257812
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-teens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"13\"",
+            "contains \"sorry\""
+          ],
+          "output" : "there are 13 sorry 14 boxes left in the garage",
+          "seconds" : 0.0005810260772705078
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-bigger",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"200\"",
+            "contains \"I mean\""
+          ],
+          "output" : "the hall seats 200 i mean 300 people",
+          "seconds" : 0.0006949901580810547
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-percent",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"15\"",
+            "contains \"actually\""
+          ],
+          "output" : "the sale takes 15% actually 25% off every jacket",
+          "seconds" : 0.00043392181396484375
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-down",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"30\"",
+            "contains \"I mean\""
+          ],
+          "output" : "the trail loop is about 30 i mean 20 kilometers long",
+          "seconds" : 0.0005619525909423828
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-control-tens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+
+          ],
+          "output" : "we bought 40 paper plates and 16 cups for the picnic",
+          "seconds" : 0.0008109807968139648
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-control-small",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+
+          ],
+          "output" : "the ferry has four decks and the crossing takes 20 minutes",
+          "seconds" : 0.000720977783203125
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-teen",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"three\"",
+            "contains \"no wait\""
+          ],
+          "output" : "pack three no wait 15 sandwiches for the road trip",
+          "seconds" : 0.0006259679794311523
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-tens-same",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"nine\"",
+            "contains \"I mean\""
+          ],
+          "output" : "the parking lot has nine i mean 90 spaces",
+          "seconds" : 0.0007899999618530273
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-unit-to-tens-sorry",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"seven \"",
+            "contains \"sorry\""
+          ],
+          "output" : "please print seven sorry 70 name tags for the fair",
+          "seconds" : 0.0009709596633911133
+        }
+      ]
+    },
+    {
+      "id" : "d-num-correction-teen-to-unit",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "raw",
+          "failures" : [
+            "contains \"15\"",
+            "contains \"actually\""
+          ],
+          "output" : "we have 15 actually five minutes before the train leaves",
+          "seconds" : 0.0007719993591308594
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-25-234903",
+  "provider" : {
+    "hwModel" : "Mac17,9",
+    "macOS" : "Version 27.2.1 (Build 26B131)",
+    "provider" : "raw",
+    "recaseTerms" : "off",
+    "runs" : "1"
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "cases" : [
+    {
+      "id" : "p-h7",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need 20 extra chairs.",
+          "seconds" : 0.13299095630645752
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need 20 extra chairs.",
+          "seconds" : 0.1336069107055664
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "We need 20 extra chairs.",
+          "seconds" : 0.13323509693145752
+        }
+      ]
+    },
+    {
+      "id" : "p-unit-to-tens",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Save us 30 seats near the stage.",
+          "seconds" : 0.15484797954559326
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Save us 30 seats near the stage.",
+          "seconds" : 0.1543790102005005
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Save us 30 seats near the stage.",
+          "seconds" : 0.15465593338012695
+        }
+      ]
+    },
+    {
+      "id" : "p-tens-up",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please grab 40 paper cups for the picnic.",
+          "seconds" : 0.1646709442138672
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please grab 40 paper cups for the picnic.",
+          "seconds" : 0.1650679111480713
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please grab 40 paper cups for the picnic.",
+          "seconds" : 0.1638801097869873
+        }
+      ]
+    },
+    {
+      "id" : "p-unit-to-teen",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Pack 15 sandwiches for the road trip.",
+          "seconds" : 0.15312397480010986
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Pack 15 sandwiches for the road trip.",
+          "seconds" : 0.15878701210021973
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Pack 15 sandwiches for the road trip.",
+          "seconds" : 0.15375399589538574
+        }
+      ]
+    },
+    {
+      "id" : "p-unit-to-tens-same",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The parking lot has 90 spaces.",
+          "seconds" : 0.14519691467285156
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The parking lot has 90 spaces.",
+          "seconds" : 0.1454179286956787
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "The parking lot has 90 spaces.",
+          "seconds" : 0.14512598514556885
+        }
+      ]
+    },
+    {
+      "id" : "p-unit-to-tens-sorry",
+      "kind" : "dictation",
+      "runs" : [
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please print 70 name tags for the fair.",
+          "seconds" : 0.16468095779418945
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please print 70 name tags for the fair.",
+          "seconds" : 0.1662520170211792
+        },
+        {
+          "action" : "insert",
+          "failures" : [
+
+          ],
+          "output" : "Please print 70 name tags for the fair.",
+          "seconds" : 0.16498291492462158
+        }
+      ]
+    }
+  ],
+  "date" : "2026-11-25-235307",
+  "provider" : {
+    "cleanupModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "editModel" : "adapters/gemma-4-e2b-poptalk-v6",
+    "footprintMB" : "1560",
+    "footprintMBAfterRun" : "1537",
+    "hwModel" : "Mac17,9",
+    "loadSeconds" : "0.93",
+    "macOS" : "Version 27.2.1 (Build 26B131)",
+    "promptCache" : "on",
+    "promptCacheBudgetMB" : "200",
+    "promptCacheMinReuse" : "256",
+    "provider" : "mlx",
+    "recaseTerms" : "on",
+    "runs" : "3"
+  }
+}
