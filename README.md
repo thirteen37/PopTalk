@@ -48,6 +48,7 @@ scripts/install.zsh        # builds, signs, installs to /Applications and launch
 
 - To dictate, hold right ⌥, talk and release. A tap shorter than 150 ms, or pressing another key while ⌥ is down, cancels. While you hold the key, the overlay shows the live transcript and, at each pause, the cleaned-up text.
 - To edit, select text, hold right ⌥ and say what to do with it.
+- To edit what PopTalk just inserted, tap right ⌥, then press it again and hold: say the replacement, or what to change ("make that shorter"). It works while the text is as PopTalk left it (in a terminal: nothing typed since); otherwise the overlay says "Nothing to edit".
 - Double-tap right ⌥ while the overlay is showing (5 s by default) to undo. In terminals (Terminal, iTerm2, Ghostty and apps built on it such as Herdr, and others) this works only if you haven't typed since and the dictation has no line break.
 - You can also correct the inserted text by typing. About 2 s after you stop, if you replaced a misheard name or term, the overlay offers to add it to your vocabulary; tap right ⌥ to accept.
 - Settings → Vocabulary lists your terms, each with optional "heard as" forms. PopTalk never adds one without asking.

@@ -20,3 +20,15 @@ private let t0 = Date(timeIntervalSince1970: 1000)
     deleted.deletedAt = t0 + 3  // deleted (or sent, #95): nothing left to space after
     #expect(deleted.space(before: "Hi", into: "slack", now: t0 + 5) == "")
 }
+
+// #110: tap-then-hold edits the last insert only while its field is focused and its text as PopTalk left it.
+@Test func editableInPlaceOnlyUntouchedInItsField() {
+    var last = LastInsert(target: "slack", text: "hello", at: t0)
+    #expect(!last.isUntouched(focused: "slack", value: "Hi hello"))  // field text never read
+    last.fieldValue = "Hi hello"
+    #expect(last.isUntouched(focused: "slack", value: "Hi hello"))
+    #expect(!last.isUntouched(focused: "mail", value: "Hi hello"))
+    #expect(!last.isUntouched(focused: nil, value: "Hi hello"))
+    #expect(!last.isUntouched(focused: "slack", value: "Hi hello!"))
+    #expect(!last.isUntouched(focused: "slack", value: nil))
+}

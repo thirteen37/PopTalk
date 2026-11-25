@@ -120,7 +120,7 @@ struct SettingsView: View {
     private var general: some View {
         Form {
             Section {
-                Text("Hold Right ⌥ to talk. With text selected, what you say edits the selection.")
+                Text("Hold Right ⌥ to talk. With text selected, what you say edits the selection. Tap, then hold, to edit what PopTalk just inserted.")
             }
             Section("Microphone") {
                 Picker("Input", selection: $inputDeviceUID) {

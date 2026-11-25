@@ -2,12 +2,13 @@ import Foundation
 
 /// Right-⌥ presses as gestures (#109). A press released within `tap` seconds is a tap; a tap whose press comes within
 /// `doubleTapGap` of the previous tap's release is a double tap, which ends the sequence (a third tap starts anew).
+/// That second press held for `tap` seconds or more is a tap-then-hold instead (#110), which edits the last insert.
 /// A hold, or another key, also starts over. Each release decides at once: a first tap gets no added latency.
 public struct HotkeyGesture {
     public static let tap: TimeInterval = 0.15
     public static let doubleTapGap: TimeInterval = 0.4
 
-    public enum Release: Equatable { case tap, doubleTap, hold }
+    public enum Release: Equatable { case tap, doubleTap, hold, editHold }
 
     private var pressedAt: Date?
     private var cancelled = false
@@ -20,13 +21,16 @@ public struct HotkeyGesture {
 
     public var isPressed: Bool { pressedAt != nil }
 
-    /// Right ⌥ went down; ignored while already down.
-    public mutating func press(at now: Date) {
-        guard pressedAt == nil else { return }
+    /// Right ⌥ went down; ignored while already down. True if it came soon after a tap: a double tap or a
+    /// tap-then-hold, which its release decides.
+    @discardableResult
+    public mutating func press(at now: Date) -> Bool {
+        guard pressedAt == nil else { return false }
         pressedAt = now
         cancelled = false
         second = tappedAt.map { now.timeIntervalSince($0) < Self.doubleTapGap } ?? false
         tappedAt = nil
+        return second
     }
 
     /// Another key went down: cancels a press in progress (true the first time) and forgets a pending tap.
@@ -42,7 +46,7 @@ public struct HotkeyGesture {
         guard let start = pressedAt else { return nil }
         pressedAt = nil
         if cancelled { return nil }
-        guard now.timeIntervalSince(start) < Self.tap else { return .hold }
+        guard now.timeIntervalSince(start) < Self.tap else { return second ? .editHold : .hold }
         if second { return .doubleTap }
         tappedAt = now
         return .tap

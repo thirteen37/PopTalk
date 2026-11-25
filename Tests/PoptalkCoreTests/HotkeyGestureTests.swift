@@ -32,13 +32,34 @@ private func run(_ events: [Event]) -> [HotkeyGesture.Release?] {
     #expect(run([.down(0), .up(0.1), .down(0.6), .up(0.7)]) == [.tap, .tap])
 }
 
-@Test func tapThenHold() {
-    #expect(run([.down(0), .up(0.1), .down(0.3), .up(2)]) == [.tap, .hold])
+@Test func tapThenHoldEditsTheLastInsert() {
+    #expect(run([.down(0), .up(0.1), .down(0.3), .up(2)]) == [.tap, .editHold])
+}
+
+@Test func tapThenLateHoldIsAPlainHold() {
+    #expect(run([.down(0), .up(0.1), .down(0.6), .up(2)]) == [.tap, .hold])
+}
+
+@Test func otherKeyDuringTapThenHoldCancels() {
+    #expect(run([.down(0), .up(0.1), .down(0.3), .key, .up(2)]) == [.tap, nil])
+}
+
+@Test func secondPressSplitsAt150ms() {
+    #expect(run([.down(0), .up(0.1), .down(0.25), .up(0.399)]) == [.tap, .doubleTap])
+    #expect(run([.down(0), .up(0.1), .down(0.25), .up(0.401)]) == [.tap, .editHold])
+}
+
+@Test func secondPressIsKnownAtPress() {
+    var g = HotkeyGesture()
+    let first = g.press(at: t0)
+    _ = g.release(at: t0 + 0.1)
+    let second = g.press(at: t0 + 0.3)
+    #expect(!first && second)
 }
 
 @Test func holdResetsTheSequence() {
     #expect(run([.down(0), .up(2), .down(2.1), .up(2.2), .down(2.3), .up(2.4)]) == [.hold, .tap, .doubleTap])
-    #expect(run([.down(0), .up(0.1), .down(0.2), .up(2), .down(2.1), .up(2.2)]) == [.tap, .hold, .tap])
+    #expect(run([.down(0), .up(0.1), .down(0.2), .up(2), .down(2.1), .up(2.2)]) == [.tap, .editHold, .tap])
 }
 
 @Test func otherKeyBetweenTapsResets() {

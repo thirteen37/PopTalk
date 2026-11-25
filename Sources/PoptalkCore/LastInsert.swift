@@ -20,6 +20,8 @@ public struct LastInsert<Target: Equatable> {
     public let axUndo: TerminalStamp?
     /// Parakeet's unboosted text for this take, in memory only, for `redictated` (#95).
     public let rawTranscript: String?
+    /// The field's text right after the paste (nil: unreadable), for `isUntouched` (#110).
+    public var fieldValue: String?
     /// When the insert was seen deleted (or the field sent, #94) or undone, for `redictated` (#95).
     public var deletedAt: Date?
 
@@ -34,6 +36,11 @@ public struct LastInsert<Target: Equatable> {
         self.terminal = terminal
         self.axUndo = axUndo
         self.rawTranscript = rawTranscript
+    }
+
+    /// Whether `target` is focused with its text exactly as PopTalk left it, so the insert can be found and edited.
+    public func isUntouched(focused: Target?, value: String?) -> Bool {
+        fieldValue != nil && focused == target && value == fieldValue
     }
 
     /// The space to put before `s` being dictated into `target`.
