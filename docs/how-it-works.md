@@ -11,7 +11,7 @@ The detailed reference: what each key does, how a dictation flows through the pi
 | Double tap | Undo |
 | Tap, then hold | Edit the last insert |
 
-- **Hold and talk.** A tap under 150 ms, or pressing another key while ⌥ is down (⌥E and the like), cancels. A tap also accepts the offer showing in the overlay (below), 0.4 s later, once it can't be the start of a double tap; a second press in that time drops the accept. Two taps, the second pressed within 0.4 s of the first one's release, undo the showing result; the undo runs on the second release, so ⌥ is up before any backspaces go out. Hold that second press instead and it records an edit of the text PopTalk just inserted, run as if that text were selected (live preview included) and applied in place; undo puts the previous text back. It needs the insert untouched: its field focused with the same text and not a password field, or in a terminal nothing typed since. Otherwise the overlay says "Nothing to edit" and nothing is inserted.
+- **Hold and talk.** A tap under 300 ms, or pressing another key while ⌥ is down (⌥E and the like), cancels. A tap also accepts the offer showing in the overlay (below), 0.4 s later, once it can't be the start of a double tap; a second press in that time drops the accept. Two taps, the second pressed within 0.4 s of the first one's release, undo the showing result; the undo runs on the second release, so ⌥ is up before any backspaces go out. Hold that second press instead and it records an edit of the text PopTalk just inserted, run as if that text were selected (live preview included) and applied in place; undo puts the previous text back. It needs the insert untouched: its field focused with the same text and not a password field, or in a terminal nothing typed since. Otherwise the overlay says "Nothing to edit" and nothing is inserted.
 - **Live preview.** While you hold the key, the overlay shows the transcript and, at each pause, the cleaned-up text or the planned edit, with changed words marked. If you pause before letting go, release inserts that result without running the model again.
 - **Overlay.** After a result, the overlay shows what was heard above what was inserted. A **double tap of right ⌥** undoes it and a **tap** accepts an offer, such as remembering a corrected word as vocabulary. Both work only while the overlay is up (the undo window, 5 s by default); typing in the field closes it, so undo can't take back your typing and a tap can't accept an offer you've typed past. PopTalk catches no keys: Esc and Return always go to the app. The overlay moves above the field you're typing in if it would cover it. Drag it to move it; the position is remembered per display, and right-clicking it resets that display. A row of small icons shows anything inactive: a model still loading, a missing permission, a context source turned off, history recording on.
 - **Fix it by typing.** Instead of dictating a correction, fix the dictated text in the field. About 2 s after you stop typing, PopTalk compares your version with what it inserted. If you replaced words speech recognition misheard with a name or term ("todo list" → Todoist), the overlay offers to add it to your vocabulary, with what was heard as an alias: tap **right ⌥** to add it, or ignore it. It stays up while you type. With history on, your version is recorded with the dictation. PopTalk stops watching when you leave the field, dictate again or undo, or after 3 minutes. Not in terminals or password fields, and only in apps whose text fields PopTalk can read.
@@ -25,7 +25,7 @@ The hotkey, from press to the end of the undo window:
 ```mermaid
 stateDiagram-v2
     state "Idle" as Idle
-    state "Held, under 150 ms" as Arming
+    state "Held, under 300 ms" as Arming
     state "Recording, live preview" as Recording
     state "Working" as Working
     state "Outcome, undo window" as Outcome
@@ -35,7 +35,7 @@ stateDiagram-v2
     [*] --> Idle
     Idle --> Arming: right ⌥ down
     Arming --> Idle: released, or another key, cancels; a lone tap accepts a showing offer 0.4 s later, a second tap within 0.4 s undoes a showing outcome
-    Arming --> Recording: still held at 150 ms (right after a tap: an edit of the last insert)
+    Arming --> Recording: still held at 300 ms (right after a tap: an edit of the last insert)
     Arming --> Notice: right after a tap, still held, nothing to edit
     Arming --> Notice: speech model loading
     Recording --> Idle: another key, cancels
@@ -114,7 +114,7 @@ sequenceDiagram
 
     User->>App: hold right ⌥
     App->>Mic: start recording
-    Note over App: 150 ms later, unless cancelled
+    Note over App: 300 ms later, unless a tap or another key cancels
     par
         App->>Screen: read field, nearby text, title, OCR
     and

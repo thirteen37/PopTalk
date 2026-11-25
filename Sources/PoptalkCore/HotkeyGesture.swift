@@ -5,12 +5,16 @@ import Foundation
 /// That second press held for `tap` seconds or more is a tap-then-hold instead (#110), which edits the last insert.
 /// A hold, or another key, also starts over. Each release decides at once: a first tap gets no added latency.
 public struct HotkeyGesture {
-    public static let tap: TimeInterval = 0.15
+    /// A deliberate tap often lasts 150-300 ms, and no real dictation or edit is that short: at 150 ms a slightly slow
+    /// second tap became an edit hold and the double tap did nothing (#109). The app's delayed start (HUD, context,
+    /// selection) waits this long too, so a tap never replaces the showing outcome.
+    public static let tap: TimeInterval = 0.3
     public static let doubleTapGap: TimeInterval = 0.4
 
     public enum Release: Equatable { case tap, doubleTap, hold, editHold }
 
-    private var pressedAt: Date?
+    /// When the current press went down, nil while up.
+    public private(set) var pressedAt: Date?
     private var cancelled = false
     /// The current press came within `doubleTapGap` of a tap.
     private var second = false

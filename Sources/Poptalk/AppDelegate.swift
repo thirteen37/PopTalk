@@ -222,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// `afterTap`: a double tap or a tap-then-hold (#110), which the 150 ms start tells apart.
+    /// `afterTap`: a double tap or a tap-then-hold (#110), which the delayed start tells apart.
     private func pressed(afterTap: Bool) {
         guard !busy else { return }  // one request at a time
         loadTranscriber()  // retries after a failed load
@@ -236,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recording = true
         (editLast, editTarget) = (afterTap, nil)
         targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        // Hotkey cancels holds under 150 ms; only then read the selection (may post ⌘C), OCR and show the HUD.
+        // A release before `HotkeyGesture.tap` is a tap, which cancels; only then read the selection (may post ⌘C), OCR and show the HUD.
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             // Tap-then-hold: the last insert is the selection, for the live preview (#43) and the final pass; with
@@ -261,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
         startWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + HotkeyGesture.tap, execute: work)
     }
 
     private func cancelled() {
@@ -285,7 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func released() {
         guard recording else { return }
-        // Released right at 150 ms, before the delayed start ran: run it now and stop the scheduled copy. It may
+        // Released right at `HotkeyGesture.tap`, before the delayed start ran: run it now and stop the scheduled copy. It may
         // stop the recording itself (nothing to edit, #110).
         if let work = startWork, !work.isCancelled, contextTask == nil { work.perform(); work.cancel() }
         guard recording else { return }
@@ -552,11 +552,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// replaced, "" for a dictation). ⌘Z, except in a terminal (#79): `replaceLast`, and in an `AXUndo` app (#93): `takeBack`; either returns false
     /// (having said so, nothing changed) once that isn't safe. Every undo goes through here.
     private func undo(_ inserted: LastInsert<AXUIElement>?, previous: String = "", id: UUID) async -> Bool {
+        let path = inserted?.terminal != nil ? "terminal backspaces" : inserted?.axUndo != nil ? "AX takeBack" : "⌘Z"
+        let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-"
+        Timing.log.info("undo: \(path, privacy: .public), app \(app, privacy: .public)")
         if let inserted, inserted.terminal != nil {
             guard await replaceLast(inserted, with: previous) else { overlay.showError(Self.editFailed); return false }
         } else if let inserted, inserted.axUndo != nil {
             guard await takeBack(inserted, putting: previous) else { overlay.showError(Self.editFailed); return false }
-        } else { TextIO.undo() }
+        } else { await TextIO.undo() }
         typing?.end(flush: false)
         typing = nil
         lastInsert = nil

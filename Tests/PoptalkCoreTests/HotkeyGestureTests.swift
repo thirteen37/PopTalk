@@ -44,9 +44,21 @@ private func run(_ events: [Event]) -> [HotkeyGesture.Release?] {
     #expect(run([.down(0), .up(0.1), .down(0.3), .key, .up(2)]) == [.tap, nil])
 }
 
-@Test func secondPressSplitsAt150ms() {
-    #expect(run([.down(0), .up(0.1), .down(0.25), .up(0.399)]) == [.tap, .doubleTap])
-    #expect(run([.down(0), .up(0.1), .down(0.25), .up(0.401)]) == [.tap, .editHold])
+@Test func secondPressSplitsAtTheTapThreshold() {
+    #expect(run([.down(0), .up(0.1), .down(0.25), .up(0.549)]) == [.tap, .doubleTap])
+    #expect(run([.down(0), .up(0.1), .down(0.25), .up(0.551)]) == [.tap, .editHold])
+}
+
+// A deliberate tap often lasts 150-300 ms; no real dictation is that short.
+@Test func slowTapsStillTap() {
+    #expect(run([.down(0), .up(0.2)]) == [.tap])
+    #expect(run([.down(0), .up(0.28)]) == [.tap])
+    #expect(run([.down(0), .up(0.31)]) == [.hold])
+}
+
+@Test func slowDoubleTapUndoes() {
+    #expect(run([.down(0), .up(0.2), .down(0.4), .up(0.68)]) == [.tap, .doubleTap])
+    #expect(run([.down(0), .up(0.28), .down(0.5), .up(0.7)]) == [.tap, .doubleTap])
 }
 
 @Test func secondPressIsKnownAtPress() {
@@ -85,7 +97,7 @@ private func run(_ events: [Event]) -> [HotkeyGesture.Release?] {
     var g = HotkeyGesture()
     g.press(at: t0)
     g.press(at: t0 + 0.1)  // a second "down" while held keeps the first press
-    let r = g.release(at: t0 + 0.2)
+    let r = g.release(at: t0 + 0.35)  // 0.25 s after the repeat: a tap had it replaced the press
     #expect(r == .hold)
 }
 

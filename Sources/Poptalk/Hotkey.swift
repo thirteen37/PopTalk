@@ -3,7 +3,7 @@ import CoreGraphics
 import PoptalkCore
 
 /// Hold-to-talk on Right Option (keycode 61) via a CGEventTap. Events always pass through.
-/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap under 150 ms calls `onTap`, which cancels too,
+/// A hold where another key is pressed (⌥+e etc.) is cancelled; a tap (under `HotkeyGesture.tap`) calls `onTap`, which cancels too,
 /// and once the double-tap window passes with nothing else pressed, `onTapSettled`, which accepts a showing offer
 /// (#111). A second tap soon after (`HotkeyGesture`) calls `onTap` and then `onDoubleTap` (undo, #109), on its
 /// release so ⌥ is up before any keystrokes are sent. A press soon after a tap is `onPress(true)`: held, it's a
@@ -64,7 +64,13 @@ final class Hotkey {
             if rightDown, !gesture.isPressed {
                 onPress(gesture.press(at: Date()))
             } else if !rightDown {
-                switch gesture.release(at: Date()) {
+                let now = Date(), held = gesture.pressedAt.map { now.timeIntervalSince($0) }
+                let release = gesture.release(at: now)
+                if let held {
+                    let kind = release.map { "\($0)" } ?? "cancelled"
+                    Timing.log.info("hotkey: released after \(Int(held * 1000)) ms, \(kind, privacy: .public)")
+                }
+                switch release {
                 case .tap:
                     onTap()
                     // A little past the window, so the check after it sees the window passed.

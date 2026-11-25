@@ -121,21 +121,29 @@ enum TextIO {
         await paste(s)
     }
 
-    static func undo() { press(.z, flags: .maskCommand) }
+    /// ⌘Z, once right ⌥ is up (#109): sent while it's still down it could arrive as ⌥⌘Z.
+    static func undo() async {
+        await rightOptionUp()
+        press(.z, flags: .maskCommand)
+    }
 
-    /// Deletes `n` characters before the cursor, then pastes `s` if any: PopTalk's edit of its insert in a terminal (#79).
-    /// #89: one backspace of the burst got lost (Ghostty, plain zsh). So: wait (≤300 ms) for right ⌥ to be up, then
-    /// space the deletes. The undo was Esc, held as it fired; it's now a right-⌥ double tap that fires on the release
-    /// (#109), so the key is normally up already and this returns at once. Kept for a quick third press, which would
-    /// make the deletes ⌥⌫ (delete a word).
-    /// ponytail: cause not pinned (the held Esc, a delete in flight through the overlay's key tap as it was torn
-    /// down, which #111 removed, or the app dropping a burst). If one still goes missing, slow the deletes.
-    static func retype(deleting n: Int, then s: String) async {
+    /// Waits (≤300 ms) for right ⌥ to be up, so keystrokes sent next aren't modified by it. The double tap fires on the
+    /// release, so it's normally up already and this returns at once; kept for a quick third press.
+    private static func rightOptionUp() async {
         let start = ContinuousClock.now
         while CGEventSource.keyState(.hidSystemState, key: 61), ContinuousClock.now - start < .milliseconds(300) {
             try? await Task.sleep(for: .milliseconds(10))
         }
-        Timing.mark("retype: right ⌥ release wait", since: start)
+        Timing.mark("right ⌥ release wait", since: start)
+    }
+
+    /// Deletes `n` characters before the cursor, then pastes `s` if any: PopTalk's edit of its insert in a terminal (#79).
+    /// #89: one backspace of the burst got lost (Ghostty, plain zsh). So: wait for right ⌥ to be up (`rightOptionUp`;
+    /// held, the deletes would be ⌥⌫, delete a word), then space the deletes. The undo was Esc, held as it fired.
+    /// ponytail: cause not pinned (the held Esc, a delete in flight through the overlay's key tap as it was torn
+    /// down, which #111 removed, or the app dropping a burst). If one still goes missing, slow the deletes.
+    static func retype(deleting n: Int, then s: String) async {
+        await rightOptionUp()
         for _ in 0..<n {
             press(.delete)
             try? await Task.sleep(for: .milliseconds(3))
