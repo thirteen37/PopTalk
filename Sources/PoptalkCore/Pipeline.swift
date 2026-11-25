@@ -106,7 +106,8 @@ public struct Pipeline: Sendable {
             }
             let fixed = !recase ? [] : Self.termsWritten(from: transcript, to: recased, terms: Self.recaseCandidates(recaseWith),
                                                          saved: saved + Self.recaseCandidates(saved))
-            let transcript = Self.dictationPrepass(recased)
+            let off = features.guardsOff
+            let transcript = Self.dictationPrepass(recased, off: off)
             // Everything said was cancelled ("… Scratch that.", #98).
             guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
             let space = Self.leadingSpace(r.context)
@@ -136,15 +137,9 @@ public struct Pipeline: Sendable {
             }
             catch { reply = nil }
             guard let reply else { return result(.insert(space + transcript, label: "Dictated (raw)")) }
-            let cleaned = Self.restoreMarks(Self.stripChatter(reply), transcript: transcript)
-            let rejectedBy: String? =
-                cleaned.isEmpty ? "empty"
-                : cleaned.count > limit ? "length"
-                : Self.dropsContent(cleaned, transcript: transcript) ? "dropsContent"
-                : Self.dropsProtected(cleaned, transcript: transcript) ? "dropsProtected"
-                : Self.echoesContext(cleaned, transcript: transcript,
-                                     context: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context)) ? "echoesContext"
-                : nil
+            let cleaned = Self.repairs.filter { !off.contains($0.name) }.reduce(reply) { $1.run($0, transcript) }
+            let check = ReplyCheck(limit: limit, screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context))
+            let rejectedBy = Self.rejects.first { !off.contains($0.name) && $0.test(cleaned, transcript, check) }?.name
             guard let rejectedBy else { return result(.insert(space + cleaned, label: "Dictated")) }
             var res = result(.insert(space + transcript, label: "Dictated (raw)"))
             res.rejectedBy = rejectedBy
@@ -256,9 +251,33 @@ extension Pipeline {
     private static let hesitation = try! NSRegularExpression(
         pattern: #"(?<![\w-])(?:u+m+|u+h+|e+r+m*|h+m+)(?![\w-])[,.!?]?"#, options: .caseInsensitive)
 
-    /// What the cleanup model sees of a dictation after `stripHesitations`: spoken formatting (#48), then
-    /// numbers (#59). PoptalkDatagen render uses it too, so training transcripts match production.
-    public static func dictationPrepass(_ s: String) -> String { spokenNumbers(spokenCancel(spokenFormatting(s))) }
+    /// The dictation guards (#108), in order. `prepass`: what the cleanup model sees of a dictation after
+    /// `stripHesitations` and the casing fix. `repairs`: applied to its reply. `rejects`: the first that holds makes
+    /// the reply a raw fallback, its name the `rejectedBy`. `DictationFeatures.guardsOff` turns steps off by name.
+    public static let prepass: [(name: String, run: @Sendable (String) -> String)] = [
+        ("spokenFormatting", spokenFormatting),  // #48
+        ("spokenCancel", spokenCancel),  // #98
+        ("spokenNumbers", spokenNumbers),  // #59
+    ]
+    public static let repairs: [(name: String, run: @Sendable (_ out: String, _ said: String) -> String)] = [
+        ("stripChatter", { out, _ in stripChatter(out) }),
+        ("restoreMarks", { restoreMarks($0, transcript: $1) }),
+    ]
+    /// What a reject sees besides the reply and the transcript: `maxCleanupLength`, and the screen the model saw.
+    public struct ReplyCheck: Sendable { var limit: Int, screen: String }
+    public static let rejects: [(name: String, test: @Sendable (_ out: String, _ said: String, _ check: ReplyCheck) -> Bool)] = [
+        ("empty", { out, _, _ in out.isEmpty }),
+        ("length", { out, _, c in out.count > c.limit }),
+        ("dropsContent", { out, said, _ in dropsContent(out, transcript: said) }),
+        ("dropsProtected", { out, said, _ in dropsProtected(out, transcript: said) }),
+        ("echoesContext", { out, said, c in echoesContext(out, transcript: said, context: c.screen) }),
+    ]
+    public static var guardNames: [String] { prepass.map(\.name) + repairs.map(\.name) + rejects.map(\.name) }
+
+    /// The `prepass` steps not in `off`. PoptalkDatagen render uses it too, so training transcripts match production.
+    public static func dictationPrepass(_ s: String, off: Set<String> = []) -> String {
+        prepass.filter { !off.contains($0.name) }.reduce(s) { $1.run($0) }
+    }
 
     /// The utterance explicitly asks to add text rather than replace the selection.
     /// English-only, like the speech model (Parakeet v2 transcribes English only): revisit the

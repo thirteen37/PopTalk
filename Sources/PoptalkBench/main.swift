@@ -27,6 +27,13 @@ Transcriber.quietLogs()
 let args = CommandLine.arguments
 func opt(_ name: String) -> String? { args.firstIndex(of: name).flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } }
 func fail(_ msg: Any) -> Never { FileHandle.standardError.write(Data("\(msg)\n".utf8)); exit(1) }
+/// `--guards -a,-b`: `Pipeline.guardNames` steps turned off for this run (#108), in bench and `--replay` modes.
+let guardsOff: Set<String> = Set((opt("--guards") ?? "").split(separator: ",").map { g in
+    guard g.hasPrefix("-"), Pipeline.guardNames.contains(String(g.dropFirst())) else {
+        fail("--guards takes -name,… of: " + Pipeline.guardNames.joined(separator: ", "))
+    }
+    return String(g.dropFirst())
+})
 func load(_ path: String) -> BenchReport {
     do { return try JSONDecoder().decode(BenchReport.self, from: Data(contentsOf: URL(fileURLWithPath: path))) } catch { fail("\(path): \(error)") }
 }
@@ -238,7 +245,7 @@ for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-pro
 
 // History replay: runs dictation requests through Pipeline with an MLX cleanup model, as the app would.
 //   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID [--cleanup-timeout S]   (S: the base deadline, app default 4)
-//     [--dictation-prompt-file F]   (scripts/replay.zsh: the ship check)
+//     [--dictation-prompt-file F] [--guards -name,…]   (scripts/replay.zsh: the ship check)
 // in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, rejectedBy?, seconds}.
 // Prints counts only: the inputs and outputs are history content and stay in the files.
 if let i = args.firstIndex(of: "--replay") {
@@ -260,8 +267,10 @@ if let i = args.firstIndex(of: "--replay") {
             // The prompt lists term texts only; aliases come from today's saved vocabulary.
             for t in r.vocabulary { try store.add(saved.terms.first { $0.text == t } ?? VocabTerm(text: t)) }
             let calls = ModelCallRecorder()
+            var features = DictationFeatures()
+            features.guardsOff = guardsOff
             let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
-                             cleanupTimeout: opt("--cleanup-timeout").flatMap(Double.init) ?? 4)
+                             cleanupTimeout: opt("--cleanup-timeout").flatMap(Double.init) ?? 4, features: features)
             let t = Date()
             let res = await p.run(Request(transcript: r.transcript, selection: nil,
                                           context: ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)))
@@ -322,6 +331,8 @@ if features.soundAlikeTerms { meta["soundAlike"] = "on" }
 let contextOff = Set((opt("--context-off") ?? "").split(separator: ",").map(String.init))
 if !contextOff.isEmpty { meta["contextOff"] = contextOff.sorted().joined(separator: ",") }
 features.screenTerms = !contextOff.contains("vocab")
+features.guardsOff = guardsOff
+if !guardsOff.isEmpty { meta["guards"] = guardsOff.sorted().map { "-" + $0 }.joined(separator: ",") }
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)

@@ -14,6 +14,8 @@ public struct DictationFeatures: Sendable, Equatable {
     /// Sound-alike terms (#75 step 2, experimental, no Settings UI yet): `termShortlist` runs the cleanup model
     /// confirms (`Pipeline.termScore`) become the term before cleanup. Only where `recaseTerms` runs.
     public var soundAlikeTerms = false
+    /// `Pipeline.guardNames` steps turned off: PoptalkBench `--guards -name,…` only (#108).
+    public var guardsOff: Set<String> = []
 
     public init() {}
 
