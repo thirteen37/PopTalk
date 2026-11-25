@@ -14,6 +14,7 @@ extension Pipeline {
     /// - "minus"/"negative" before a number → "-5" (ASCII), except after a number or "plus or" ("ten minus two").
     /// - A run that isn't one number stays as said: "one two three", "twelve fifty", "nineteen ninety nine".
     ///   A run can't start with hundred/thousand: "a hundred times".
+    /// - A 0–9 word corrected to digits goes to digits too: "three actually twenty" → "3 actually 20" (`correctedSmall`).
     public static func spokenNumbers(_ s: String) -> String {
         let s = s.replacing(time) { m in
             var t = "\(number[m.1.lowercased()]!.value)"
@@ -106,8 +107,14 @@ extension Pipeline {
             done = end
             i = j
         }
-        return out + s[done...]
+        return (out + s[done...]).replacing(correctedSmall) { "\(number[$0.1.lowercased()]!.value)" }
     }
+
+    /// #106: a 0–9 word corrected to digits ("three actually 20") goes to digits too: v6 misreads the mixed form and
+    /// writes a number never said. Upward only; "30 actually three" already resolves. Cues: actually, no, wait,
+    /// sorry, I mean, make that / make it, in any run.
+    nonisolated(unsafe) private static let correctedSmall =
+        /(?i)\b(zero|one|two|three|four|five|six|seven|eight|nine)(?=[,;]?\s+(?:(?:actually|no|wait|sorry|i mean|make (?:that|it))[,;]?\s+)+[-$]?\d)/
 
     private enum NumberKind { case unit, teen, tens, hundred, scale }
 

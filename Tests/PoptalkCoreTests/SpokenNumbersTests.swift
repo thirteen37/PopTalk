@@ -120,6 +120,44 @@ func nemoWins(_ said: String, _ written: String) {
     #expect(n(said) == written)
 }
 
+// #106: a 0–9 word corrected to a number written as digits goes to digits too, so the model never sees a mixed
+// "three actually 20" (v6 wrote "two" for it). Upward only: "30 actually three" already comes out right.
+@Test(arguments: [
+    ("we need three actually twenty extra chairs", "we need 3 actually 20 extra chairs"),
+    ("we need three actually 20 extra chairs", "we need 3 actually 20 extra chairs"),
+    ("save us two make that thirty seats", "save us 2 make that 30 seats"),
+    ("save us two make it thirty seats", "save us 2 make it 30 seats"),
+    ("five no wait fifty", "5 no wait 50"),
+    ("five no fifty", "5 no 50"),
+    ("five wait fifty", "5 wait 50"),
+    ("nine i mean ninety spaces", "9 i mean 90 spaces"),
+    ("seven sorry seventy tags", "7 sorry 70 tags"),
+    ("Seven, sorry, I mean seventy", "7, sorry, I mean 70"),
+    ("three actually fifteen percent", "3 actually 15%"),
+    ("four actually forty five dollars", "4 actually $45"),
+])
+func correctedSmallNumberGetsDigits(_ said: String, _ written: String) {
+    #expect(n(said) == written)
+}
+
+@Test(arguments: [
+    "60 no wait 16",
+    "three people actually 20 came",
+    "I have two, actually",
+    "one, sorry",
+    "actually two of them",
+    "wait three minutes",
+    "no one came",
+    "two make that six",
+])
+func correctionLookalikesUnchanged(_ said: String) {
+    #expect(n(said) == said)
+}
+
+@Test func correctionDownKeepsSmallWord() {
+    #expect(n("thirty actually three") == "30 actually three")
+}
+
 @Test(arguments: [
     "five cents",
     "five minus two",
