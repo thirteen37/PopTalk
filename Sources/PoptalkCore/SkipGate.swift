@@ -55,12 +55,19 @@ extension Pipeline {
     /// `similarity` to it ("Maheena" for "Mahina", "Toy Vonen" for "Toivonen", "fluid audio" left as heard).
     /// ponytail: keyword lists and string similarity; a decision model only if this skips wrongly too often.
     public static func skipsLLM(said: String, transcript: String, terms: [String]) -> Bool {
+        skipGateStop(said: said, transcript: transcript, terms: terms) == nil
+    }
+
+    /// The first `skipsLLM` check that keeps the model, in order: "casing", "punctuation", "cue", "command",
+    /// "term" (a near miss); nil when the gate skips. Replay counts only (#122).
+    public static func skipGateStop(said: String, transcript: String, terms: [String]) -> String? {
         func has(_ re: NSRegularExpression, _ s: String) -> Bool { re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil }
         let end = transcript.trimmingCharacters(in: CharacterSet(charactersIn: "\"”’')] \n"))
-        guard transcript.first(where: \.isLetter)?.isUppercase == true, let last = end.last, ".!?".contains(last),
-              !has(cue, said), !has(command, transcript) else { return false }
-
-        return termShortlist(transcript, terms: terms).isEmpty
+        if transcript.first(where: \.isLetter)?.isUppercase != true { return "casing" }
+        guard let last = end.last, ".!?".contains(last) else { return "punctuation" }
+        if has(cue, said) { return "cue" }
+        if has(command, transcript) { return "command" }
+        return termShortlist(transcript, terms: terms).isEmpty ? nil : "term"
     }
 
     /// A run of `transcript` that may be a misheard term (#75 step 2), for the yes/no term check to confirm.
