@@ -10,7 +10,7 @@
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
   gen.py v8               → out/pool-v8/{train,val}.jsonl  dictation pool matched to real use (#103), for GEPA and E2B data
   gen.py teach6 / build6 / split6   the same three stages for the E2B v6 adapter, in out/v6/ (make_data_v6.zsh)
-  gen.py build7 / split7  E2B v7 (#105): v6's items plus d-keep-lead, in out/v7/ (make_data_v7.zsh)
+  gen.py build7 / split7  E2B v7 (#105): v6's items plus d-keep-lead, d-numgroup (#125) and kept-as-said (#126), in out/v7/
   gen.py check            → asserts the v5–v7 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
@@ -30,6 +30,7 @@ from contamination import Checker, Phrases  # noqa: E402
 import pool_profile as P  # noqa: E402
 
 OUT = Path("training/out")
+AS_SAID = False  # #126: build7 sets it; v6 (build6) stays as it was. See the "kept as said" section.
 VOICES = ["Samantha", "Daniel", "Karen", "Moira", "Rishi", "Aman", "Fred", "Kathy", "Ralph", "Eddy (English (US))",
           "Flo (English (UK))", "Reed (English (UK))", "Sandy (English (US))", "Shelley (English (UK))"]
 RATES = [None, None, 160, 200, 230]
@@ -755,7 +756,8 @@ def v5_dictation():
         if r.random() < 0.15:  # two commands in one breath: two sentences
             (a, ea), (b, eb), j = fill(r, r.choice(short)), fill(r, r.choice(short)), r.choice(L.RUNON_JOIN)
             spoken, ents = a + j + b, ea + eb
-            target = sentence(a) + " " + sentence((j.split()[-1] + " " if j.strip() else "") + b)
+            target = (sentence(a + j + b) if AS_SAID and j.startswith(" and ")  # #126: "and then" stays as said
+                      else sentence(a) + " " + sentence((j.split()[-1] + " " if j.strip() else "") + b))
         else:
             c, ents = fill(r, r.choice(L.IMPERATIVES))
             x = r.random()
@@ -1163,7 +1165,8 @@ def m_soundalike(r, st):
             nxt = toks[i + 1]["w"][:1].lower() if i + 1 < len(toks) else ""
             if x["own"] is None and core.lower() in table and not (table[core.lower()] == "a" and nxt in "aeiou"):
                 cand.append((i, core))
-        if kind == "function":  # the k-th occurrence must line up with the target's k-th
+        keep = kind == "function" or AS_SAID  # #126: in build7 a homophone stays as heard too
+        if keep:  # the k-th occurrence must line up with the target's k-th
             said = [x["w"] for x in toks]
             cand = [(i, c) for i, c in cand if sum(norm(w) == [c.lower()] for w in said) == len(
                 list(re.finditer(rf"(?<![\w']){re.escape(c)}(?![\w'])", tgt, re.I)))]
@@ -1171,7 +1174,7 @@ def m_soundalike(r, st):
             continue
         i, core = r.choice(cand)
         heard = recase(table[core.lower()], core)
-        if kind == "function":
+        if keep:
             k = sum(norm(x["w"]) == [core.lower()] for x in toks[:i])
             m = v7_nth(tgt, core, k)
             st["target"] = tgt[:m.start()] + recase(heard, m.group()) + tgt[m.end():]
@@ -1994,6 +1997,134 @@ def check_numgroup():
     print("numgroup check ok: " + ", ".join(f"{kinds[k]} {k}" for k in NUMG_N))
 
 
+# ---------- #126: kept as said (build7) ----------
+# Clean dictation keeps the speaker's words and grammar: only punctuation, casing, fillers and applied
+# self-corrections change. With AS_SAID on (build7 only, so v6 rebuilds as it was): homophones stay as transcribed
+# (m_soundalike), "and then"/"and also" between two commands stays (v5_dictation), and d-as-said adds ungrammatical
+# speech kept as said, mostly long: the replay's rewrites concentrate in dictations over 20 words. split7 then keeps
+# a misheard name as heard where the prompt has nothing to fix it toward (keep_heard_row): only the rendered prompt
+# shows what Prompts.window clips and #124 drops.
+
+import word_changes as W  # noqa: E402
+
+AS_SAID_N = 500
+AS_SAID_CLAUSES = [(1, 10), (2, 25), (3, 35), (4, 30)]  # clauses per item, weights: most items over 20 words
+
+
+KEEP_HEARD_CATS = {"d-names-audio", "d-names-text", "d-names-vocab", "d-mutated"}
+
+
+def keep_heard(transcript, target, seen):
+    """`target` with every heard word it changes or adds to, where word_changes calls the change "other" (no word of
+    `seen`, the screen and vocabulary text the model gets, behind it), put back as heard: "jelanta" stays, "Jolanta"
+    on screen gets fixed. Heard words the target drops stay dropped: they are recognizer debris next to a fixed term
+    ("SwiftUI UI", "YarrowWare Air"). Joins and splits ("stand up" → "standup") are spelling and stay."""
+    t, y = transcript, target
+    tm, ym = list(W.WORD.finditer(t.lower().replace("’", "'"))), list(W.WORD.finditer(y.lower().replace("’", "'")))
+    old, new = [m.group() for m in tm], [m.group() for m in ym]
+    ev = W.words(seen)
+    ops = [o for o in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes() if o[0] != "equal"]
+    kinds = W.changes(old, new, frozenset(ev + [w + "'s" for w in ev]))  # "Tadhg" on screen backs "Tadhg's"
+    for (_, i1, i2, j1, j2), kind in reversed(list(zip(ops, kinds))):
+        if kind not in W.OTHER or j1 == j2 or "".join(old[i1:i2]) == "".join(new[j1:j2]):
+            continue
+        a, b = ym[j1].start(), ym[j2 - 1].end()
+        if i2 > i1:
+            y = y[:a] + recase(t[tm[i1].start():tm[i2 - 1].end()], y[a:b]) + y[b:]
+        else:  # the target added words: take them out with the space before (or after, at the start)
+            y = y[:a] + y[b + 1:] if a == 0 else y[:a - 1] + y[b:]
+    return cap(y)
+
+
+def keep_heard_row(row):
+    """A rendered dictation row with keep_heard applied to its target, against the prompt the model sees (the screen
+    after Prompts.window's clip and #124's short-dictation drop, the window title, the vocabulary)."""
+    user = row["messages"][1]["content"]
+    m = re.search(r"<transcript>(.*)</transcript>", user, re.S)
+    if not m or row["messages"][-1]["role"] != "assistant":
+        return row
+    y = keep_heard(html.unescape(m.group(1)), row["messages"][-1]["content"], html.unescape(user[:m.start()]))
+    return row | {"messages": row["messages"][:-1] + [row["messages"][-1] | {"content": y}]}
+
+
+def as_said_clause(r):
+    """(as said, as written) for one AS_SAID sentence, with a self-correction in its slot about a third of the time."""
+    tmpl, kind = r.choice(L.AS_SAID)
+    if not kind:
+        return tmpl, tmpl
+    a, b = r.sample(slot_pool(kind), 2)
+    if r.random() < 0.35:
+        cue = r.choice(L.CUES)
+        return tmpl.replace("{X}", f"{a}, {cue}, {b}" if r.random() < 0.5 else f"{a} {cue} {b}"), tmpl.replace("{X}", b)
+    return tmpl.replace("{X}", b), tmpl.replace("{X}", b)
+
+
+def as_said_dictation():
+    checker, r, out, seen = Checker(), R("d-as-said"), [], set()
+    while len(out) < AS_SAID_N:
+        n = r.choices(*zip(*AS_SAID_CLAUSES))[0]
+        parts = [as_said_clause(r) for _ in range(n)]
+        said, target = parts[0]
+        for s_, y_ in parts[1:]:
+            if r.random() < 0.4:  # one breath: the join word stays, the target only adds punctuation
+                j = r.choice(L.AS_SAID_JOIN)
+                comma = "," if j in (" so ", " but ") else ""
+                said, target = said[:-1] + j + decap(s_), target[:-1] + comma + j + decap(y_)
+            else:
+                said, target = said + " " + s_, target + " " + y_
+        v = r.random()  # as Parakeet punctuates it, run together lowercase, with an "uh"/"um" or two
+        t = said if v < 0.3 else lower_transcript(said) if v < 0.55 else v8_um(r, said, r.choice([1, 1, 2]))
+        t = lower_transcript(t) if v >= 0.55 and r.random() < 0.4 else t
+        cues = lambda s: [" ".join(norm(m.group())) for m in V7_CUE.finditer(s)]
+        if t in seen or cues(t) != cues(said):  # an "uh" inside "I mean" breaks the cue
+            continue
+        ctx = m6_screen(r, avoid=[target]) if r.random() < 0.4 else unrelated_context(r)
+        it = {"id": f"d-as-said-{len(out)}", "cat": "d-as-said", "transcript": t, "context": ctx, "target": target}
+        if not checker.reason(it):
+            seen.add(t)
+            out.append(it)
+    return out
+
+
+def check_as_said():
+    """`gen.py check`: d-as-said changes no word but fillers and self-corrections, is clean and mostly long; with
+    AS_SAID on, d-imperative keeps "and then", d-mutated keeps homophones, and keep_heard puts unfixable names back."""
+    global AS_SAID
+    checker, items = Checker(), as_said_dictation()
+    bad = [s for s, _ in L.AS_SAID if checker.reason({"transcript": s, "target": s})]
+    assert not bad, bad
+    for it in items:
+        y = it["target"]
+        assert y[0].isupper() and y[-1] in ".!?" and not checker.reason(it), it
+        assert all(c in ("filler", "cue") for c in W.changes(W.words(it["transcript"]), W.words(y))), it
+    lens = Counter(W.length_bin(len(W.words(it["transcript"]))) for it in items)
+    assert lens[">20"] >= 0.5 * len(items), lens
+    # keep_heard: an unfixable name goes back as heard; one on screen stays fixed; added words go, dropped debris stays out.
+    k = lambda t, y, seen="": keep_heard(t, y, seen)
+    said, fixed = "can you ask jelanta about the venue", "Can you ask Jolanta about the venue?"
+    assert k(said, fixed) == "Can you ask Jelanta about the venue?"
+    assert k(said, fixed, "<screen>Jolanta: the venue is booked.</screen>") == fixed
+    assert k("forward taig's notes", "Forward Tadhg's notes.", "<vocabulary>Tadhg</vocabulary>") == "Forward Tadhg's notes."
+    assert k("notes for team", "Notes for the team.") == "Notes for team."
+    assert k("restart here for the workers today", "Restart the workers today.") == "Restart the workers today."
+    assert k("ask about weights and biases at the stand up", "Ask about Weights & Biases at the standup.") \
+        == "Ask about Weights & Biases at the standup."
+    AS_SAID = True
+    try:
+        prog = program_items()
+    finally:
+        AS_SAID = False
+    imp = [it for it in prog if it["cat"] == "d-imperative"]
+    assert not any(re.search(r"\bThen\b", it["target"]) and "and then" in it["transcript"] for it in imp)
+    kept = sum(bool(re.search(r"\band (then|also)\b", it["target"])) for it in imp)
+    assert kept >= 5, kept
+    mut = [it for it in prog if it["cat"] == "d-mutated" and "homophone" in it["mutators"]]
+    fixed = [it for it in mut if "homophone" in W.changes(W.words(it["transcript"]), W.words(it["target"]))]
+    assert not fixed, fixed[:3]
+    print(f"as-said check ok: {len(items)} d-as-said ({dict(lens)}), {len(L.AS_SAID)} sentences; {kept} d-imperative "
+          f"keep \"and then\"/\"and also\"; {len(mut)} d-mutated keep a homophone")
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -2235,17 +2366,22 @@ def build(out, items, skipped, manifest):
          "contaminationRejected": rejected} | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
 
 
-def split(out, samples):
-    """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match."""
+def split(out, samples, as_said=False):
+    """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match; with `as_said`
+    (split7, #126), names with nothing in the prompt to fix them toward stay as heard (keep_heard_row)."""
     items = {i["id"]: i for i in jl(out / "items.jsonl")}
     cats = {k: i["cat"] for k, i in items.items()}
-    rows, dropped = [], {}
+    rows, dropped, heard = [], {}, Counter()
     for row in jl(out / "rendered.jsonl"):
         if (why := prepass_mismatch(row, cats[row["id"]], items[row["id"]].get("digits", ()))):
             dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
             print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
         else:
-            rows.append(row)
+            kept = keep_heard_row(row) if as_said and cats[row["id"]] in KEEP_HEARD_CATS else row
+            heard[cats[row["id"]]] += kept != row
+            rows.append(kept)
+    if as_said:
+        print(f"split: names kept as heard {+heard}", file=sys.stderr)
     print(f"split: {len(rows)} rows, dropped for pre-pass mismatch: {dropped}", file=sys.stderr)
     R("split").shuffle(rows)
     n = max(100, len(rows) // 25)
@@ -2263,6 +2399,7 @@ def main(cmd):
         check_m6()
         check_keep7()
         check_numgroup()
+        check_as_said()
     elif cmd == "v8":
         train, val = v8_pools()
         write(OUT / "pool-v8" / "train.jsonl", train)
@@ -2279,13 +2416,15 @@ def main(cmd):
     elif cmd == "teach6":
         write(OUT6 / "teach.jsonl", m6_teach_items())
     elif cmd in ("build6", "build7"):  # E2B v6 (#103): see the m6 section; v7 (#105) adds d-keep-lead
+        global AS_SAID
         skipped, v7 = {}, cmd == "build7"
+        AS_SAID = v7
         items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
-        items += (keep7_dictation() + numg_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
+        items += (keep7_dictation() + numg_dictation() + as_said_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
         build(OUT7 if v7 else OUT6, items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
     elif cmd in ("split", "split6", "split7"):
         v = cmd[5:]
-        split({"": OUT, "6": OUT6, "7": OUT7}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl")
+        split({"": OUT, "6": OUT6, "7": OUT7}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl", v == "7")
     elif cmd == "heldout":
         keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
         write(Path("training/heldout.jsonl"), heldout(keys))
