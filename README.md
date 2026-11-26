@@ -73,7 +73,7 @@ The full details, including the overlay, the safety net when cleanup drops conte
 
 ## Privacy
 
-PopTalk reads the focused field, nearby text, the window title, the web domain and, when an app hides its text, an OCR crop around the field. It never reads password fields, password managers or private browser windows, and each source can be turned off in Settings → Context, or for one app or website in Settings → Apps (also from the menu bar: "Don't Read the Screen in ‹app›"). A source turned off is never read. Remembered screen terms are opt-in and stay on this Mac. Usage history is off by default; if you turn it on, it's stored locally (audio optional), can be wiped with one button, and can optionally sync between your Macs through iCloud Drive, without audio. Apart from that sync and model downloads, nothing leaves the Mac.
+PopTalk reads the focused field, nearby text, the window title, the web domain and, when an app hides its text, an OCR crop around the field. It never reads password fields, password managers or private browser windows, and each source can be turned off in Settings → Context, or for one app or website in Settings → Apps (also from the menu bar: "Don't Read the Screen in ‹app›"). A source turned off is never read, except the window title: PopTalk always reads it to spot a private window and to find the window for OCR. With the window title off, it's dropped before the prompt and never logged. Remembered screen terms are opt-in and stay on this Mac. Usage history is off by default; if you turn it on, it's stored locally (audio optional), can be wiped with one button, and can optionally sync between your Macs through iCloud Drive, without audio. Apart from that sync and model downloads, nothing leaves the Mac.
 
 ## Development
 
