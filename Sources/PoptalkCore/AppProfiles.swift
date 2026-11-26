@@ -71,8 +71,12 @@ public struct ResolvedProfile: Sendable, Equatable {
     public var sources: ContextSources
     /// A per-app profile matched, for the log and the status strip. Which one, and the domain, never leave here.
     public var custom = false
+    /// The sources the profile turned off that Settings → Context had on, for the status strip (#127).
+    public var appOff: Set<ContextSource> = []
 
-    public init(sources: ContextSources, custom: Bool = false) { (self.sources, self.custom) = (sources, custom) }
+    public init(sources: ContextSources, custom: Bool = false, appOff: Set<ContextSource> = []) {
+        (self.sources, self.custom, self.appOff) = (sources, custom, appOff)
+    }
 }
 
 /// Per-app profiles (#96), a JSON array in local `UserDefaults` (not synced: the list shows what a user runs).
@@ -96,6 +100,7 @@ public enum AppProfiles {
         if let match = profiles.filter({ $0.matches(bundleID: bundleID, host: isPrivate ? nil : domain) })
             .max(by: { $0.rank < $1.rank }) {
             r.custom = true
+            r.appOff = match.off.filter { defaults[$0] }
             for s in match.off { r.sources[s] = false }
         }
         if isPrivate { (r.sources.nearbyText, r.sources.ocr, r.sources.webDomain) = (false, false, false) }

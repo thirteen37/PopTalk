@@ -98,4 +98,14 @@ extension Pipeline {
         }
         return terms.filter { !known.contains($0.lowercased()) && count($0, after) > count($0, before) }
     }
+
+    /// What `learn()` records for a dictation (#87): the screen terms its boost (raw → boosted transcript) or the casing
+    /// fix (`recased`) wrote, if still in the text `inserted`. Nil with learning off, in Settings or in the app's
+    /// profile (#96).
+    public static func termsToLearn(_ raw: RawInsert, recased: [String], inserted: String,
+                                    saved: [String]) -> (boost: [String], casing: [String])? {
+        guard raw.sources.learnScreenTerms else { return nil }
+        let boosted = termsWritten(from: raw.rawTranscript, to: raw.request.transcript, terms: raw.boost, saved: saved)
+        return (boosted.filter { inserted.contains($0) }, recased.filter { inserted.contains($0) })
+    }
 }

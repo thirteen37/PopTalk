@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let sel = Settings.selection
             return StatusStrip.badges(status.value, llm: sel.provider == "mlx" ? modelStatus[sel.cleanupModel] ?? .loading : .ready,
                                       sources: profile?.sources ?? ContextSources(.standard), ocrWarm: ScreenContext.isOCRWarm,
-                                      history: history.isEnabled, custom: profile?.custom ?? false)
+                                      history: history.isEnabled, appOff: profile?.appOff ?? [])
         }
         let menu = NSMenu()
         menu.delegate = self
@@ -731,14 +731,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
     }
 
-    /// #87: with the setting on, remembers the screen terms a boost (raw → boosted transcript) or the casing fix wrote
-    /// into dictation `id`, if still in the text inserted. Undo forgets them again. Not where the app's profile turns
-    /// learning off (#96).
+    /// #87: remembers the screen terms dictation `id` wrote (`Pipeline.termsToLearn`). Undo forgets them again.
     private func learn(_ raw: RawInsert, _ result: PipelineResult, inserted: String, id: UUID) {
-        guard raw.sources.learnScreenTerms else { return }
-        let boosted = Pipeline.termsWritten(from: raw.rawTranscript, to: raw.request.transcript, terms: raw.boost,
-                                            saved: store.terms.map(\.text))
-        let (fromBoost, fromCasing) = (boosted.filter { inserted.contains($0) }, result.recased.filter { inserted.contains($0) })
+        guard let (fromBoost, fromCasing) = Pipeline.termsToLearn(raw, recased: result.recased, inserted: inserted,
+                                                                  saved: store.terms.map(\.text)) else { return }
         let size = learned.record(fromBoost + fromCasing, request: id)
         Timing.log.info("learned: \(fromBoost.count) from boost, \(fromCasing.count) from casing, list \(size)")
     }

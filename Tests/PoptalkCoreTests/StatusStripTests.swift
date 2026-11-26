@@ -33,12 +33,23 @@ private func normal() -> AppStatus {
     AppProfiles.setScreenOff(true, bundleID: "com.example.Mail", in: &profiles)
     let r = AppProfiles.resolve(bundleID: "com.example.Mail", domain: nil, isPrivate: false, profiles: profiles,
                                 defaults: ContextSources())
-    let b = StatusStrip.badges(normal(), llm: .ready, sources: r.sources, ocrWarm: true, history: false, custom: r.custom)
+    let b = StatusStrip.badges(normal(), llm: .ready, sources: r.sources, ocrWarm: true, history: false, appOff: r.appOff)
     #expect(b == [StatusBadge(symbol: "eye.slash", help: "Screen reading off in this app")])
-    var ocrOff = ContextSources()
-    ocrOff.ocr = false
-    #expect(StatusStrip.badges(normal(), llm: .ready, sources: ocrOff, ocrWarm: true, history: false, custom: true)
-        .map(\.symbol) == ["text.viewfinder"])
+}
+
+// #127: a profile that turns some screen sources off says so, apart from what Settings → Context turned off.
+@Test func stripSaysWhichSourcesAreOffInThisApp() {
+    let profiles = [AppProfile(bundleID: "com.example.mail", off: [.ocr, .nearbyText])]
+    func strip(_ defaults: ContextSources) -> [StatusBadge] {
+        let r = AppProfiles.resolve(bundleID: "com.example.mail", domain: nil, isPrivate: false, profiles: profiles, defaults: defaults)
+        return StatusStrip.badges(normal(), llm: .ready, sources: r.sources, ocrWarm: true, history: false, appOff: r.appOff)
+    }
+    #expect(strip(ContextSources()) == [StatusBadge(symbol: "rectangle.badge.xmark", help: "Off in this app: nearby text, OCR")])
+    var d = ContextSources()
+    (d.ocr, d.windowTitle) = (false, false)  // off everywhere: not the profile's doing
+    #expect(strip(d) == [StatusBadge(symbol: "rectangle.badge.xmark", help: "Off in this app: nearby text"),
+                         StatusBadge(symbol: "text.viewfinder", help: "Screen text (OCR) off"),
+                         StatusBadge(symbol: "text.badge.xmark", help: "Context off: window title")])
 }
 
 @Test func stripShowsOCROffOrWarming() {

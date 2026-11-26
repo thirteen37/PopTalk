@@ -91,3 +91,18 @@ private let day: TimeInterval = 86_400
     d.set(false, forKey: ContextSources.Key.screenVocabulary)
     #expect(!ContextSources(d).rememberScreenTerms)
 }
+
+// #96: where the app's profile turns learning off, `learn()` gets nothing to record.
+@Test func learningOffForTheAppRecordsNothing() {
+    var on = ContextSources()
+    on.learnScreenTerms = true
+    let profiles = [AppProfile(bundleID: "com.example.mail", off: [.learnScreenTerms])]
+    func learn(_ bundleID: String) -> [String]? {
+        let sources = AppProfiles.resolve(bundleID: bundleID, domain: nil, isPrivate: false, profiles: profiles, defaults: on).sources
+        let raw = RawInsert(request: Request(transcript: "ask Zorblat", selection: nil, context: ScreenSnapshot()),
+                            rawTranscript: "ask sorblat", boost: ["Zorblat"], sources: sources)
+        return Pipeline.termsToLearn(raw, recased: ["Quix"], inserted: "Ask Zorblat about Quix.", saved: []).map { $0.boost + $0.casing }
+    }
+    #expect(learn("com.example.notes") == ["Zorblat", "Quix"])
+    #expect(learn("com.example.mail") == nil)
+}
