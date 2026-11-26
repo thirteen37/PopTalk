@@ -148,24 +148,19 @@ public enum MLXProvider {
                 ModelCallRecorder.current?.prompt(tokens: tokens.count, shared: shared)
                 timing.info("llm \(name, privacy: .public) prefix-shared \(shared)/\(tokens.count) tok")
                 let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0)
-                let stream = if enabled {
-                    try await container.perform(nonSendable: lm) { context, lm in
-                        try MLXProvider.generate(lm, tokens, plan, entry, prefixes, parameters, context, name)
-                    }
-                } else {
-                    try await container.generate(input: lm, parameters: parameters)
+                let (stream, generation) = try await container.perform(nonSendable: lm) { context, lm in
+                    try MLXProvider.generate(lm, tokens, plan, entry, prefixes, parameters, context, name)
                 }
                 var out = "", chunks = 0
                 let limit = Pipeline.replyLimit
-                // Leaving the loop (on cancellation or the reply limit) terminates the stream, which stops generation.
-                for await g in stream {
+                reply: for await g in stream {
                     switch g {
                     case .chunk(let s):
                         out += s
                         chunks += 1
                         if let limit, Pipeline.pastReplyLimit(out, limit: limit) {
                             timing.info("llm \(name, privacy: .public) stopped at reply limit \(limit) chars after \(chunks) chunks")
-                            return out
+                            break reply
                         }
                     // Timing only (no text), for diagnosing latency: `log stream --predicate 'subsystem == "io.lyx.poptalk"'`.
                     case .info(let i):
@@ -173,6 +168,11 @@ public enum MLXProvider {
                     default: break
                     }
                 }
+                // Left early (reply limit, or cancelled on timeout), the generation task still runs its current
+                // step on the model and the KV cache. Stop it and wait, so nothing uses MLX after this returns: a
+                // process exiting right after tore MLX down under it (#119), and the next request would share the GPU.
+                generation.cancel()
+                await generation.value
                 try Task.checkCancellation()
                 return out
             }
@@ -211,9 +211,11 @@ public enum MLXProvider {
 
     /// Generation on top of a stored prompt prefix (#42): a copy of `entry`'s cache, cut back to the shared prefix,
     /// is prefilled up to `plan.snapshot` and stored again there; `generate` prefills the rest as usual. Stored
-    /// caches are only ever copied, never generated into.
+    /// caches are only ever copied, never generated into. With the cache off, `plan` is empty: a plain generation.
+    /// Returns the generation task with the stream, to await once the stream is left early (#119).
     private static func generate(_ lm: LMInput, _ tokens: [Int], _ plan: PrefixPlan, _ entry: PrefixCache.Entry?, _ prefixes: PrefixCache,
-                                 _ parameters: GenerateParameters, _ context: ModelContext, _ name: String) throws -> AsyncStream<Generation> {
+                                 _ parameters: GenerateParameters, _ context: ModelContext, _ name: String) throws
+        -> (AsyncStream<Generation>, Task<Void, Never>) {
         let cache = try entry?.cache.map { $0.copy() } ?? context.model.newCache(parameters: parameters)
         if let entry { for c in cache { c.trim(entry.tokens.count - plan.keep) } }
         var start = plan.keep
@@ -233,7 +235,14 @@ public enum MLXProvider {
             start = end
         }
         timing.info("llm \(name, privacy: .public) prefix-reused \(plan.keep)/\(tokens.count) tok")
-        return try MLXLMCommon.generate(input: LMInput(text: lm.text[start...]), cache: cache, parameters: parameters, context: context)
+        // As `MLXLMCommon.generate(input:cache:parameters:context:)`, which drops the task. Whether the prompt ends
+        // inside a reasoning block is read from the whole prompt, not the part left to prefill.
+        let iterator = try TokenIterator(input: LMInput(text: lm.text[start...]), model: context.model, cache: cache, parameters: parameters)
+        let primed = context.configuration.reasoningConfig.map {
+            ReasoningEventEmitter.promptEndsInsideReasoning(promptTokens: tokens, config: $0, tokenizer: context.tokenizer)
+        } ?? false
+        return generateTask(promptTokenCount: tokens.count - start, modelConfiguration: context.configuration, tokenizer: context.tokenizer,
+                            iterator: iterator, toolCallPolicy: parameters.toolCallPolicy, reasoningPrimedInside: primed)
     }
 
     /// Physical memory footprint of this process (what Activity Monitor shows), including MLX's Metal buffers.

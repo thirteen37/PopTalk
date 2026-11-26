@@ -171,10 +171,9 @@ The prepass, repairs and rejects are string code. Per call, median of 200, Popta
 
 The prepass, repairs and rejects together take about 0.9 ms on the short dictation and 2.3 ms on the long one, against 0.31 s mean for the cleanup itself on the replay (p90 0.49 s). The casing fix runs by default with v6, once per dictation, so its cost isn't per word: it scales with the terms and the screen. It case-folds the transcript and the screen once (about 0.35 ms of it for this screen), then searches the transcript for each term, and the screen only for the terms the transcript has. Before #121 it compiled a regex per term and scanned the whole screen with each, about 20 ms whatever the length. The skip gate is off by default and would cost more than the cleanup it skips on long dictations (#120).
 
-The `replyLimit` early stop: on the 2 history dictations `length` rejects, the cleanup takes 0.84 s and 0.56 s with it (median of 3) and 2.32 s and 2.01 s with it patched out, about 1.5 s saved per hit. Without it the replies run on to 384 and 574 characters instead of being cut at 146 and 114, and are rejected either way. The bench has no `length` hits, so it doesn't show this, and the timing log (`log stream`, category `timing`, "stopped at reply limit") isn't kept by default. A replay whose last dictation stopped early crashes at exit (#119).
+The `replyLimit` early stop: on the 2 history dictations `length` rejects, the cleanup takes 0.84 s and 0.56 s with it (median of 3) and 2.32 s and 2.01 s with it patched out, about 1.5 s saved per hit. Without it the replies run on to 384 and 574 characters instead of being cut at 146 and 114, and are rejected either way. The bench has no `length` hits, so it doesn't show this, and the timing log (`log stream`, category `timing`, "stopped at reply limit") isn't kept by default. Since #119 the provider waits for the stopped generation to finish its step before it returns (a replay whose last dictation stopped early used to crash at exit).
 
 ### Known issues
 
 - #116: `length` runs before `echoesContext`, so screen echoes are counted as `length`.
-- #119: `PoptalkBench --replay` segfaults at exit when its last cleanup stopped at the reply limit.
 - #120: the skip gate's term shortlist is slower than the cleanup it skips.
