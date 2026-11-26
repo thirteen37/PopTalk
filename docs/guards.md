@@ -45,7 +45,7 @@ The order matters. `length` runs before `echoesContext`, so a long screen echo i
 ### Other mechanisms
 
 - **`ReplyCheck`.** What a reject sees besides the reply and the transcript: the `maxCleanupLength` limit, and the screen the model saw (window title and domain, then the trimmed screen text).
-- **`maxCleanupLength` and `replyLimit` (#100).** During a dictation cleanup, `Pipeline.replyLimit` (a task-local) holds `maxCleanupLength`. The MLX and LM Studio providers check `pastReplyLimit` as the reply streams and stop generating once the reply is certainly past the limit, with a 20-character margin for what the repairs can still remove. That reply would be rejected by `length` anyway, so stopping early only saves time. An open `<think>` never stops, since it may still be stripped. Edits have no limit: they can legitimately grow.
+- **`maxCleanupLength` and `replyLimit` (#100).** During a dictation cleanup, `Pipeline.replyLimit` (a task-local) holds `maxCleanupLength`. The MLX and LM Studio providers check `pastReplyLimit` as the reply streams and stop generating once the reply is certainly past the limit, with a 20-character margin for what the repairs can still remove. That reply would be rejected by `length` anyway, so stopping early only saves time. An open `<think>` never stops, since it may still be stripped. Edits have no limit: they can legitimately grow. Nor does a cleanup with `length` off (#118), so a `-length` or model-only run scores the whole reply.
 - **Skip gate (`skipsLLM`, #75, experimental, off).** A dictation with no filler or correction cue, no spoken command left after the prepass, Parakeet's sentence casing and closing punctuation, and no near-miss of a term goes in as heard, without the model (label "Dictated", `skippedLLM`). Setting: "Skip cleanup for clean dictations"; `POPTALK_SKIP_LLM=1` forces it on.
 - **Timeout (#3).** The cleanup has 4 s plus 20 ms per word. A timeout, or any other provider error, inserts the pre-passed transcript as a raw fallback with no `rejectedBy`.
 - **Model loading (#31, #39).** If the model isn't loaded yet, the provider throws `ModelLoading` and the pre-passed transcript goes in labelled "Dictated (raw) · model loading". The result is `degraded`, so the overlay offers **clean up now** once the model is ready, and live preview doesn't reuse it.
@@ -61,7 +61,7 @@ The order matters. `length` runs before `echoesContext`, so a long screen echo i
 
 `--guards` takes a comma-separated list of `-name`, where a name is any of `Pipeline.guardNames` or a whole list: `-prepass`, `-repairs`, `-rejects`. It works in bench mode and in `--replay` (`scripts/replay.zsh --guards`). Result files get a `-guards` suffix, or `-model` when every repair and reject is off. `training/bench.zsh` runs the model-only pass with `--guards -repairs,-rejects`; it keeps the prepass, which shapes what the model is asked.
 
-Turning `length` off doesn't turn off the `replyLimit` early stop, so a `-length` or model-only run still scores a reply cut at the limit (#118).
+Turning `length` off also turns off the `replyLimit` early stop (#118), so a `-length` or model-only run scores the whole reply. Before #118 it scored a reply cut at the limit; on the bench that changed nothing, since no reply there reaches the limit (`d`, `e`, `h`, `s`, guards on and model only: identical outputs before and after, [`bench/results/replylimit-118/`](../bench/results/replylimit-118/)).
 
 ### Edits
 
@@ -176,6 +176,5 @@ The `replyLimit` early stop: on the 2 history dictations `length` rejects, the c
 ### Known issues
 
 - #116: `length` runs before `echoesContext`, so screen echoes are counted as `length`.
-- #118: `--guards -length` and the model-only pass still stop at the reply limit, so they score a cut reply.
 - #119: `PoptalkBench --replay` segfaults at exit when its last cleanup stopped at the reply limit.
 - #120: the skip gate's term shortlist is slower than the cleanup it skips.
