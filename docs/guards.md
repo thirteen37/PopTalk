@@ -44,7 +44,24 @@ The order matters for the `rejectedBy` count, not for what is inserted: any reje
 
 ### Other mechanisms
 
-- **`ReplyCheck`.** What a reject sees besides the reply and the transcript: the `maxCleanupLength` limit, and the screen the model saw (window title and domain, then the trimmed screen text).
+- **`ReplyCheck`.** What a reject sees besides the reply and the transcript: the `maxCleanupLength` limit, and the screen (window title and domain, then the trimmed screen text). It is the whole trimmed screen, also for a short dictation whose prompt left the screen text out (below).
+- **Short dictations get no screen text (#116).** A dictation of at most `Pipeline.shortDictationWords` (5) words after the prepass gets an empty `<screen>` in its prompt (`Pipeline.cleanupContext`): the app, window title, domain and `<vocabulary>` stay, the screen text doesn't. Over long terminal screens, E2B v6 copied the screen instead of cleaning so short a dictation. Only the prompt changes: the casing fix, boost terms, learned terms and `echoesContext` still use the whole screen. The tag structure the fine-tune was trained on is unchanged, since a dictation with no screen context already gets an empty `<screen>`. Edits keep the screen.
+
+  Picked on the replay (492 dictations, 157 of them 5 words or fewer, E2B v6), counts only. Each candidate against main, which had 3 raw fallbacks (2 `echoesContext` at 4 and 8 words, 1 `dropsContent`):
+
+  | Candidate | Raw (echo) | Differ, ≤ N / > N | p50 / p90, ≤ N |
+  | --- | --- | --- | --- |
+  | main | 3 (2) | | 0.18–0.22 s / 0.23–0.29 s |
+  | No screen text, N = 3 | 3 (2) | 6 / 0 | 0.13 / 0.17 s |
+  | **No screen text, N = 5** | **2 (1)** | **20 / 4** | **0.12 / 0.15 s** |
+  | No screen text, N = 6 | 2 (1) | 25 / 5 | 0.14 / 0.18 s |
+  | No screen text, N = 8 | 1 (0) | 34 / 7 | 0.15 / 0.19 s |
+  | 500 characters nearest the cursor, N = 5 | 2 (1) | 19 / 4 | 0.18 / 0.22 s |
+  | 1,000 characters nearest the cursor, N = 5 | 4 (3) | 17 / 4 | 0.21 / 0.29 s |
+  | 500 characters nearest the cursor, N = 8 | 1 (0) | 30 / 5 | 0.20 / 0.25 s |
+  | Top 20 screen terms instead of the text, N = 5 | 3 (1) | 20 / 4 | 0.17 / 0.21 s |
+
+  N = 8 removes both echoes but regresses the bench: with no screen text `d-long-ocr-thread`, `d-long-emoji-utf16` and `h-d-names-7` go from 3/3 to 0/3, and with 500 characters `d-long-emoji-utf16` and `h-d-names-7` do. They are 7- and 8-word dictations that need a name from the screen. No bench case with screen text has 6 words or fewer, so N = 5 leaves the bench unchanged (`d`, `e`, `s`, `h`, guards on and model only: identical outputs to main, [`bench/results/shortscreen-116/`](../bench/results/shortscreen-116/)). A nearby window echoed more as it grew, and a term list added a `dropsContent` fallback. The differing outputs over N have the same prompt as on main; they most likely come from the prompt cache, since the dictation before them had a different prompt. Two main runs back to back are identical. Latency is noisy between runs (main's p50 ranged 0.24–0.30 s across runs), but the short dictations' prompts are shorter.
 - **`maxCleanupLength` and `replyLimit` (#100).** During a dictation cleanup, `Pipeline.replyLimit` (a task-local) holds `maxCleanupLength`. The MLX and LM Studio providers check `pastReplyLimit` as the reply streams and stop generating once the reply is certainly past the limit, with a 20-character margin for what the repairs can still remove. That reply would be rejected by `length` anyway, so stopping early only saves time. An open `<think>` never stops, since it may still be stripped. Edits have no limit: they can legitimately grow. Nor does a cleanup with `length` off (#118), so a `-length` or model-only run scores the whole reply.
 - **Skip gate (`skipsLLM`, #75, experimental, off).** A dictation with no filler or correction cue, no spoken command left after the prepass, Parakeet's sentence casing and closing punctuation, at most 40 words, and no near-miss of a term goes in as heard, without the model (label "Dictated", `skippedLLM`). Setting: "Skip cleanup for clean dictations"; `POPTALK_SKIP_LLM=1` forces it on. The checks run in that order, cheapest first, and `skipGateStop` names the first that keeps the model: `casing`, `punctuation`, `cue`, `command`, `length`, `term`. The 40-word cap (#120) bounds the term shortlist, the only costly check. On real history every dictation over 40 words had already stopped at a cue (#122). The shortlist skips pairs of a run and a term that can't reach 0.75 by length alone, and computes each term's strings once per call. Its output is unchanged (see What they cost).
 - **Timeout (#3).** The cleanup has 4 s plus 20 ms per word. A timeout, or any other provider error, inserts the pre-passed transcript as a raw fallback with no `rejectedBy`.
@@ -96,7 +113,7 @@ flowchart TD
 3. The casing fix and, if on, sound-alike terms.
 4. The prepass, in order: `spokenFormatting`, `spokenCancel`, `spokenNumbers`. If everything was cancelled: **nothing**.
 5. The skip gate, if on. If `skipsLLM` holds: the pre-passed transcript goes in, **skipped LLM**.
-6. The cleanup model, with `replyLimit` set and the timeout. Model still loading: **raw, model loading** (degraded). Timeout or error: **raw on timeout**.
+6. The cleanup model, with `replyLimit` set and the timeout. A dictation of 5 words or fewer gets no screen text in its prompt (#116). Model still loading: **raw, model loading** (degraded). Timeout or error: **raw on timeout**.
 7. The repairs, in order: `stripChatter`, `restoreMarks`, `openingCue`.
 8. The rejects, in order: `empty`, `echoesContext`, `length`, `dropsContent`, `dropsProtected`. The first that holds: **raw on reject**, with `rejectedBy`.
 9. Otherwise: the **cleaned** reply goes in.
@@ -147,7 +164,7 @@ On the bench, two repairs carry the whole gain. `dropsContent` catches a real fa
 | `stripChatter`, `restoreMarks` (repairs) | 0 | |
 | Timeouts | 0 | |
 
-A repair counts when it changed the reply beyond surrounding whitespace, whether or not the reply was then used (`PipelineResult.repaired`, the replay's `chatter`, `marks` and `cue` columns). So 3 of 492 real dictations went in raw, and the guards changed 4 more. #116 found that `length` hits are mostly screen echoes over long terminal screens, counted as `length` because it ran first; `echoesContext` runs before it now.
+A repair counts when it changed the reply beyond surrounding whitespace, whether or not the reply was then used (`PipelineResult.repaired`, the replay's `chatter`, `marks` and `cue` columns). So 3 of 492 real dictations went in raw, and the guards changed 4 more. #116 found that `length` hits are mostly screen echoes over long terminal screens, counted as `length` because it ran first; `echoesContext` runs before it now. Since the short-dictation rule (#116 step 2), replayed back to back with main: 2 raw fallbacks, not 3 (`echoesContext` 2 → 1, `dropsContent` 1 → 1), no new ones, `openingCue` 4 and no timeouts or stray markers either way; 24 outputs differ, 20 of them dictations of 5 words or fewer.
 
 ### What they cost
 
@@ -183,4 +200,4 @@ The `replyLimit` early stop: on the 2 history dictations `length` rejects, the c
 
 ### Known issues
 
-- #116: short dictations over long terminal screens still get screen echoes. They now count as `echoesContext`, not `length`, and still go in raw. Trimming the screen or a retrain is still open.
+- #116: dictations of 6 words or more over long screens can still echo the screen (1 of 492 on the replay, 8 words). They count as `echoesContext` and go in raw. A wider no-screen rule costs bench cases that need a name from the screen; a retrain with such cases is open (#123).
