@@ -7,7 +7,7 @@ dir=$(mktemp -d "${TMPDIR:-/tmp}/replay-test.XXXXXX")
 trap 'rm -rf -- $dir' EXIT
 
 # req ID TRANSCRIPT USER-MESSAGE [SELECTION]
-req() { jq -nc --arg id $1 --arg t $2 --arg u $3 --arg sel "${4:-}" '{type: "request", id: $id, at: "2026-11-25T10:00:0\($id[-1:])Z",
+req() { jq -nc --arg id $1 --arg t $2 --arg u $3 --arg sel "${4:-}" '{type: "request", id: $id, at: "2026-11-25T10:00:0\($id[-1:])Z", bundleID: "com.example.app\($id)",
   transcript: $t, selection: (if $sel == "" then null else $sel end),
   messages: [{role: "system", content: "sys"}, {role: "user", content: $u}]}' }
 long=${(l:3000::o:)${:-}}$'\n'${(l:3500::a:)${:-}}
@@ -24,10 +24,10 @@ long=${(l:3000::o:)${:-}}$'\n'${(l:3500::a:)${:-}}
 } > $dir/history-B.jsonl
 
 zsh ./replay.zsh build $dir/history.jsonl $dir/history-B.jsonl > $dir/all.jsonl
-diff =(jq -c '{id, skipped, app, window, vocabulary, ax: (.ax | length), ocr: (.ocr | length)}' $dir/all.jsonl) - <<'EOF'
-{"id":"1","skipped":null,"app":"Chat","window":"Say \"hi\" & more","vocabulary":["Acme","Bo & Co"],"ax":7,"ocr":0}
-{"id":null,"skipped":true,"app":null,"window":null,"vocabulary":null,"ax":0,"ocr":0}
-{"id":"5","skipped":null,"app":"Mail","window":"M","vocabulary":[],"ax":3500,"ocr":3000}
+diff =(jq -c '{id, skipped, app, bundleID, window, vocabulary, ax: (.ax | length), ocr: (.ocr | length)}' $dir/all.jsonl) - <<'EOF'
+{"id":"1","skipped":null,"app":"Chat","bundleID":"com.example.app1","window":"Say \"hi\" & more","vocabulary":["Acme","Bo & Co"],"ax":7,"ocr":0}
+{"id":null,"skipped":true,"app":null,"bundleID":null,"window":null,"vocabulary":null,"ax":0,"ocr":0}
+{"id":"5","skipped":null,"app":"Mail","bundleID":"com.example.app5","window":"M","vocabulary":[],"ax":3500,"ocr":3000}
 EOF
 diff =(jq -r 'select(.id == "1") | .ax' $dir/all.jsonl) =(print 'a <b> c')
 
