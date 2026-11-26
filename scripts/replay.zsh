@@ -13,6 +13,7 @@
 #   raw      raw transcript inserted ("(raw)" label) though the model replied: a guard rejected the reply
 #   len content protect echo notext   raw split by the guard that rejected the reply: maxCleanupLength,
 #            dropsContent, dropsProtected, echoesContext, or nothing left after stripping chatter
+#   chatter marks cue   replies (used or not) that stripChatter, restoreMarks or openingCue changed (#117)
 #   timeout  "(raw)" with no reply: the model timed out or failed
 #   stray    output has a list line ("- ", "* ", "1. ") and the transcript has none (spoken lists count too)
 #   empty    Nothing inserted, or blank output
@@ -62,14 +63,15 @@ counts() {
     | def raws: map(select(.label | contains("(raw)")) | .id);
       ($runs[0] | raws) as $firstRaw
     | def by($g): map(select(.rejectedBy == $g)) | length;
-      ["config", "set", "n", "raw", "len", "content", "protect", "echo", "notext", "timeout", "stray", "empty", "diff", "raw+", "raw-", "mean", "p50", "p90"],
+      def fixed($g): map(select(.repaired // [] | index($g))) | length;
+      ["config", "set", "n", "raw", "len", "content", "protect", "echo", "notext", "chatter", "marks", "cue", "timeout", "stray", "empty", "diff", "raw+", "raw-", "mean", "p50", "p90"],
       ($runs | to_entries[] | .key as $k | .value
        | (["all", .], (if $subset == "" then empty else ["subset", map(select($t[.id] // "" | test($subset; "i")))] end))
        | .[1] as $r | ($r | map(.seconds) | sort) as $s
        | [$names[$k], .[0], ($r | length),
           ($r | map(select((.label | contains("(raw)")) and .reply != null)) | length),
           ($r | by("length")), ($r | by("dropsContent")), ($r | by("dropsProtected")), ($r | by("echoesContext")),
-          ($r | by("empty")),
+          ($r | by("empty")), ($r | fixed("stripChatter")), ($r | fixed("restoreMarks")), ($r | fixed("openingCue")),
           ($r | map(select((.label | contains("(raw)")) and .reply == null)) | length),
           ($r | map(select((.output | lists) and ($t[.id] // "" | lists | not))) | length),
           ($r | map(select(.label == "Nothing" or (.output | test("^\\s*$")))) | length),

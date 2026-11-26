@@ -251,11 +251,12 @@ for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-pro
 // History replay: runs dictation requests through Pipeline with an MLX cleanup model, as the app would.
 //   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID [--cleanup-timeout S]   (S: the base deadline, app default 4)
 //     [--dictation-prompt-file F] [--guards -name,…]   (scripts/replay.zsh: the ship check)
-// in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, rejectedBy?, seconds}.
+// in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, rejectedBy?, repaired, seconds}
+// (`repaired`: the names of the repairs that changed the reply, #117).
 // Prints counts only: the inputs and outputs are history content and stay in the files.
 if let i = args.firstIndex(of: "--replay") {
     struct In: Decodable { var id, transcript, app, window, ax, ocr: String; var vocabulary: [String] }
-    struct Out: Encodable { var id, label, output: String; var reply, user, rejectedBy: String?; var seconds: Double }
+    struct Out: Encodable { var id, label, output: String; var reply, user, rejectedBy: String?; var repaired: [String]; var seconds: Double }
     guard i + 2 < args.count, let model = opt("--cleanup-model") else { fail("usage: PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID") }
     do {
         let lines = try String(contentsOfFile: args[i + 1], encoding: .utf8).split(separator: "\n")
@@ -286,7 +287,7 @@ if let i = args.firstIndex(of: "--replay") {
             default: ("other", "")
             }
             let o = Out(id: r.id, label: label, output: output, reply: calls.call?.reply,
-                        user: calls.call?.messages.last?.content, rejectedBy: res.rejectedBy, seconds: Date().timeIntervalSince(t))
+                        user: calls.call?.messages.last?.content, rejectedBy: res.rejectedBy, repaired: res.repaired, seconds: Date().timeIntervalSince(t))
             try out.write(contentsOf: JSONEncoder().encode(o) + Data([0x0A]))
             if (n + 1) % 25 == 0 { print("\(n + 1)/\(lines.count) \(Int(Date().timeIntervalSince(start)))s footprint \(MLXProvider.footprintMB()) MB") }
         }

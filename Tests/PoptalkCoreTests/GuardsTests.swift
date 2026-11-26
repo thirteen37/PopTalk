@@ -18,6 +18,19 @@ private func dictate(_ transcript: String, reply: String, off: Set<String> = [])
     return await p.run(Request(transcript: transcript, selection: nil, context: ScreenSnapshot()))
 }
 
+// #117: which repairs changed the reply, for replay counts; trimming alone doesn't count.
+@Test func repairedNamesTheRepairsThatChangedTheReply() async {
+    #expect(await dictate("Send the report by Friday.", reply: "Send the report by Friday.\n").repaired == [])
+    #expect(await dictate("Send the report by Friday.", reply: "<think>ok</think>Send the report by Friday.").repaired == ["stripChatter"])
+    let r = await dictate("No, send the report by Friday.", reply: "<think></think>Send the report by Friday.")
+    #expect(r.repaired == ["stripChatter", "openingCue"])
+    #expect(r.outcome == .insert("No, send the report by Friday.", label: "Dictated"))
+    let rejected = await dictate("Send the report by Friday.", reply: "<think></think>" + String(repeating: "lorem ipsum dolor ", count: 6))
+    #expect(rejected.rejectedBy == "length")
+    #expect(rejected.repaired == ["stripChatter"])
+    #expect(await dictate("Send the report by Friday.", reply: "<think></think>Send it.", off: ["stripChatter"]).repaired == [])
+}
+
 @Test func turnedOffGuardIsSkipped() async {
     let said = "Send the report by Friday.", long = String(repeating: "lorem ipsum dolor ", count: 6)
     #expect(await dictate(said, reply: long).rejectedBy == "length")

@@ -36,6 +36,8 @@ public struct PipelineResult: Equatable, Sendable {
     /// The guard that turned a dictation reply into a raw fallback: empty, length, dropsContent, dropsProtected
     /// or echoesContext (replay counts); nil when there was no reply or it was used.
     public var rejectedBy: String?
+    /// The `Pipeline.repairs` that changed a dictation reply beyond surrounding whitespace, in order (replay counts).
+    public var repaired: [String] = []
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
                 modelAction: String? = nil, skippedLLM: Bool = false) {
@@ -137,12 +139,19 @@ public struct Pipeline: Sendable {
             }
             catch { reply = nil }
             guard let reply else { return result(.insert(space + transcript, label: "Dictated (raw)")) }
-            let cleaned = Self.repairs.filter { !off.contains($0.name) }.reduce(reply) { $1.run($0, transcript) }
+            var repaired: [String] = []
+            let cleaned = Self.repairs.filter { !off.contains($0.name) }.reduce(reply) { out, step in
+                let next = step.run(out, transcript)
+                if next.trimmingCharacters(in: .whitespacesAndNewlines) != out.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    repaired.append(step.name)
+                }
+                return next
+            }
             let check = ReplyCheck(limit: limit, screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context))
             let rejectedBy = Self.rejects.first { !off.contains($0.name) && $0.test(cleaned, transcript, check) }?.name
-            guard let rejectedBy else { return result(.insert(space + cleaned, label: "Dictated")) }
-            var res = result(.insert(space + transcript, label: "Dictated (raw)"))
+            var res = result(rejectedBy == nil ? .insert(space + cleaned, label: "Dictated") : .insert(space + transcript, label: "Dictated (raw)"))
             res.rejectedBy = rejectedBy
+            res.repaired = repaired
             return res
         }
 

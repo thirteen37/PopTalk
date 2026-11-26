@@ -32,15 +32,16 @@ EOF
 diff =(jq -r 'select(.id == "1") | .ax' $dir/all.jsonl) =(print 'a <b> c')
 
 jq -c 'select(.skipped | not)' $dir/all.jsonl > $dir/in.jsonl
-out() { jq -nc --arg id $1 --arg l $2 --arg o $3 --argjson r $4 --argjson s $5 --arg g "${6:-}" \
-  '{id: $id, label: $l, output: $o, reply: $r, seconds: $s, rejectedBy: (if $g == "" then null else $g end)}' }
+out() { jq -nc --arg id $1 --arg l $2 --arg o $3 --argjson r $4 --argjson s $5 --arg g "${6:-}" --arg f "${7:-}" \
+  '{id: $id, label: $l, output: $o, reply: $r, seconds: $s, rejectedBy: (if $g == "" then null else $g end),
+    repaired: ($f | split(",") | map(select(. != "")))}' }
 { out 1 Dictated 'Hello there.' '"x"' 1; out 5 'Dictated (raw)' 'scratch that buy eggs' null 3 } > $dir/a.jsonl
-{ out 1 'Dictated (raw)' $'- Hello\n- there' '"x"' 2 dropsContent; out 5 Dictated 'Buy eggs.' '"x"' 4 } > $dir/b.jsonl
+{ out 1 'Dictated (raw)' $'- Hello\n- there' '"x"' 2 dropsContent stripChatter,restoreMarks; out 5 Dictated 'Buy eggs.' '"x"' 4 '' openingCue } > $dir/b.jsonl
 diff =(zsh ./replay.zsh counts --subset 'scratch that' $dir/in.jsonl $dir/a.jsonl $dir/b.jsonl | awk '{$1=$1; print}') - <<'EOF'
-config set n raw len content protect echo notext timeout stray empty diff raw+ raw- mean p50 p90
-a.jsonl all 2 0 0 0 0 0 0 1 0 0 0 0 0 2 1 3
-a.jsonl subset 1 0 0 0 0 0 0 1 0 0 0 0 0 3 3 3
-b.jsonl all 2 1 0 1 0 0 0 0 1 0 2 1 1 3 2 4
-b.jsonl subset 1 0 0 0 0 0 0 0 0 0 1 0 1 4 4 4
+config set n raw len content protect echo notext chatter marks cue timeout stray empty diff raw+ raw- mean p50 p90
+a.jsonl all 2 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 2 1 3
+a.jsonl subset 1 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 3 3 3
+b.jsonl all 2 1 0 1 0 0 0 1 1 1 0 1 0 2 1 1 3 2 4
+b.jsonl subset 1 0 0 0 0 0 0 0 0 1 0 0 0 1 0 1 4 4 4
 EOF
 print "replay: ok"
