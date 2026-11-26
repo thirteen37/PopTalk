@@ -133,11 +133,11 @@ public struct Pipeline: Sendable {
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
-            // Providers stop generating once a reply is certainly past it (#100).
+            // Providers stop generating once a reply is certainly past it (#100), unless `length` is off (#118).
             let limit = Self.maxCleanupLength(transcript)
             let reply: String?
             do {
-                reply = try await Self.$replyLimit.withValue(limit) {
+                reply = try await Self.$replyLimit.withValue(off.contains("length") ? nil : limit) {
                     try await complete(cleanupModel, messages, false, cleanupTimeout + 0.02 * Double(words))
                 }
             }
@@ -248,7 +248,8 @@ extension Pipeline {
     /// The longest dictation cleanup the chatter guard accepts, in characters after `stripChatter` and `restoreMarks`.
     public static func maxCleanupLength(_ transcript: String) -> Int { Int(Double(transcript.count) * 1.5 + 40) }
 
-    /// `maxCleanupLength` during a dictation cleanup's `complete`, nil otherwise (edits can legitimately grow):
+    /// `maxCleanupLength` during a dictation cleanup's `complete`, nil otherwise (edits can legitimately grow, and
+    /// with the `length` guard off the whole reply is wanted):
     /// providers stop generating once `pastReplyLimit` holds, since that reply falls back to raw anyway (#100).
     @TaskLocal public static var replyLimit: Int?
 
