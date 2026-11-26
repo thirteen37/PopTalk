@@ -3,7 +3,8 @@ import Testing
 @testable import PoptalkCore
 
 // #117: per-step cost of the dictation string code, on invented text, for docs/guards.md. Opt-in, since it
-// times rather than checks: POPTALK_GUARD_TIMING=1 swift test -c release -Xswiftc -enable-testing --filter guardTiming
+// times rather than checks: `POPTALK_GUARD_TIMING=1 swift test --filter guardTiming` (debug). The doc's numbers are
+// -O: this body without the Testing lines, compiled with Sources/PoptalkCore/*.swift (docs/guards.md, Performance).
 @Test(.enabled(if: ProcessInfo.processInfo.environment["POPTALK_GUARD_TIMING"] == "1"))
 func guardTiming() {
     let sentence = "so the quarterly report for Acme Corp is due on Friday and we need twenty five percent more data from the "
@@ -18,15 +19,18 @@ func guardTiming() {
             return Double(DispatchTime.now().uptimeNanoseconds - t) / 1000
         }.sorted()[n / 2]
     }
-    for (label, words) in [("30 words", 1), ("150 words", 5)] {
+    for (label, words) in [("38 words", 1), ("190 words", 5)] {
         let said = String(repeating: sentence, count: words)
+        let clean = String(repeating: "The quarterly report for Acme Corp is due on Friday, and the speech team sends the data before then. ",
+                           count: 2 * words).trimmingCharacters(in: .whitespaces)
         let transcript = Pipeline.dictationPrepass(said)
         let reply = "<think></think>" + transcript.replacingOccurrences(of: "sorry, the speech team, ", with: "")
         let check = Pipeline.ReplyCheck(limit: Pipeline.maxCleanupLength(transcript), screen: screen)
         var rows: [(String, Double)] = [
             ("stripHesitations", median(200) { _ = Pipeline.stripHesitations(said) }),
             ("recaseTerms", median(200) { _ = Pipeline.recaseTerms(said, terms: terms, screen: screen) }),
-            ("skipsLLM", median(200) { _ = Pipeline.skipsLLM(said: said, transcript: transcript, terms: terms) }),
+            // On a clean dictation: a cue ("sorry") would return before the term shortlist.
+            ("skipsLLM", median(9) { _ = Pipeline.skipsLLM(said: clean, transcript: clean, terms: terms) }),
         ]
         rows += Pipeline.prepass.map { s in (s.name, median(200) { _ = s.run(said) }) }
         rows += Pipeline.repairs.map { s in (s.name, median(200) { _ = s.run(reply, transcript) }) }

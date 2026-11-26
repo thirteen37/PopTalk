@@ -18,7 +18,7 @@ The detailed reference: what each key does, how a dictation flows through the pi
 - **Terminals.** In Ghostty, Terminal, iTerm2, kitty, WezTerm, Alacritty, Warp, Hyper and Tabby, apps built on Ghostty's library (such as Herdr), and any app that registers as a shell for Unix executables, undo removes the dictated text with backspaces, since ⌘Z isn't a text undo there. It only works if you haven't typed since, and not for dictations containing a line break.
 - **Spoken formatting.** "quote … unquote", "open paren … close paren", "new line" and "new paragraph" are applied in code. Spoken numbers become digits where unambiguous ("twenty five percent" → 25%, "three thirty pm" → 3:30 PM); zero to nine stay words in prose.
 - **While models load.** If the language model isn't ready yet, dictation inserts the raw transcript, and the overlay offers **clean up now** once it is: tap right ⌥. Edits need the model: until it's ready they leave the selection unchanged.
-- **Safety net.** If the cleanup drops content (sentences, quoted or bracketed text, line breaks), PopTalk inserts the raw transcript instead.
+- **Safety net.** If the cleanup drops content (sentences, quoted or bracketed text, line breaks), runs far longer than what you said, or copies the screen, PopTalk inserts the raw transcript instead. Each check, its order and what it costs and buys are in [Dictation guards](guards.md).
 
 The hotkey, from press to the end of the undo window:
 
@@ -66,7 +66,7 @@ stateDiagram-v2
     Transcribe --> which
     which --> Edit: text selected, or tap-then-hold (the last insert)
     which --> Cleanup: otherwise
-    Cleanup --> Raw: model still loading, or cleanup dropped content
+    Cleanup --> Raw: model still loading or too slow, or a guard rejected the reply
     Cleanup --> Apply
     Raw --> Apply
     Edit --> Apply
@@ -156,7 +156,7 @@ sequenceDiagram
     else dictation
         App->>LLM: cleanup prompt, cached prefix
         LLM-->>App: cleaned text
-        Note over App: safety net, raw transcript if content was dropped
+        Note over App: guards (docs/guards.md), raw transcript if a check fails
     end
     App->>Field: paste
     App->>Overlay: heard and inserted, double-tap right ⌥ to undo
