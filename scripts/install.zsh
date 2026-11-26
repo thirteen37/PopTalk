@@ -15,5 +15,7 @@ gone 100 || { pkill -9 -x Poptalk || true; gone 20 } || { print -u2 "Poptalk did
 # The bundle was Poptalk.app before #65.
 rm -rf -- /Applications/Poptalk.app /Applications/PopTalk.app
 cp -R $app /Applications/
-open /Applications/PopTalk.app
+# -n: LaunchServices can keep the dead app registered after its pid is gone, and a plain open then sends it a
+# reopen that fails with -600 (#107). A new instance skips the lookup; the wait above makes it the only one.
+open -n /Applications/PopTalk.app
 print "Installed /Applications/PopTalk.app. On first run grant Microphone, Accessibility and Screen Recording (menu bar ⟶ PopTalk icon shows status)."
