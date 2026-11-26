@@ -34,7 +34,8 @@ enum ScreenContext {
         let focused: AXUIElement? = attr(axApp, kAXFocusedUIElementAttribute)
         let isPrivate = CapturePolicy.isPrivateWindow(bundleID: app.bundleIdentifier, title: snap.windowTitle)
         // The page's host, for matching and (if the profile allows) the prompt; not looked up when neither can use it.
-        let wantsDomain = !isPrivate && (defaults.webDomain || profiles.contains { !$0.domain.isEmpty })
+        let wantsDomain = AppProfiles.needsDomain(bundleID: app.bundleIdentifier, isPrivate: isPrivate,
+                                                  profiles: profiles, defaults: defaults)
         let domain = wantsDomain ? focused.flatMap(webDomain) : nil
         let profile = resolve(domain, isPrivate, false)
         let sources = profile.sources  // #40, #96: a disabled source is never read
