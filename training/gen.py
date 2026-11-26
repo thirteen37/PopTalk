@@ -1913,6 +1913,87 @@ def check_keep7():
           + ", ".join(f"{w} {leads[w]}" for w in ("no", "sorry", "wait", "actually", "so", "well", "okay")))
 
 
+# ---------- #125: grouped spoken numbers ----------
+# The prepass leaves numbers said in groups as words ("one twenty", "twenty twenty six", "at three thirty"); the
+# model writes them per #125's table. Rule targets: 120, 2026, 205, at 3:30, $12.50, number 456; digit runs with no
+# cue and three or more groups stay as said. `digits` lists the numbers the target writes that the transcript says
+# as words, so split's prepass check lets them through.
+
+NUMG_N = {"pair": 100, "year": 90, "oh": 40, "time": 90, "money": 30, "cue": 70, "count": 25, "groups": 18}
+_UNITS = "one two three four five six seven eight nine".split()
+_TEENS = "ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+_TENS = "twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def said_num(n):
+    """1–99 as words: 7 → "seven", 45 → "forty five"."""
+    return (_UNITS[n - 1] if n < 10 else _TEENS[n - 10] if n < 20
+            else _TENS[n // 10 - 2] + (f" {_UNITS[n % 10 - 1]}" if n % 10 else ""))
+
+
+def numg_value(r, kind):
+    """(said, written) for one #125 form."""
+    if kind == "pair":  # "one twenty" → 120, "twelve fifty" → 1250, "twenty five fifty" → 2550
+        a = r.choice([r.randint(1, 9)] * 14 + [r.randint(10, 19)] * 5 + [r.choice([n for n in range(21, 100) if n % 10])])
+        b = r.randint(10, 99)
+        return f"{said_num(a)} {said_num(b)}", f"{a}{b:02d}"
+    if kind == "year":  # "nineteen ninety nine" → 1999, "twenty twenty six" → 2026, "twenty oh five" → 2005
+        a, b = r.choice([(19, r.randint(10, 99)), (19, r.randint(50, 99)), (20, r.randint(10, 39)), (20, r.randint(10, 29)),
+                         (r.choice([19, 20]), r.randint(1, 9))])
+        return f"{said_num(a)} {'oh ' + said_num(b) if b < 10 else said_num(b)}", f"{a}{b:02d}"
+    if kind == "oh":  # "two oh five" → 205
+        a, b = r.choice([r.randint(1, 9)] * 4 + [r.randint(10, 12)]), r.randint(1, 9)
+        return f"{said_num(a)} oh {said_num(b)}", f"{a}0{b}"
+    if kind == "time":  # after "at": "three thirty" → 3:30, "seven oh five" → 7:05
+        h, m = r.randint(1, 12), r.choice([r.randint(10, 59)] * 6 + [r.randint(1, 9)])
+        return f"{said_num(h)} {'oh ' + said_num(m) if m < 10 else said_num(m)}", f"{h}:{m:02d}"
+    if kind == "money":  # "twelve dollars fifty" → $12.50
+        d, c = r.randint(1, 99), r.randint(10, 99)
+        return f"{said_num(d)} dollars {said_num(c)}", f"${d}.{c}"
+    ds = [r.randint(1, 9)] + [r.choice([0] + list(range(1, 10))) for _ in range(r.choice([3, 3, 3, 4, 4, 2, 5]) - 1)]
+    return " ".join("zero" if d == 0 else _UNITS[d - 1] for d in ds), "".join(map(str, ds))  # cue: "four five six" → 456
+
+
+def numg_dictation():
+    checker, r, out, seen = Checker(), R("d-numgroup"), [], set()
+    for kind, n in NUMG_N.items():
+        k = 0
+        for _ in range(50 * n):
+            if k == n:
+                break
+            if kind in L.NUMG_KEEP_T:
+                said = target = r.choice(L.NUMG_KEEP_T[kind])
+                digits = []
+            else:
+                tmpl, (x, y) = r.choice(L.NUMG_T[kind]), numg_value(r, kind)
+                said, target, digits = tmpl.format(X=x), tmpl.format(X=y), [y]
+            v = r.random()  # as Parakeet punctuates it, bare, or after an "uh"/"um" (never inside the number)
+            t = said if v < 0.4 else lower_transcript(said) if v < 0.8 else r.choice(["Uh, ", "Um, "]) + decap(said)
+            if t in seen:
+                continue
+            ctx = m6_screen(r, avoid=[target]) if r.random() < 0.4 else unrelated_context(r)
+            it = {"id": f"d-numgroup-{kind}-{k}", "cat": "d-numgroup", "transcript": t, "context": ctx, "target": target,
+                  "digits": digits}
+            if not checker.reason(it):
+                seen.add(t)
+                out.append(it)
+                k += 1
+    return out
+
+
+def check_numgroup():
+    """`gen.py check`: each #125 form is built as planned; transcripts say the number as words, targets write it."""
+    items, checker = numg_dictation(), Checker()
+    kinds = Counter(it["id"].rsplit("-", 1)[0].removeprefix("d-numgroup-") for it in items)
+    assert all(kinds[k] >= 0.9 * n for k, n in NUMG_N.items()), kinds
+    for it in items:
+        t, y = it["transcript"], it["target"]
+        assert not checker.reason(it) and not re.search(r"\d", t) and y[0].isupper() and y[-1] in ".!?", it
+        assert all(d in y for d in it["digits"]) and (it["digits"] or m6_words(t) == norm(y)), it
+    assert said_num(7) == "seven" and said_num(45) == "forty five" and said_num(19) == "nineteen"
+    print("numgroup check ok: " + ", ".join(f"{kinds[k]} {k}" for k in NUMG_N))
+
+
 SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
@@ -2079,15 +2160,16 @@ def list_keeps_casing(it):
     return all(re.sub(r"^(- |\d+\. )", "", l) in it["selection"] for l in lines)
 
 
-def prepass_mismatch(row, cat):
+def prepass_mismatch(row, cat, digits=()):
     """Why a rendered dictation row's target doesn't carry the digits and marks the pre-pass left in its
-    transcript, or None (#48, #59). Spoken lists add line breaks and numbered lines, so those are allowed."""
+    transcript, or None (#48, #59). Spoken lists add line breaks and numbered lines, so those are allowed, and so are
+    the item's `digits`: numbers said in groups that the model writes (#125)."""
     m = re.search(r"<transcript>(.*)</transcript>", row["messages"][1]["content"], re.S)
     if not m or row["messages"][-1]["role"] != "assistant":
         return None
     said, target = html.unescape(m.group(1)), row["messages"][-1]["content"]
     nums = lambda s: Counter(re.findall(r"(?<![\w.])\d+(?:[.:,]\d+)*(?!\w)", re.sub(r"(?m)^\d+\. ", "", s)))
-    if extra := nums(target) - nums(said):
+    if extra := nums(target) - nums(said) - nums(" ".join(digits)):
         return f"target digits {sorted(extra)} not in transcript {said!r}"
     for mark in "“”()" + ("" if cat == "d-list" else "\n"):
         if target.count(mark) != said.count(mark):
@@ -2155,10 +2237,11 @@ def build(out, items, skipped, manifest):
 
 def split(out, samples):
     """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match."""
-    cats = {i["id"]: i["cat"] for i in jl(out / "items.jsonl")}
+    items = {i["id"]: i for i in jl(out / "items.jsonl")}
+    cats = {k: i["cat"] for k, i in items.items()}
     rows, dropped = [], {}
     for row in jl(out / "rendered.jsonl"):
-        if (why := prepass_mismatch(row, cats[row["id"]])):
+        if (why := prepass_mismatch(row, cats[row["id"]], items[row["id"]].get("digits", ()))):
             dropped[cats[row["id"]]] = dropped.get(cats[row["id"]], 0) + 1
             print(f"pre-pass mismatch {row['id']}: {why}", file=sys.stderr)
         else:
@@ -2179,6 +2262,7 @@ def main(cmd):
         check_v8()
         check_m6()
         check_keep7()
+        check_numgroup()
     elif cmd == "v8":
         train, val = v8_pools()
         write(OUT / "pool-v8" / "train.jsonl", train)
@@ -2197,7 +2281,7 @@ def main(cmd):
     elif cmd in ("build6", "build7"):  # E2B v6 (#103): see the m6 section; v7 (#105) adds d-keep-lead
         skipped, v7 = {}, cmd == "build7"
         items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
-        items += (keep7_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
+        items += (keep7_dictation() + numg_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
         build(OUT7 if v7 else OUT6, items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
     elif cmd in ("split", "split6", "split7"):
         v = cmd[5:]

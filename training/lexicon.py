@@ -1017,3 +1017,45 @@ M6_CONTEXT_FIX = ["the name's misspelled", "that name is spelled wrong", "match 
                   "correct this name", "make the name match the screen", "that should match what's on screen",
                   "spell it the way it's written above", "fix the capitalization", "this is misspelled",
                   "spelled wrong", "fix this to match", "the spelling's off", "correct the spelling of this"]
+
+# #125: grouped spoken numbers the model writes as digits (the prepass leaves them as words). {X} is the number:
+# said as words in the transcript, written per the issue's table in the target. Pair, oh and year slots never follow
+# "at" or a prepass cue word; NUMG_CUE_T has its cue in the template.
+NUMG_T = {
+    "pair": ["The printer jammed after {X} pages.", "The cookbook has {X} recipes in it.", "We sold {X} tickets before noon.",
+             "The orchard planted {X} apple trees this spring.", "The petition reached {X} signatures overnight.",
+             "The museum counted {X} visitors on Saturday.", "That hiking loop gains {X} feet of elevation.",
+             "The warehouse shipped {X} boxes yesterday.", "The draft is {X} words long right now.",
+             "We printed {X} flyers for the street fair.", "The upload stalled after {X} files.",
+             "Our van has {X} miles on the new tires."],
+    "year": ["The farmhouse was built in {X}.", "She moved to the coast in {X}.", "That photo is from the summer of {X}.",
+             "The bakery has been open since {X}.", "Our contract runs through {X}.", "The vintage camera was made in {X}.",
+             "He finished school in {X}.", "The festival started back in {X}.", "My car is a {X} model with low mileage.",
+             "The rules changed in {X} and nobody noticed."],
+    "oh": ["Our flight is {X} out of the north terminal.", "The meeting moved to suite {X}.",
+           "Take bus {X} to the farmers market.", "Call extension {X} for the front desk.",
+           "My cousin lives in apartment {X}.", "We parked near gate {X}.", "The detour sends you onto highway {X}."],
+    "time": ["The train gets in at {X}.", "Swim practice starts at {X}.", "The pharmacy closes at {X} today.",
+             "Pick me up at {X} outside the office.", "The webinar begins at {X} sharp.",
+             "The kids get out of school at {X}.", "My shift ends at {X} tonight.", "Can we start the call at {X}?",
+             "Dinner reservations are at {X}."],
+    "money": ["The sandwich came to {X} with tax.", "A matinee ticket costs {X} now.", "The cab ride was {X} from the airport.",
+              "Shipping adds {X} to the order.", "The museum shop sells the poster for {X}."],
+    "cue": ["My raffle ticket is number {X}.", "Your order is number {X} in the queue.", "Our table is number {X} by the window.",
+            "Bring the forms to room {X} before lunch.", "The gym has a class in room {X} tonight.",
+            "Enter code {X} when the app asks.", "The bike lock opens with code {X}.",
+            "That crash is logged as issue {X}.", "Could someone check issue {X} this week?"],
+}
+# Said and written the same: digit runs with no cue, and three or more groups in a row (no commas there: the
+# prepass would turn comma-separated tens into digits).
+NUMG_KEEP_T = {
+    "count": ["Ready? One, two, three, go!", "She counted down five, four, three, two, one and the lights went out.",
+              "Clap along with me: one, two, three, four.", "The drummer clicked off one, two, three, four and the band started.",
+              "Breathe in for one, two, three and out again.", "Pick a card and count one, two, three before you flip it.",
+              "Okay, on my count. One, two, three, lift."],
+    "groups": ["We counted by tens, ten twenty thirty forty, until the bus came.",
+               "The chant goes five ten fifteen twenty and then everyone claps.",
+               "My nephew skip counts twenty forty sixty eighty all day.",
+               "She sang ten twenty thirty forty fifty in the car.",
+               "The rhyme starts fifteen thirty forty five and nobody knows why."],
+}
