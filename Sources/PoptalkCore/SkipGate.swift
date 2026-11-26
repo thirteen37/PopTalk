@@ -49,8 +49,8 @@ extension Pipeline {
     private static let token = try! NSRegularExpression(pattern: #"[\p{L}\p{N}][\p{L}\p{N}'’\-]*"#)
 
     /// True when the cleanup model can be skipped and `transcript` (stripped, recased and pre-passed) inserted as
-    /// is: no filler or correction cue in `said`, no spoken command the pre-pass left, no near-miss of a term
-    /// (`recaseCandidates`), and Parakeet's sentence casing and closing punctuation.
+    /// is: no filler or correction cue in `said`, no spoken command the pre-pass left, at most `skipGateMaxWords`
+    /// words, no near-miss of a term (`recaseCandidates`), and Parakeet's sentence casing and closing punctuation.
     /// A near miss is a run of 1–3 words, not spelled exactly like a term or one of its names, at least 0.75
     /// `similarity` to it ("Maheena" for "Mahina", "Toy Vonen" for "Toivonen", "fluid audio" left as heard).
     /// ponytail: keyword lists and string similarity; a decision model only if this skips wrongly too often.
@@ -58,8 +58,12 @@ extension Pipeline {
         skipGateStop(said: said, transcript: transcript, terms: terms) == nil
     }
 
+    /// Longer dictations keep the model, which bounds the term shortlist's cost (#120). On real history every
+    /// dictation over 40 words stopped at a cue first (#122).
+    static let skipGateMaxWords = 40
+
     /// The first `skipsLLM` check that keeps the model, in order: "casing", "punctuation", "cue", "command",
-    /// "term" (a near miss); nil when the gate skips. Replay counts only (#122).
+    /// "length" (over `skipGateMaxWords`), "term" (a near miss); nil when the gate skips. Replay counts only (#122).
     public static func skipGateStop(said: String, transcript: String, terms: [String]) -> String? {
         func has(_ re: NSRegularExpression, _ s: String) -> Bool { re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil }
         let end = transcript.trimmingCharacters(in: CharacterSet(charactersIn: "\"”’')] \n"))
@@ -67,6 +71,7 @@ extension Pipeline {
         guard let last = end.last, ".!?".contains(last) else { return "punctuation" }
         if has(cue, said) { return "cue" }
         if has(command, transcript) { return "command" }
+        if transcript.split(whereSeparator: \.isWhitespace).count > skipGateMaxWords { return "length" }
         return termShortlist(transcript, terms: terms).isEmpty ? nil : "term"
     }
 
@@ -87,11 +92,24 @@ extension Pipeline {
         let words = tokens.map { ns.substring(with: $0).replacing(/['’]s$/, with: "") }
         let runs = (1...3).flatMap { n in words.count < n ? [] : (0...(words.count - n)).map { $0..<$0 + n } }
         let exact = runs.filter { r in forms.contains(words[r].joined(separator: " ")) }
+        // The score is `max(similarity(heard, form), similarity(soundFold(heard), soundFold(form)))`, unrolled: the
+        // best `1 − edit distance / longer length` of four pairs (the strings, their skeletons, the folded strings,
+        // their skeletons), each term's computed once per call (#120). Edit distance is at least the length
+        // difference, so a pair scores at most shorter / longer and can reach 0.75 only if 4 × shorter ≥ 3 × longer.
+        // A pair that can't is skipped: it can't be the best of a kept score, and with none left the run is out.
+        func key(_ s: String) -> [[Character]] {
+            let fold = soundFold(s)
+            return [s, skeleton(s), fold, skeleton(fold)].map(Array.init)
+        }
+        let keyed = forms.map { (form: $0, key: key(squash($0))) }
         let all = runs.filter { r in !exact.contains { $0.overlaps(r) } }.flatMap { r -> [TermCandidate] in
-            let heard = squash(words[r].joined(separator: " "))
+            let heard = key(squash(words[r].joined(separator: " ")))
             let range = NSUnionRange(tokens[r.lowerBound], tokens[r.upperBound - 1])
-            return forms.compactMap { f in
-                let score = max(similarity(heard, squash(f)), similarity(soundFold(heard), soundFold(squash(f))))
+            return keyed.compactMap { f, k in
+                let score = zip(heard, k).map { a, b in
+                    let n = max(a.count, b.count)
+                    return n == 0 || 4 * min(a.count, b.count) < 3 * n ? 0 : 1 - Double(levenshtein(a, b)) / Double(n)
+                }.max()!
                 return score >= 0.75 ? TermCandidate(range: range, heard: ns.substring(with: range), term: f, score: score) : nil
             }
         }

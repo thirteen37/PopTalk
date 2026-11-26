@@ -94,7 +94,7 @@ Several steps match what was heard against terms PopTalk knows. In order:
 
 Related matching elsewhere:
 - **Learned screen terms** (opt-in, "Remember screen terms that fix dictations"): a screen term that changed a dictation, through a boost or the casing fix, is remembered on this Mac only. It boosts and recases later dictations without being on screen, up to 200 terms, dropped after 30 days unused (`LearnedTerms`).
-- **Skip-cleanup gate** (experimental, off): a dictation goes in as heard only if it has no filler or correction cue, no spoken command, starts capitalized, ends with `.`, `!` or `?`, and the sound-alike shortlist finds no near-miss term in it (`Pipeline.skipsLLM`).
+- **Skip-cleanup gate** (experimental, off): a dictation goes in as heard only if it has no filler or correction cue, no spoken command, starts capitalized, ends with `.`, `!` or `?`, has at most 40 words, and the sound-alike shortlist finds no near-miss term in it (`Pipeline.skipsLLM`).
 - **Typed fixes:** when you fix a dictation by typing, PopTalk diffs your version against the insert word by word (`TypedCorrection`). A replaced word that came from the transcript, where your word didn't, counts as misheard and becomes a vocabulary offer, with what was heard as its alias.
 - **Re-dictation** (history only): a dictation into the same field within 30 s of the insert, or 120 s after it was deleted or undone, that is at least 0.6 similar to the last raw transcript is recorded as saying it again (`Redictation`).
 

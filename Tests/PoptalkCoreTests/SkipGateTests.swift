@@ -50,6 +50,11 @@ private func skips(_ said: String, screen: String = "") -> Bool {
     #expect(stop("So, like, we need to ship this.") == "cue")
     #expect(stop("Buy milk, bullet eggs.") == "command")
     #expect(stop("Ask Maheena about it.", ["Mahina"]) == "term")
+    // #120: over 40 words keeps the model, before the term shortlist.
+    let words = { (n: Int) in "The " + (0..<n - 2).map { ["report", "team", "data"][$0 % 3] }.joined(separator: " ") + " ships." }
+    #expect(stop(words(40), ["Mahina"]) == nil)
+    #expect(stop(words(41), ["Mahina"]) == "length")
+    #expect(stop("Ask Maheena about it. " + words(40), ["Mahina"]) == "length")
     for s in ["send it today.", "Send it today", "Ask Maheena about it.", "Can you send me the report by Friday?"] {
         #expect(Pipeline.skipsLLM(said: s, transcript: s, terms: ["Mahina"]) == (stop(s, ["Mahina"]) == nil))
     }

@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import PoptalkCore
 
-// #117: per-step cost of the dictation string code, on invented text, for docs/guards.md. Opt-in, since it
-// times rather than checks: `POPTALK_GUARD_TIMING=1 swift test --filter guardTiming` (debug). The doc's numbers are
+// #117: per-step cost of the dictation string code, on invented text, for docs/guards.md. Opt-in, since it times
+// (its one check is the skip gate's budget): `POPTALK_GUARD_TIMING=1 swift test --filter guardTiming` (debug). The doc's numbers are
 // -O: this body without the Testing lines, compiled with Sources/PoptalkCore/*.swift (docs/guards.md, Performance).
 @Test(.enabled(if: ProcessInfo.processInfo.environment["POPTALK_GUARD_TIMING"] == "1"))
 func guardTiming() {
@@ -31,11 +31,15 @@ func guardTiming() {
             ("recaseTerms", median(200) { _ = Pipeline.recaseTerms(said, terms: terms, screen: screen) }),
             // On a clean dictation: a cue ("sorry") would return before the term shortlist.
             ("skipsLLM", median(9) { _ = Pipeline.skipsLLM(said: clean, transcript: clean, terms: terms) }),
+            // Past the 40-word cap too (#120), which skipsLLM stops at.
+            ("termShortlist", median(9) { _ = Pipeline.termShortlist(clean, terms: terms) }),
         ]
         rows += Pipeline.prepass.map { s in (s.name, median(200) { _ = s.run(said) }) }
         rows += Pipeline.repairs.map { s in (s.name, median(200) { _ = s.run(reply, transcript) }) }
         let cleaned = Pipeline.repairs.reduce(reply) { $1.run($0, transcript) }
         rows += Pipeline.rejects.map { s in (s.name, median(200) { _ = s.test(cleaned, transcript, check) }) }
         print("guardTiming \(label) (\(said.count) chars): " + rows.map { "\($0.0) \(String(format: "%.0f", $0.1)) µs" }.joined(separator: ", "))
+        // #120 budget, debug: 104 ms measured at 38 words (-O: 4.8 ms, and 170 ms before the prefilter).
+        #expect(rows.first { $0.0 == "skipsLLM" }!.1 < 400_000, "skipsLLM over budget at \(label)")
     }
 }
