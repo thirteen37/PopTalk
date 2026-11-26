@@ -105,6 +105,15 @@ public enum AppProfiles {
         return r
     }
 
+    /// Whether capture should look up the page's host: the app's own resolution lets the domain into the prompt, or a
+    /// website profile for this app (or any app) could still match. Never in a private window or a password manager.
+    public static func needsDomain(bundleID: String?, isPrivate: Bool, profiles: [AppProfile], defaults: ContextSources) -> Bool {
+        guard !isPrivate, !CapturePolicy.isSensitive(subrole: nil, bundleID: bundleID) else { return false }
+        let b = bundleID?.lowercased()
+        return resolve(bundleID: bundleID, domain: nil, isPrivate: false, profiles: profiles, defaults: defaults).sources.webDomain
+            || profiles.contains { !$0.domain.isEmpty && ($0.bundleID.isEmpty || $0.bundleID.lowercased() == b) }
+    }
+
     /// Another profile (by id) has the same match rule. Settings refuses to save it, so ties need no order.
     public static func conflicts(_ p: AppProfile, in profiles: [AppProfile]) -> Bool {
         profiles.contains {

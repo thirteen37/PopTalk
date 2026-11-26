@@ -145,3 +145,31 @@ private let browserOff = AppProfile(bundleID: "com.example.Browser", off: [.wind
     #expect(r.sources.apply(snap).titleAndDomain == "Inbox")
     #expect(ContextSources(UserDefaults(suiteName: "poptalk-test-\(UUID())")!).webDomain)
 }
+
+@Test func defaultProfileEditPromptIsUnchanged() {
+    let snap = ScreenSnapshot(appName: "Browser", windowTitle: "Inbox", webDomain: "mail.example.com", text: "Hi team")
+    let sources = resolve("com.example.Browser", "mail.example.com", []).sources
+    #expect(Prompts.edit(instruction: "make it formal", selection: "hey", context: sources.apply(snap), vocabulary: [])
+        == Prompts.edit(instruction: "make it formal", selection: "hey",
+                        context: ScreenSnapshot(appName: "Browser", windowTitle: "Inbox (mail.example.com)", text: "Hi team"),
+                        vocabulary: []))
+}
+
+// The page's host is read only when the prompt can use it or a website profile could still match.
+@Test func domainIsLookedUpOnlyWhenSomethingCanUseIt() {
+    let needs = { (b: String?, p: Bool, ps: [AppProfile], d: ContextSources) in
+        AppProfiles.needsDomain(bundleID: b, isPrivate: p, profiles: ps, defaults: d)
+    }
+    var noDomain = all
+    noDomain.webDomain = false
+    #expect(needs("com.example.Browser", false, [], all))
+    #expect(!needs("com.example.Browser", true, [siteOff], all))  // private window: never
+    #expect(!needs("com.example.Browser", false, [], noDomain))
+    #expect(needs("com.example.Browser", false, [siteOff], noDomain))  // a website profile may match
+    #expect(needs("com.example.Browser", false, [browserSiteOff], noDomain))
+    #expect(!needs("com.example.Other", false, [browserSiteOff], noDomain))  // another app's website profile
+    let screenOff = AppProfile(bundleID: "com.example.Browser", off: ContextSource.screen)
+    #expect(!needs("com.example.Browser", false, [screenOff], all))  // the app's own profile turned the domain off
+    #expect(needs("com.example.Browser", false, [screenOff, browserSiteOff], all))  // a more specific one may turn it back
+    #expect(!needs("com.1password.1password", false, [siteOff], all))  // password manager
+}
