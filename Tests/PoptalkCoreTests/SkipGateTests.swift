@@ -39,6 +39,33 @@ private func skips(_ said: String, screen: String = "") -> Bool {
     #expect(!skips("Ping Paavo when the Toy Vonen build lands.", screen: "Paavo Toivonen joined the channel"))
 }
 
+// #122: the check that stops the gate first, for replay counts; nil when it skips.
+@Test func skipGateStopNamesTheFirstCheck() {
+    func stop(_ said: String, _ terms: [String] = []) -> String? {
+        Pipeline.skipGateStop(said: said, transcript: said, terms: terms)
+    }
+    #expect(stop("Can you send me the report by Friday?") == nil)
+    #expect(stop("send it today.") == "casing")
+    #expect(stop("Send it today") == "punctuation")
+    #expect(stop("So, like, we need to ship this.") == "cue")
+    #expect(stop("Buy milk, bullet eggs.") == "command")
+    #expect(stop("Ask Maheena about it.", ["Mahina"]) == "term")
+    for s in ["send it today.", "Send it today", "Ask Maheena about it.", "Can you send me the report by Friday?"] {
+        #expect(Pipeline.skipsLLM(said: s, transcript: s, terms: ["Mahina"]) == (stop(s, ["Mahina"]) == nil))
+    }
+}
+
+@Test func skipGateRecordsItsStopAndTime() async {
+    for (gate, said) in [(true, "Can you send me the report by Friday?"), (true, "send it today."), (false, "Send it.")] {
+        let p = Pipeline(complete: { _, _, _, _ in said },
+                         vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                         cleanupModel: "s", editModel: "b", features: { var f = DictationFeatures(); f.skipGate = gate; return f }())
+        let r = await p.run(Request(transcript: said, selection: nil, context: ScreenSnapshot()))
+        #expect((r.skipGateSeconds != nil) == gate)
+        #expect(r.skipGateStop == (gate && !r.skippedLLM ? "casing" : nil))
+    }
+}
+
 @Test func skipGateBypassesTheModel() async {
     final class Calls: @unchecked Sendable { var n = 0 }
     for gate in [true, false] {

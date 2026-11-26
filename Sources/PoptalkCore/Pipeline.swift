@@ -38,6 +38,10 @@ public struct PipelineResult: Equatable, Sendable {
     public var rejectedBy: String?
     /// The `Pipeline.repairs` that changed a dictation reply beyond surrounding whitespace, in order (replay counts).
     public var repaired: [String] = []
+    /// With the skip gate on: the check that kept the model (`skipGateStop`, nil if it skipped) and the gate's
+    /// own seconds (#122, replay counts).
+    public var skipGateStop: String?
+    public var skipGateSeconds: Double?
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
                 modelAction: String? = nil, skippedLLM: Bool = false) {
@@ -113,15 +117,18 @@ public struct Pipeline: Sendable {
             // Everything said was cancelled ("… Scratch that.", #98).
             guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
             let space = Self.leadingSpace(r.context)
+            // Near misses count screen terms either way: the model still sees the screen.
+            let gateStart = Date()
+            let gate = !features.skipGate ? nil
+                : (stop: Self.skipGateStop(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)),
+                   seconds: Date().timeIntervalSince(gateStart))
             func result(_ outcome: Outcome, degraded: Bool = false, skippedLLM: Bool = false) -> PipelineResult {
                 var res = PipelineResult(outcome: outcome, degraded: degraded, skippedLLM: skippedLLM)
                 res.recased = fixed
+                (res.skipGateStop, res.skipGateSeconds) = (gate?.stop, gate?.seconds)
                 return res
             }
-            // Near misses count screen terms either way: the model still sees the screen.
-            if features.skipGate, Self.skipsLLM(said: r.transcript, transcript: transcript, terms: Self.recaseCandidates(terms)) {
-                return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true)
-            }
+            if let gate, gate.stop == nil { return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true) }
             let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
