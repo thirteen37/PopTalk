@@ -50,6 +50,46 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(recase("start the meal prep", screen: "Meal Prep. I need to meal prep tonight") == "start the meal prep")
 }
 
+// #121: the matching itself, with the terms given (invented names): up to case and whitespace, whole words.
+private func fix(_ t: String, _ terms: [String], screen: String = "") -> String { Pipeline.recaseTerms(t, terms: terms, screen: screen) }
+
+@Test func recaseMatchesUpToCaseAndWhitespace() {
+    #expect(fix("ping the fluid audio team", ["FluidAudio"]) == "ping the FluidAudio team")
+    #expect(fix("the mealprep list", ["Meal Prep"]) == "the Meal Prep list")
+    #expect(fix("ask ko rvan ta, or KOR  VANTA, or kor\nvanta", ["Korvanta"]) == "ask Korvanta, or Korvanta, or Korvanta")
+    // Several terms and hits: a replacement that changes the length doesn't shift the next ones.
+    #expect(fix("fluid audio, korvanta and fluidaudio", ["Korvanta", "FluidAudio"]) == "FluidAudio, Korvanta and FluidAudio")
+    #expect(fix("did yarrowly freight renew? ask yarrowly", ["Yarrowly", "Yarrowly Freight"])
+        == "did Yarrowly Freight renew? ask Yarrowly")
+}
+
+@Test func recaseMatchesWholeWordsOnly() {
+    #expect(fix("korvantas, xkorvanta, 2korvanta, korvanta2, éclatkorvanta", ["Korvanta"])
+        == "korvantas, xkorvanta, 2korvanta, korvanta2, éclatkorvanta")
+    #expect(fix("korvanta's, korvanta-based, (korvanta)", ["Korvanta"]) == "Korvanta's, Korvanta-based, (Korvanta)")
+    #expect(fix("korvanta", ["Korvanta"]) == "Korvanta")
+    #expect(fix("fluid audiophile", ["FluidAudio"]) == "fluid audiophile")
+}
+
+@Test func recaseSkipsATermTheScreenSpellsTwoWays() {
+    #expect(fix("ask korvanta", ["Korvanta"], screen: "Korvanta notes. KORVANTA 2") == "ask korvanta")
+    #expect(fix("ask korvanta", ["Korvanta"], screen: "Korvanta notes. Kor vanta 2") == "ask korvanta")
+    // Whitespace runs count as one space: one spelling.
+    #expect(fix("ask korvanta", ["Kor Vanta"], screen: "Kor Vanta notes. Kor\n  Vanta 2") == "ask Kor Vanta")
+    // On screen only: nothing to do. In the transcript only (saved or learned): recased.
+    #expect(fix("ask them", ["Korvanta"], screen: "Korvanta notes") == "ask them")
+    #expect(fix("ask korvanta", ["Korvanta"], screen: "nothing here") == "ask Korvanta")
+}
+
+@Test func recaseHandlesUnicode() {
+    #expect(fix("ask jÜRGEN and ÅSVIK", ["Jürgen", "Åsvik"]) == "ask Jürgen and Åsvik")
+    // "İ" lowercases to two code points, so offsets after it differ between the original and its lowercase form.
+    #expect(fix("İSTANBUL Ölçek and korvanta", ["Korvanta"]) == "İSTANBUL Ölçek and Korvanta")
+    #expect(fix("İZMIRLY and izmirly", ["İzmirly"]) == "İzmirly and izmirly")
+    // Case folding, as the regex did: "ß" matches "ss". (Greek terms never get here: the spell check passes them.)
+    #expect(fix("the strasse and STRASSE", ["Straße"]) == "the Straße and Straße")
+}
+
 // Settings, read per press: each request's pipeline gets `DictationFeatures(defaults)` as the app builds it.
 @Test func dictationFeaturesFollowSettingsPerRequest() async {
     final class Seen: @unchecked Sendable { var prompt = ""; var calls = 0 }

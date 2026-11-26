@@ -151,12 +151,12 @@ A repair counts when it changed the reply beyond surrounding whitespace, whether
 
 ### What they cost
 
-The prepass, repairs and rejects are string code. Per call, median of 200, PoptalkCore built with `-O`, on invented text (a 38-word, 204-character dictation and a 190-word, 1,020-character one; a 64-term list; a 40-line, 4,000-character screen). `Tests/PoptalkCoreTests/GuardTimingTests.swift` has the code: `POPTALK_GUARD_TIMING=1 swift test --filter guardTiming` runs it in debug, and these numbers come from the same body compiled with `swiftc -O -module-name PoptalkCore Sources/PoptalkCore/*.swift`.
+The prepass, repairs and rejects are string code. Per call, median of 200, PoptalkCore built with `-O`, on invented text (a 38-word, 204-character dictation and a 190-word, 1,020-character one; a 64-term list; a 40-line, 4,000-character screen). `Tests/PoptalkCoreTests/GuardTimingTests.swift` has the code: `POPTALK_GUARD_TIMING=1 swift test --filter guardTiming` runs it in debug, and these numbers come from the same body compiled with `swiftc -O -swift-version 6 -module-name PoptalkCore Sources/PoptalkCore/*.swift`. The casing fix was re-measured with #121.
 
 | Step | 38 words | 190 words |
 | --- | --- | --- |
 | `stripHesitations` | 0.01–0.03 ms | 0.03 ms |
-| Casing fix (`recaseTerms`) | 19.5 ms | 19.9 ms |
+| Casing fix (`recaseTerms`) | 0.47 ms (19.9 ms before #121) | 0.78 ms (20.1 ms) |
 | `spokenFormatting` | 0.23 ms | 0.42 ms |
 | `spokenCancel` | 0.10 ms | 0.14 ms |
 | `spokenNumbers` | 0.17 ms | 0.77 ms |
@@ -169,7 +169,7 @@ The prepass, repairs and rejects are string code. Per call, median of 200, Popta
 | `echoesContext` | 0.17 ms | 0.25 ms |
 | Skip gate (`skipsLLM`, off), on a clean dictation of the same length (median of 9) | 170 ms | 870 ms |
 
-The prepass, repairs and rejects together take about 0.9 ms on the short dictation and 2.3 ms on the long one, against 0.31 s mean for the cleanup itself on the replay (p90 0.49 s). The casing fix, which runs by default with v6, is about 20 ms whatever the length: it scales with the terms and the screen. The skip gate is off by default and would cost more than the cleanup it skips on long dictations (#120).
+The prepass, repairs and rejects together take about 0.9 ms on the short dictation and 2.3 ms on the long one, against 0.31 s mean for the cleanup itself on the replay (p90 0.49 s). The casing fix runs by default with v6, once per dictation, so its cost isn't per word: it scales with the terms and the screen. It case-folds the transcript and the screen once (about 0.35 ms of it for this screen), then searches the transcript for each term, and the screen only for the terms the transcript has. Before #121 it compiled a regex per term and scanned the whole screen with each, about 20 ms whatever the length. The skip gate is off by default and would cost more than the cleanup it skips on long dictations (#120).
 
 The `replyLimit` early stop: on the 2 history dictations `length` rejects, the cleanup takes 0.84 s and 0.56 s with it (median of 3) and 2.32 s and 2.01 s with it patched out, about 1.5 s saved per hit. Without it the replies run on to 384 and 574 characters instead of being cut at 146 and 114, and are rejected either way. The bench has no `length` hits, so it doesn't show this, and the timing log (`log stream`, category `timing`, "stopped at reply limit") isn't kept by default. A replay whose last dictation stopped early crashes at exit (#119).
 

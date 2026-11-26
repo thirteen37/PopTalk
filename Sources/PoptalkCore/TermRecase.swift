@@ -17,26 +17,27 @@ extension Pipeline {
     ///   mixing dictionary words and names ("Call Priya") gives only its names;
     /// - a term `screen` shows in more than one spelling ("PopTalk" and "Poptalk", "Meal Prep" and "meal prep").
     public static func recaseTerms(_ transcript: String, terms: [String], screen: String) -> String {
-        recaseCandidates(terms).reduce(transcript) { text, term in
+        let onScreen = Folded(screen)
+        var text = Folded(transcript)
+        for term in recaseCandidates(terms) {
             // ponytail: a Title Case UI label made of common words ("Recent Files") is recased like "Meal Prep";
             // drop all-dictionary phrases too if history shows wrong ones.
-            let chars = term.filter { !$0.isWhitespace }.map { NSRegularExpression.escapedPattern(for: String($0)) }
-            guard !chars.isEmpty, let re = try? NSRegularExpression(
-                pattern: #"(?<![\p{L}\p{N}])"# + chars.joined(separator: #"\s*"#) + #"(?![\p{L}\p{N}])"#, options: .caseInsensitive)
-            else { return text }
-            func spans(_ s: String) -> [NSRange] { re.matches(in: s, range: NSRange(s.startIndex..., in: s)).map(\.range) }
-            let shown = Set(spans(screen).map { (screen as NSString).substring(with: $0).split(whereSeparator: \.isWhitespace).joined(separator: " ") })
-            guard shown.count <= 1 else { return text }
-            let own = term.lowercased().split(separator: " ")
-            var out = text as NSString
-            for r in spans(text).reversed() {
-                let pieces = out.substring(with: r).lowercased().split(whereSeparator: \.isWhitespace)
-                guard chars.count >= 5 || pieces.count == 1 || pieces == own || pieces.allSatisfy({ $0.count >= 3 })
+            let key = Folded.fold(term), hits = text.spans(key)
+            guard !hits.isEmpty else { continue }
+            let shown = Set(onScreen.spans(key).map { screen[$0].split(whereSeparator: \.isWhitespace).joined(separator: " ") })
+            guard shown.count <= 1 else { continue }
+            let length = term.count { !$0.isWhitespace }, own = term.lowercased().split(separator: " ")
+            var out = "", from = text.source.startIndex
+            for r in hits {
+                let pieces = text.source[r].lowercased().split(whereSeparator: \.isWhitespace)
+                guard length >= 5 || pieces.count == 1 || pieces == own || pieces.allSatisfy({ $0.count >= 3 })
                         || pieces.allSatisfy({ $0.count == 1 }) else { continue }
-                out = out.replacingCharacters(in: r, with: term) as NSString
+                out += text.source[from..<r.lowerBound] + term
+                from = r.upperBound
             }
-            return out as String
+            if from > text.source.startIndex { text = Folded(out + text.source[from...]) }
         }
+        return text.source
     }
 
     /// The terms worth recasing, longest first: no single dictionary words; a phrase of only dictionary words
@@ -53,6 +54,49 @@ extension Pipeline {
         }
         .filter { seen.insert($0.lowercased()).inserted }
         .sorted { $0.count > $1.count }
+    }
+
+    /// `source` case-folded per Character, without whitespace, with each folded Character's range in `source`: the
+    /// casing fix's matching, once per string (#121). Per Character, since a folded form can be longer ("İ", "ß" → "ss").
+    struct Folded {
+        let source: String
+        private(set) var chars: [Character] = [], ranges: [Range<String.Index>] = []
+
+        init(_ s: String) {
+            source = s
+            for i in s.indices where !s[i].isWhitespace {
+                let r = i..<s.index(after: i)
+                for c in Self.fold(s[i]) { chars.append(c); ranges.append(r) }
+            }
+        }
+
+        static func fold(_ c: Character) -> [Character] {
+            Array(c.isASCII ? c.lowercased() : String(c).folding(options: .caseInsensitive, locale: nil))
+        }
+        static func fold(_ s: String) -> [Character] { s.filter { !$0.isWhitespace }.flatMap(fold) }
+
+        /// The ranges of `source` that fold to `key`, whole Characters, with no letter or digit right before or after,
+        /// left to right without overlaps.
+        func spans(_ key: [Character]) -> [Range<String.Index>] {
+            guard let first = key.first else { return [] }
+            func wordy(_ c: Character) -> Bool { c.isLetter || c.isNumber }
+            var out: [Range<String.Index>] = [], i = 0
+            while i + key.count <= chars.count {
+                let j = i + key.count - 1
+                if chars[i] == first, chars[i...j].elementsEqual(key),
+                   i == 0 || ranges[i - 1] != ranges[i], j + 1 == chars.count || ranges[j + 1] != ranges[j] {
+                    let r = ranges[i].lowerBound..<ranges[j].upperBound
+                    if !(r.lowerBound > source.startIndex && wordy(source[source.index(before: r.lowerBound)]))
+                        && !(r.upperBound < source.endIndex && wordy(source[r.upperBound])) {
+                        out.append(r)
+                        i = j + 1
+                        continue
+                    }
+                }
+                i += 1
+            }
+            return out
+        }
     }
 
     nonisolated(unsafe) private static var common: [String: Bool] = [:]
