@@ -40,3 +40,23 @@ private func dictate(_ transcript: String, reply: String, off: Set<String> = [])
     #expect(Pipeline.dictationPrepass("about seventy five thousand users", off: ["spokenNumbers"]) == "about seventy five thousand users")
     #expect(Pipeline.dictationPrepass("about seventy five thousand users") != "about seventy five thousand users")
 }
+
+// #118: with `length` off there is no reply limit, so a provider that stops at it (as MLX and LM Studio do, #100)
+// returns the whole reply and that is what's scored.
+@Test func lengthOffLetsTheReplyRunPastTheLimit() async {
+    let said = "Send the report by Friday.", long = String(repeating: "lorem ipsum dolor ", count: 20)
+    var features = DictationFeatures()
+    features.guardsOff = ["length"]
+    let p = Pipeline(complete: { _, _, _, _ in
+                         var out = ""
+                         for c in long {
+                             out.append(c)
+                             if let limit = Pipeline.replyLimit, Pipeline.pastReplyLimit(out, limit: limit) { break }
+                         }
+                         return out
+                     },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                     cleanupModel: "s", editModel: "b", features: features)
+    let r = await p.run(Request(transcript: said, selection: nil, context: ScreenSnapshot()))
+    #expect(r.outcome == .insert(long.trimmingCharacters(in: .whitespaces), label: "Dictated"))
+}
