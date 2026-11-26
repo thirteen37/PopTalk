@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # Builds training/out/v7/data/{train,valid}.jsonl for the E2B v7 adapter (#105): v6's data plus d-keep-lead (gen.py
-# v7 section). Reuses v6's speech and E4B teacher outputs (teach6 is unchanged), so it needs no GPU. Run from the
+# v7 section), d-numgroup (#125) and the kept-as-said changes (#126; split7 keeps unfixable names as heard). Reuses v6's speech and E4B teacher outputs (teach6 is unchanged), so it needs no GPU. Run from the
 # repo root, outside the sandbox, after training/make_data_v6.zsh's slow steps and `swift build -c release`.
 # Syncs lora-v7.yaml's iters to 40% of the real train rows.
 # The items check fails on any phrase shared with a bench or held-out case (#115); ALLOW_PHRASES=1 lets it pass.

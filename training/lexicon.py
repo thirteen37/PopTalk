@@ -1059,3 +1059,59 @@ NUMG_KEEP_T = {
                "She sang ten twenty thirty forty fifty in the car.",
                "The rhyme starts fifteen thirty forty five and nobody knows why."],
 }
+
+# ---------- #126: speech kept as said ----------
+# Invented sentences with the speaker's own grammar (agreement, tense, dropped articles, "don't"/"was" for
+# "doesn't"/"were"): the cleanup keeps every word and changes only punctuation, casing, fillers and applied
+# self-corrections. {X} is a slot a self-correction can land in; its kind picks the values (gen.py slot_pool).
+AS_SAID = [
+    # agreement
+    ("The printer on the second floor need new toner.", None), ("My neighbors has a new dog.", None),
+    ("The kids is already in the car.", None), ("Both of the lamps in the hallway works fine now.", None),
+    ("The new chairs in the kitchen looks great.", None), ("The bus to the airport leave every hour.", None),
+    ("Everybody in the office have a key now.", None), ("The cookies on the counter is for the party.", None),
+    ("Each of the rooms have its own heater.", None), ("The photos from the trip looks blurry on my phone.", None),
+    ("The script just hang when it reach the last file.", None), ("The two failing checks is from the lint step.", None),
+    ("The logs says the cache was empty.", None), ("These config files needs a cleanup.", None),
+    ("There's a few crates left in the shed.", None), ("There is lots of leftovers in the fridge.", None),
+    ("Here's the receipts from the hardware store.", None), ("The plants by the window needs water.", None),
+    ("My parents is coming over on {X}.", "day"), ("The groceries is still in the trunk.", None),
+    # don't / was
+    ("She don't like the window seat.", None), ("The heater don't turn on in the morning.", None),
+    ("He don't want to drive at night.", None), ("This version don't work on the old laptop.", None),
+    ("The function don't return anything when the list is empty.", None), ("It don't matter which one you pick.", None),
+    ("My sister don't eat anything spicy.", None), ("The gate don't close all the way.", None),
+    ("We was planning to leave early.", None), ("They was waiting outside for an hour.", None),
+    ("You was right about the traffic.", None), ("The movers was late again.", None),
+    ("We was going to call {X} about the lease.", "person"), ("The tomatoes was cheaper at the market.", None),
+    ("The old tests was flaky anyway.", None), ("They was asking about the parking passes.", None),
+    ("Me and him are going to the game.", None), ("Me and my brother fixed the fence.", None),
+    ("Her and Sam brought the snacks.", None), ("Me and the team already reviewed it.", None),
+    # tense
+    ("Yesterday the repair guy come and fix the dryer.", None), ("Last week we go to the lake with the kids.", None),
+    ("This morning I see a fox in the yard.", None), ("We already eat dinner before you call.", None),
+    ("Last night the alarm ring twice.", None), ("He tell me the meeting move to {X}.", "day"),
+    ("I already push the branch an hour ago.", None), ("The deploy finish before I check the logs.", None),
+    ("She bring the cake to the party last time.", None), ("I seen that movie already.", None),
+    ("We done the dishes after lunch.", None), ("I been working on the slides all day.", None),
+    ("They come by {X} yesterday to drop off the keys.", "place"), ("I run the tests twice and they pass.", None),
+    ("My cousin buyed a new bike.", None), ("The power go out right when the game started.", None),
+    # dropped articles
+    ("I left charger in car.", None), ("Can you put dishes in dishwasher?", None), ("I need to call bank about card.", None),
+    ("Put box next to door please.", None), ("We should take umbrella just in case.", None),
+    ("Grab milk from store on the way home.", None), ("Meet me at entrance by {X}.", "place"),
+    ("Check if server is up.", None), ("Add test for empty input.", None), ("I sent file to {X} this morning.", "person"),
+    ("Let's book room for the review.", None), ("Send invite to whole team.", None),
+    ("Leave key under mat.", None), ("Open ticket for the login bug.", None), ("Move meeting to {X}.", "day"),
+    # other speech patterns: double negatives, less/fewer, adjectives as adverbs
+    ("I don't need nothing from the store.", None), ("We didn't see nobody at the front desk.", None),
+    ("There's less people here than last year.", None), ("He drives real slow in the rain.", None),
+    ("The new build runs good on my machine.", None), ("She sings real nice.", None),
+    ("That one is more better than the old one.", None), ("I could have went to the earlier show.", None),
+    ("The update ain't ready yet.", None), ("We ain't got time for another round.", None),
+    ("Them boxes go in the basement.", None), ("Who's car is parked in the driveway?", None),
+    ("Can you borrow me your pen?", None), ("I'm good at cook pasta.", None), ("The trip was very fun and very tired.", None),
+    ("Me and {X} will handle the setup.", "person"), ("The kids wants to go to {X} after school.", "place"),
+]
+# How two said clauses join in one breath: kept as said in the target, only punctuation added.
+AS_SAID_JOIN = [" and ", " so ", " but ", " and then ", " because "]
