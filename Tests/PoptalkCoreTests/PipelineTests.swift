@@ -89,6 +89,7 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     let cases: [(String, String, ScreenSnapshot, String?)] = [
         (said, "We need to finish the slides before the client call on Friday afternoon.", ScreenSnapshot(), nil),
         (said, String(repeating: "Sure, here is the cleaned text. ", count: 10), ScreenSnapshot(), "length"),
+        (said, String(repeating: "Sure, here is the cleaned text. ", count: 10), ScreenSnapshot(text: todoist), "length"),
         (said, "Friday.", ScreenSnapshot(), "dropsContent"),
         ("she said (not yet) and left", "She said and left.", ScreenSnapshot(), "dropsProtected"),
         ("remind me to call priya about the okrs", todoist, ScreenSnapshot(text: todoist), "echoesContext"),
@@ -96,6 +97,20 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     for (t, reply, ctx, guardName) in cases {
         let r = await pipeline(reply: reply).run(Request(transcript: t, selection: nil, context: ctx))
         #expect(r.rejectedBy == guardName, "\(reply.prefix(20))")
+    }
+}
+
+// #116: echoesContext runs before length, so a long screen echo is named an echo, also when the
+// replyLimit early stop (#100) cut it.
+@Test func longScreenEchoIsNamedEcho() async {
+    let said = "fix it", screen = String(repeating: todoist + "\n", count: 5)
+    let limit = Pipeline.maxCleanupLength(said)
+    let cut = (1...screen.count).lazy.map { String(screen.prefix($0)) }.first { Pipeline.pastReplyLimit($0, limit: limit) }!
+    for reply in [screen, cut] {
+        #expect(reply.count > limit)
+        let r = await pipeline(reply: reply).run(Request(transcript: said, selection: nil, context: ScreenSnapshot(text: screen)))
+        #expect(r.rejectedBy == "echoesContext")
+        #expect(r.outcome == .insert(said, label: "Dictated (raw)"))
     }
 }
 

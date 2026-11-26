@@ -35,12 +35,12 @@ Pipeline keeps three named, ordered lists. Each step has a name, so the bench an
 | Step | Holds when | From |
 | --- | --- | --- |
 | `empty` | Nothing is left after the repairs. | the first pipeline, abf4563 (no issue) |
+| `echoesContext` | At least 3 of the reply's words, and more than half of them, weren't said but are on the screen: the model copied `<screen>`. | #29; before `length` since #116 |
 | `length` | The reply is longer than `maxCleanupLength`: 1.5 × the transcript's characters + 40. A reply that long is the model answering, not cleaning. | chatter guard, 42dfd60 (no issue); early stop #100 |
 | `dropsContent` | The reply lost more than 3 content words and more than 40% of them: the model kept only part of the dictation. After a spoken cancel ("scratch that", "never mind", "forget that"), only the words after the last cue count. | #47, #102 |
 | `dropsProtected` | A ( … ), “ … ” or " … " span from the transcript isn't in the reply in order, or the reply has fewer line breaks than the transcript. | #61 |
-| `echoesContext` | At least 3 of the reply's words, and more than half of them, weren't said but are on the screen: the model copied `<screen>`. | #29 |
 
-The order matters. `length` runs before `echoesContext`, so a long screen echo is counted as `length`. #116 is about those echoes and proposes swapping the two; what is inserted doesn't change either way, only the `rejectedBy` count.
+The order matters for the `rejectedBy` count, not for what is inserted: any reject means a raw fallback. `echoesContext` runs before `length` (#116), so a long screen echo is counted as an echo. Before #116 it ran last, and most real `length` hits were screen echoes over long terminal screens. It now also runs before `dropsContent` and `dropsProtected`, so an echo that also drops content is counted as an echo. No reject assumes an earlier one passed. The `replyLimit` early stop still cuts a long reply at the limit, and the cut reply is still counted as an echo when most of its words are screen words that weren't said. The move costs `echoesContext` (0.25 ms or less, see What they cost) only on replies `length` used to stop first; every used reply ran it already.
 
 ### Other mechanisms
 
@@ -86,7 +86,7 @@ flowchart TD
     M -->|ModelLoading| L([Raw: model loading, degraded])
     M -->|timeout or error| O([Raw, no rejectedBy])
     M -->|reply| F[Repairs: stripChatter, restoreMarks, openingCue]
-    F --> J{First reject that holds:<br/>empty, length, dropsContent,<br/>dropsProtected, echoesContext}
+    F --> J{First reject that holds:<br/>empty, echoesContext, length,<br/>dropsContent, dropsProtected}
     J -->|one holds| X([Raw: rejectedBy = its name])
     J -->|none| C([Insert the cleaned reply])
 ```
@@ -98,7 +98,7 @@ flowchart TD
 5. The skip gate, if on. If `skipsLLM` holds: the pre-passed transcript goes in, **skipped LLM**.
 6. The cleanup model, with `replyLimit` set and the timeout. Model still loading: **raw, model loading** (degraded). Timeout or error: **raw on timeout**.
 7. The repairs, in order: `stripChatter`, `restoreMarks`, `openingCue`.
-8. The rejects, in order: `empty`, `length`, `dropsContent`, `dropsProtected`, `echoesContext`. The first that holds: **raw on reject**, with `rejectedBy`.
+8. The rejects, in order: `empty`, `echoesContext`, `length`, `dropsContent`, `dropsProtected`. The first that holds: **raw on reject**, with `rejectedBy`.
 9. Otherwise: the **cleaned** reply goes in.
 
 Every insert gets a leading space when the cursor follows a non-space that isn't an opening bracket or quote. A raw fallback always inserts the transcript after step 4, so spoken formatting, cancels and numbers survive it.
@@ -147,7 +147,7 @@ On the bench, two repairs carry the whole gain. `dropsContent` catches a real fa
 | `stripChatter`, `restoreMarks` (repairs) | 0 | |
 | Timeouts | 0 | |
 
-A repair counts when it changed the reply beyond surrounding whitespace, whether or not the reply was then used (`PipelineResult.repaired`, the replay's `chatter`, `marks` and `cue` columns). So 3 of 492 real dictations went in raw, and the guards changed 4 more. #116 found that `length` hits are mostly screen echoes over long terminal screens, counted as `length` because it runs first.
+A repair counts when it changed the reply beyond surrounding whitespace, whether or not the reply was then used (`PipelineResult.repaired`, the replay's `chatter`, `marks` and `cue` columns). So 3 of 492 real dictations went in raw, and the guards changed 4 more. #116 found that `length` hits are mostly screen echoes over long terminal screens, counted as `length` because it ran first; `echoesContext` runs before it now.
 
 ### What they cost
 
@@ -183,4 +183,4 @@ The `replyLimit` early stop: on the 2 history dictations `length` rejects, the c
 
 ### Known issues
 
-- #116: `length` runs before `echoesContext`, so screen echoes are counted as `length`.
+- #116: short dictations over long terminal screens still get screen echoes. They now count as `echoesContext`, not `length`, and still go in raw. Trimming the screen or a retrain is still open.
