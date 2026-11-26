@@ -3,6 +3,7 @@
 # v7 section). Reuses v6's speech and E4B teacher outputs (teach6 is unchanged), so it needs no GPU. Run from the
 # repo root, outside the sandbox, after training/make_data_v6.zsh's slow steps and `swift build -c release`.
 # Syncs lora-v7.yaml's iters to 40% of the real train rows.
+# The items check fails on any phrase shared with a bench or held-out case (#115); ALLOW_PHRASES=1 lets it pass.
 set -euo pipefail
 gen=(uv run --script training/gen.py)
 dg=${DG:-.build/release/PoptalkDatagen}
@@ -12,7 +13,7 @@ v7=training/out/v7
 }
 uv run --script training/contamination.py            # self-test
 $gen build7
-uv run --script training/contamination.py $v7/items.jsonl > /dev/null
+uv run --script training/contamination.py $v7/items.jsonl ${ALLOW_PHRASES:+--allow-phrases} > /dev/null
 $dg render < $v7/items.jsonl > $v7/rendered.jsonl
 $gen split7
 n=$(wc -l < $v7/data/train.jsonl); s=$((n * 2 / 5 / 4))

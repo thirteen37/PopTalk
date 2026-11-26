@@ -8,7 +8,7 @@
 
   training/gepa_prompts.py [--model mlx-community/gemma-4-e4b-it-4bit] [--budget 1500] [--reflector claude]
                            [--component dictation|edit] [--out training/out/gepa] [--seed DIR] [--length] [--dry-run]
-                           [--pool training/out/pool-v8]
+                           [--pool training/out/pool-v8] [--allow-phrases]
 
 Candidates are scored through the real pipeline: PoptalkBench --dictation-prompt-file/--edit-prompt-file.
 Train/val come from the synthetic items only; bench and held-out stay out of the loop (test them after,
@@ -22,6 +22,8 @@ the pick is the shortest candidate on the (val accuracy, tokens) Pareto front wi
 A child longer than the seed is never accepted. Each candidate's mean val latency is logged next to its tokens, and
 the share of val replies each Pipeline guard rejects (length, dropsContent, …).
 A reply a guard rejects scores 0, as in the app it falls back to the raw transcript (#103), and its feedback says so.
+Before anything runs, the pool is checked for phrases it shares with bench or held-out cases (contamination.Phrases,
+#115); any hit stops the run unless --allow-phrases.
 --dry-run builds and writes the pool, counts the seed's tokens and checks the scoring, then stops (no model, no API).
 --reflector claude sends the reflection prompts (synthetic items, failure feedback) to Claude via `claude -p`;
 anything else is a litellm model id (e.g. a local OpenAI-compatible server)."""
@@ -33,7 +35,7 @@ import gepa
 from gepa.core.adapter import EvaluationBatch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from contamination import swift_prompt  # noqa: E402
+from contamination import Phrases, swift_prompt  # noqa: E402
 
 BENCH = ".build/release/PoptalkBench"
 
@@ -74,7 +76,7 @@ def sample(items, per_cat, seed):
     for it in items:
         by[it["cat"]].append(it)
     r = random.Random(seed)
-    return [case(it) for cat in sorted(by) for it in r.sample(by[cat], min(per_cat, len(by[cat])))]
+    return [it for cat in sorted(by) for it in r.sample(by[cat], min(per_cat, len(by[cat])))]
 
 
 def tokenizer(model):  # Gemma 4 E2B and E4B (v3's base) share one tokenizer; the text-only copies have it
@@ -325,17 +327,23 @@ def main():
                     help="with --length: also score this prompt on val and put it on the front (repeatable)")
     ap.add_argument("--length", action="store_true", help="add prompt length (tokens) as an objective")
     ap.add_argument("--dry-run", action="store_true", help="write the pool and check the scoring; no model, no API")
+    ap.add_argument("--allow-phrases", action="store_true",
+                    help="run even if pool items share 4-word phrases with bench/held-out cases (#115)")
     a = ap.parse_args()
     if a.length and a.reflector != "claude":
         sys.exit("--length reflects through claude -p only")
     if a.pool:  # already split and matched to real use: taken whole
-        train, val = (itn([case(json.loads(l)) for l in open(a.pool / f"{n}.jsonl")]) for n in ("train", "val"))
+        raw = [[json.loads(l) for l in open(a.pool / f"{n}.jsonl")] for n in ("train", "val")]
     else:
         items = [json.loads(l) for l in open("training/out/items.jsonl")]
         val = sample(items, a.val_per_cat, seed=1)
-        seen = {c["id"] for c in val}
-        train = itn(sample([it for it in items if it["id"] not in seen], a.train_per_cat, seed=2))
-        val = itn(val)
+        seen = {it["id"] for it in val}
+        raw = [sample([it for it in items if it["id"] not in seen], a.train_per_cat, seed=2), val]
+    # #115: a pool item that shares a phrase with a bench or held-out case can teach the prompt that case's wording.
+    if Phrases().report(raw[0] + raw[1], sys.stderr) and not a.allow_phrases:
+        sys.exit("pool shares phrases with bench/held-out cases (above): fix the generator templates and regenerate, "
+                 "or pass --allow-phrases")
+    train, val = (itn([case(it) for it in r]) for r in raw)
     a.out.mkdir(parents=True, exist_ok=True)
     # No cache_evaluation: GEPA keys it by (candidate, list index) for train minibatches and val alike, so a child's
     # val score would reuse train items' results (gepa 0.1.4). Minibatches rarely repeat, so it saved little anyway.

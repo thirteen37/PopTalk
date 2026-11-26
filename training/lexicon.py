@@ -223,7 +223,7 @@ PLAIN = [
 # Correction-slot templates: {X} is spoken as "a <cue> b" and written as b.
 CORRECTABLE = [
     ("Can we meet on {X} after lunch?", "day"), ("The call is at {X} tomorrow.", "time"),
-    ("Book a table for {X} people.", "num"), ("Send the invoice to {X} by Friday.", "person"),
+    ("Reserve a table for {X} people.", "num"), ("Forward the invoice to {X} by Friday.", "person"),
     ("We'll meet in {X} for the review.", "place"), ("I need {X} copies of the handout.", "num"),
     ("The deadline is {X}, not earlier.", "day"), ("Pick me up at {X} tonight.", "time"),
     ("Can you invite {X} to the planning session?", "person"), ("The flight leaves on {X} morning.", "day"),
@@ -304,17 +304,17 @@ LISTS = [
 
 # Long, padded sentences and their core meaning (for "make it shorter").
 PADDING_OPEN = [
-    "I just wanted to quickly reach out and let you all know that", "As some of you may already be aware,",
-    "I hope this message finds you well. I'm writing to say that", "Just as a quick heads up for everyone,",
-    "I thought it would be a good idea to mention that", "For what it's worth, I wanted to point out that",
-    "Following up on our earlier conversation, I wanted to confirm that",
+    "I'm sending a short note to make sure everybody hears that", "In case it slipped past anyone in the last thread,",
+    "Hello all, hopefully your week is going smoothly. The reason I'm writing is that", "One small note for the whole group,",
+    "It seemed worth bringing up that", "If it helps anyone at all, I'd like to note that",
+    "Circling back to what we talked about before, I can now confirm that",
 ]
 PADDING_CLOSE = [
-    ", so please plan accordingly and let me know if that causes any problems for you.",
-    ", and I really appreciate everyone's patience and flexibility while we sort this out.",
-    ", so feel free to reach out to me directly if you have any questions or concerns at all.",
-    ". Thanks so much in advance for your understanding, and sorry for any inconvenience this may cause.",
-    ", which I think is good news for all of us, all things considered.",
+    ", so do adjust your plans as needed and tell me if anything about that doesn't work for you.",
+    ", and I'm truly grateful to all of you for bearing with us while this gets sorted.",
+    ", so don't hesitate to message me if anything at all is unclear or worrying.",
+    ". Many thanks ahead of time for being understanding, and apologies for any trouble this might create.",
+    ", which seems like a positive outcome for everybody, on balance.",
 ]
 CORES = [
     "the workshop has moved to Thursday morning", "the office will be closed next Friday",
@@ -386,7 +386,7 @@ SHORTER = ["make this shorter", "shorten this", "make this more concise", "trim 
            "can you shorten it", "make it more concise", "tighten this up", "make it brief", "too wordy, shorten it",
            "shorter please", "condense this"]
 BULLETS = ["make this a bulleted list", "bullet these", "convert to bullets", "make it a list", "bullet points please",
-           "turn this into a list", "format as bullet points", "put these in bullets", "split this into bullet points",
+           "turn this into a list", "format as bullet points", "put these in bullets", "split this into bullets",
            "list format please"]
 NUMBERED = ["make this a numbered list", "number these", "turn this into numbered steps", "put this in a numbered list"]
 TYPO = ["fix the typos", "fix the spelling", "correct the spelling mistakes", "fix typos", "there's a typo, fix it",
@@ -394,7 +394,7 @@ TYPO = ["fix the typos", "fix the spelling", "correct the spelling mistakes", "f
 GRAMMAR = ["fix grammar", "correct the grammar", "can you fix the grammar here", "grammar fix please",
            "make this grammatically correct", "fix the grammar in this"]
 INSERT_AFTER = ["add after this: {x}", "after this add {x}", "append {x}", "put {x} at the end", "add {x} after it",
-                "then add {x}", "add a line after: {x}", "add at the end: {x}"]
+                "then add {x}", "add a line after: {x}", "add to the end: {x}"]
 INSERT_BEFORE = ["add before this: {x}", "put {x} at the start", "add {x} at the top", "prepend {x}", "add {x} before it",
                  "insert {x} at the beginning", "add at the start: {x}"]
 CASE = [("make this title case", "title"), ("all caps", "upper"), ("make it uppercase", "upper"),
@@ -403,9 +403,9 @@ SPELL_INTRO = ["it's {n}, {s}", "that's {n}, {s}", "should be {n}, {s}", "spell 
                "the name is {n}, {s}", "wrong spelling, it's {s}", "{n}, {s}"]
 CONTEXT_FIX = {"person": ["fix the name", "fix her name", "fix his name", "spell their name right", "correct the name",
                           "use the right spelling for the name", "fix the spelling of the name"],
-               "company": ["fix the company name", "fix the client name", "correct the vendor name", "fix the partner's name",
+               "company": ["correct the company name", "fix the client name", "correct the vendor name", "fix the partner's name",
                            "spell the customer name right", "the company name is wrong"],
-               "product": ["fix the product name", "correct the tool name", "fix the spelling of the app",
+               "product": ["correct the product name", "correct the tool name", "fix the spelling of the app",
                            "spell it like on screen", "use the right product name"],
                "project": ["fix the project name", "correct the codename", "spell the project name right"]}
 REMEMBER = [", and remember this", ", remember that", ", please remember it", ", save that spelling"]
@@ -598,7 +598,7 @@ NOTE_BULLETS = ["- call the landlord", "- send the deck", "- book flights", "- r
 # Sentence-opening So/Well/Okay are kept as said.
 KEEP_OPENERS = ["So I think we should wait for the review.", "Well, the second draft reads better.",
                 "Okay, let's move the call to the afternoon.", "So the plan is to ship on Friday.",
-                "Well, nobody objected in the meeting.", "Okay so the build is green now.",
+                "Well, nobody objected in the meeting.", "Okay so the tests pass now.",
                 "So what do we tell the client?", "Well, that took longer than expected.",
                 "Okay, I'll send the invite after lunch.", "So we're keeping the old logo after all.",
                 "Well, it works on the staging server.", "Okay, run it one more time."]
@@ -627,8 +627,8 @@ IMPERATIVES = [
     "pick up the dry cleaning on {D}", "schedule the review for early {M}", "ask {P} for the updated numbers",
     "grab a coffee for me on your way in", "merge the docs branch after the review",
     "set a timer for twenty minutes", "invite {P} to the kickoff on {D}", "lock the front door",
-    "email the venue about parking", "write the release notes before {D}", "review the draft and leave comments",
-    "push the fix and let me know", "return the library books by {D}", "pay the water bill",
+    "email the venue about parking", "write the release notes by {D}", "review the draft and leave comments",
+    "push the fix and let me know", "return the borrowed books by {D}", "pay the water bill",
     "save the form before you close it", "buy a birthday card for {P}", "start the dishwasher",
     "text {P} the address", "post the photos in the group chat", "check in for the flight",
 ]
@@ -730,7 +730,7 @@ KEEP_LEADS = [
     "Make sure the back door is locked.",
     "So the movers arrive at eight.", "So I booked the cabin for three nights.", "So how was the concert?",
     "So that's why the lights were off.", "So we're meeting at the park this time.",
-    "Well, the garden looks amazing this year.", "Well, I tried calling twice.", "Well, the bus never showed up.",
+    "Well, the garden looks lovely this year.", "Well, I tried calling twice.", "Well, the bus never showed up.",
     "Well, that was a long drive.", "Well, we can always order pizza.",
     "Okay, I'll pick up the kids at four.", "Okay, the table is booked for six people.", "Okay, see you at the station.",
     "Okay so the pool closes early today.", "Okay, that works for me.", "Okay, thanks for letting me know.",
@@ -820,7 +820,7 @@ V8_SHORT_NAMED = ["Thanks, {P}!", "Ask {P}.", "Ping {P} about it.", "Call {P} ba
 # Said to a coding agent, one sentence each.
 V8_DEV = [
     "Let's start with the failing test and work backwards.", "The login page still flashes white before the theme loads.",
-    "Move the retry logic into its own function.", "Keep the old endpoint working until the clients migrate.",
+    "Move the retry logic into its own function.", "Leave the old endpoint running until the clients migrate.",
     "The second approach looks cleaner, go with that one.", "Add a log line when the cache misses.",
     "Make the button disabled while the request is in flight.", "That fixed the crash but now the list doesn't scroll.",
     "Use the same date format as the export screen.", "Delete the unused helpers while you're in there.",

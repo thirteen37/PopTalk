@@ -3,6 +3,7 @@
 # lora-v6.yaml for the phase-2 sequence). Run from the repo root, outside the sandbox, after `swift build -c release`.
 # Slow steps are skipped when their output exists: speech (say + Parakeet, shared with make_data.zsh in training/out/)
 # and the E4B teacher (GPU). SKIP_TEACH=1 builds without teacher items; DG=.build/debug/PoptalkDatagen for a dry run.
+# The items check fails on any phrase shared with a bench or held-out case (#115); ALLOW_PHRASES=1 lets it pass.
 set -euo pipefail
 gen=(uv run --script training/gen.py)
 dg=${DG:-.build/release/PoptalkDatagen}
@@ -17,6 +18,6 @@ uv run --script training/contamination.py            # self-test
   mv $v6/teach_out.part $v6/teach_out.jsonl
 }
 $gen build6
-uv run --script training/contamination.py $v6/items.jsonl > /dev/null
+uv run --script training/contamination.py $v6/items.jsonl ${ALLOW_PHRASES:+--allow-phrases} > /dev/null
 $dg render < $v6/items.jsonl > $v6/rendered.jsonl
 $gen split6
