@@ -129,9 +129,10 @@ public struct Pipeline: Sendable {
                 return res
             }
             if let gate, gate.stop == nil { return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true) }
-            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
+            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: Self.cleanupContext(r.context, words: words),
+                                             vocabulary: vocabulary.terms)
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
             // Providers stop generating once a reply is certainly past it (#100), unless `length` is off (#118).
             let limit = Self.maxCleanupLength(transcript)
@@ -221,6 +222,19 @@ public struct Pipeline: Sendable {
 }
 
 extension Pipeline {
+    /// The longest dictation, in words after the prepass, whose prompt gets no screen text (#116).
+    public static let shortDictationWords = 5
+
+    /// The screen the cleanup model sees for a dictation of `words` words. Up to `shortDictationWords`, no screen
+    /// text: over long screens E2B v6 copied the screen instead of cleaning so short a dictation (#116). App, title,
+    /// domain and vocabulary stay. Only the prompt: the casing fix, boost terms and `echoesContext` see it all.
+    static func cleanupContext(_ c: ScreenSnapshot, words: Int) -> ScreenSnapshot {
+        guard words <= shortDictationWords else { return c }
+        var c = c
+        (c.text, c.ocrText, c.cursorOffset) = ("", "", nil)
+        return c
+    }
+
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
     /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
     /// `fromScreen` false (#40): saved and learned terms only.

@@ -114,6 +114,34 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     }
 }
 
+// #116 step 2: a dictation of at most `shortDictationWords` words gets no screen text in its prompt (it echoed long
+// screens). App, window title, domain and vocabulary stay; one word more keeps the screen.
+@Test func shortDictationPromptLeavesOutScreenText() async {
+    final class Seen: @unchecked Sendable { var user: [String] = [] }
+    let seen = Seen(), store = VocabularyStore(url: tmp())
+    try? store.add(VocabTerm(text: "Quillmate"))
+    let p = Pipeline(complete: { _, messages, _, _ in seen.user.append(messages.last!.content); return "Ok." },
+                     vocabulary: store, cleanupModel: "small", editModel: "big")
+    let ctx = ScreenSnapshot(appName: "Ghostty", windowTitle: "build", webDomain: "example.com", text: todoist, ocrText: "Inbox zero")
+    let n = Pipeline.shortDictationWords
+    for words in [1, n, n + 1] {
+        _ = await p.run(Request(transcript: Array(repeating: "ship", count: words).joined(separator: " "), selection: nil, context: ctx))
+    }
+    let empty = #"<screen app="Ghostty" window="build (example.com)">"# + "\n\n</screen>\n<vocabulary>Quillmate</vocabulary>"
+    #expect(seen.user[0].hasPrefix(empty) && seen.user[1].hasPrefix(empty))
+    #expect(seen.user[2].contains(todoist) && seen.user[2].contains("Inbox zero"))
+}
+
+// The rule changes only the prompt: the casing fix and echoesContext still see the whole screen.
+@Test func shortDictationKeepsScreenForCasingAndEchoCheck() async {
+    let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Meal Prep." }, vocabulary: VocabularyStore(url: tmp()),
+                           cleanupModel: "adapters/gemma-4-e2b-poptalk-v6", editModel: "big")
+        .run(Request(transcript: "ship it to meal prep", selection: nil, context: ScreenSnapshot(text: todoist)))
+    #expect(r.recased == ["Meal Prep"])
+    let echo = await pipeline(reply: todoist).run(Request(transcript: "fix it", selection: nil, context: ScreenSnapshot(text: todoist)))
+    #expect(echo.rejectedBy == "echoesContext")
+}
+
 @Test func literallyBypassesLLM() async {
     let calls = Calls()
     let r = await pipeline(reply: "x", calls: calls).run(req("Literally: make it shorter", selection: "Heading"))
