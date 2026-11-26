@@ -131,8 +131,7 @@ public struct Pipeline: Sendable {
             if let gate, gate.stop == nil { return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true) }
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
-            let messages = Prompts.dictation(model: cleanupModel, transcript: transcript, context: Self.cleanupContext(r.context, words: words),
-                                             vocabulary: vocabulary.terms)
+            let messages = Self.dictationMessages(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
             // Providers stop generating once a reply is certainly past it (#100), unless `length` is off (#118).
             let limit = Self.maxCleanupLength(transcript)
@@ -233,6 +232,14 @@ extension Pipeline {
         var c = c
         (c.text, c.ocrText, c.cursorOffset) = ("", "", nil)
         return c
+    }
+
+    /// The cleanup chat for `transcript` (after `dictationPrepass`), with `cleanupContext`'s screen. `PoptalkDatagen
+    /// render` builds training prompts with it too, so they match the app's (#124).
+    public static func dictationMessages(model: String, transcript: String, context: ScreenSnapshot,
+                                         vocabulary: [VocabTerm]) -> [ChatMessage] {
+        let words = transcript.split(whereSeparator: \.isWhitespace).count
+        return Prompts.dictation(model: model, transcript: transcript, context: cleanupContext(context, words: words), vocabulary: vocabulary)
     }
 
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor

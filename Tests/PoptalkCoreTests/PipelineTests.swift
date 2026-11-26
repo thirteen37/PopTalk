@@ -132,6 +132,26 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(seen.user[2].contains(todoist) && seen.user[2].contains("Inbox zero"))
 }
 
+// #124: `PoptalkDatagen render` builds its dictation prompts with `Pipeline.dictationMessages`, so training prompts
+// match the app's, short dictations without screen text included.
+@Test func renderedDictationPromptMatchesPipeline() async {
+    final class Seen: @unchecked Sendable { var messages: [[ChatMessage]] = [] }
+    let seen = Seen(), store = VocabularyStore(url: tmp())
+    try? store.add(VocabTerm(text: "Quillmate"))
+    let p = Pipeline(complete: { _, m, _, _ in seen.messages.append(m); return "Ok." },
+                     vocabulary: store, cleanupModel: ModelSettings.e2b, editModel: "big")
+    let ctx = ScreenSnapshot(appName: "Ghostty", windowTitle: "build", text: todoist, cursorOffset: 3, ocrText: "Inbox zero")
+    let short = "um send the draft tonight", long = "send the draft to the team tonight"
+    for said in [short, long] { _ = await p.run(Request(transcript: said, selection: nil, context: ctx)) }
+    let rendered = [short, long].map {
+        Pipeline.dictationMessages(model: ModelSettings.e2b, transcript: Pipeline.dictationPrepass(Pipeline.stripHesitations($0)),
+                                   context: ctx, vocabulary: store.terms)
+    }
+    #expect(seen.messages == rendered)
+    #expect(!rendered[0][1].content.contains(todoist) && !rendered[0][1].content.contains("Inbox zero"))
+    #expect(rendered[1][1].content.contains(todoist))
+}
+
 // The rule changes only the prompt: the casing fix and echoesContext still see the whole screen.
 @Test func shortDictationKeepsScreenForCasingAndEchoCheck() async {
     let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Meal Prep." }, vocabulary: VocabularyStore(url: tmp()),
