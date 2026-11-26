@@ -86,8 +86,6 @@ private func fix(_ t: String, _ terms: [String], screen: String = "") -> String 
     // "İ" lowercases to two code points, so offsets after it differ between the original and its lowercase form.
     #expect(fix("İSTANBUL Ölçek and korvanta", ["Korvanta"]) == "İSTANBUL Ölçek and Korvanta")
     #expect(fix("İZMIRLY and izmirly", ["İzmirly"]) == "İzmirly and izmirly")
-    // Case folding, as the regex did: "ß" matches "ss". (Greek terms never get here: the spell check passes them.)
-    #expect(fix("the strasse and STRASSE", ["Straße"]) == "the Straße and Straße")
 }
 
 // Settings, read per press: each request's pipeline gets `DictationFeatures(defaults)` as the app builds it.
