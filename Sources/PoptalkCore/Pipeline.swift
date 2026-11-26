@@ -33,8 +33,8 @@ public struct PipelineResult: Equatable, Sendable {
     public var skippedLLM: Bool
     /// Screen or learned terms (not saved vocabulary) whose spelling the casing fix wrote (#87).
     public var recased: [String] = []
-    /// The guard that turned a dictation reply into a raw fallback: empty, length, dropsContent, dropsProtected
-    /// or echoesContext (replay counts); nil when there was no reply or it was used.
+    /// The guard that turned a dictation reply into a raw fallback: empty, echoesContext, length, dropsContent
+    /// or dropsProtected (replay counts); nil when there was no reply or it was used.
     public var rejectedBy: String?
     /// The `Pipeline.repairs` that changed a dictation reply beyond surrounding whitespace, in order (replay counts).
     public var repaired: [String] = []
@@ -284,10 +284,11 @@ extension Pipeline {
     public struct ReplyCheck: Sendable { var limit: Int, screen: String }
     public static let rejects: [(name: String, test: @Sendable (_ out: String, _ said: String, _ check: ReplyCheck) -> Bool)] = [
         ("empty", { out, _, _ in out.isEmpty }),
+        // Before length, so a long screen echo is named an echo (#116).
+        ("echoesContext", { out, said, c in echoesContext(out, transcript: said, context: c.screen) }),
         ("length", { out, _, c in out.count > c.limit }),
         ("dropsContent", { out, said, _ in dropsContent(out, transcript: said) }),
         ("dropsProtected", { out, said, _ in dropsProtected(out, transcript: said) }),
-        ("echoesContext", { out, said, c in echoesContext(out, transcript: said, context: c.screen) }),
     ]
     public static var guardNames: [String] { prepass.map(\.name) + repairs.map(\.name) + rejects.map(\.name) }
 
