@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lexicon as L  # noqa: E402
-from contamination import Checker  # noqa: E402
+from contamination import Checker, Phrases  # noqa: E402
 import pool_profile as P  # noqa: E402
 
 OUT = Path("training/out")
@@ -1968,6 +1968,15 @@ HO_CORES = ["the shuttle to the venue leaves at eight", "the cafeteria is closed
 HO_LISTS = [["buy stamps", "mail the package", "return the library books"], ["carrots", "yogurt", "bananas", "honey"],
             ["back up the laptop", "update the router", "reset the guest password"]]
 HO_BULLETS = ["make this into bullets", "can you bulletize this", "bulleted list please"]
+# h-e-shorter's padding: lexicon.py's PADDING_* until #115, which gave training its own wording.
+HO_PADDING_OPEN = ["I just wanted to quickly reach out and let you all know that", "As some of you may already be aware,",
+                   "I hope this message finds you well. I'm writing to say that", "Just as a quick heads up for everyone,",
+                   "I thought it would be a good idea to mention that", "For what it's worth, I wanted to point out that"]
+HO_PADDING_CLOSE = [", so please plan accordingly and let me know if that causes any problems for you.",
+                    ", and I really appreciate everyone's patience and flexibility while we sort this out.",
+                    ", so feel free to reach out to me directly if you have any questions or concerns at all.",
+                    ". Thanks so much in advance for your understanding, and sorry for any inconvenience this may cause.",
+                    ", which I think is good news for all of us, all things considered."]
 
 
 def heldout(train_keys):
@@ -2019,7 +2028,7 @@ def heldout(train_keys):
                       "expectAction": "correct", "expectExact": e[0]})
     for i in range(6):
         core = HO_CORES[i % 3]
-        sel = f"{L.PADDING_OPEN[i]} {core}{L.PADDING_CLOSE[i % len(L.PADDING_CLOSE)]}"
+        sel = f"{HO_PADDING_OPEN[i]} {core}{HO_PADDING_CLOSE[i % len(HO_PADDING_CLOSE)]}"
         cases.append({"id": f"h-e-shorter-{i}", "kind": "edit", "transcript": HO_SHORTER[i % 3], "selection": sel,
                       "expectAction": "edit", "mustContain": [core.split()[1]], "maxLengthRatio": 0.6})
     for i in range(6):
@@ -2102,19 +2111,24 @@ def audio_items(skipped):
 
 
 def taught(out, skipped, target):
-    """Teacher items from out/teach.jsonl whose result in out/teach_out.jsonl `target` accepts."""
+    """Teacher items from out/teach.jsonl whose result in out/teach_out.jsonl `target` accepts, minus those that share
+    a phrase with a bench or held-out case (#115): no template to fix there, the teacher wrote it, or the input predates
+    the template fix."""
     if not (out / "teach_out.jsonl").exists():  # SKIP_TEACH=1: build without teacher items
         n = len(jl(out / "teach.jsonl")) if (out / "teach.jsonl").exists() else 0
         print(f"teacher: skipped, no teach_out.jsonl ({n} items in teach.jsonl)", file=sys.stderr)
         skipped["teacher"] = "no teach_out.jsonl"
         return []
-    results, kept = {o["id"]: o for o in jl(out / "teach_out.jsonl")}, Counter()
+    results, kept, phrases, shared = {o["id"]: o for o in jl(out / "teach_out.jsonl")}, Counter(), Phrases(), Counter()
     items = []
     for it in jl(out / "teach.jsonl"):
-        if (t := target(it, results.get(it["id"], {}))):
+        if (t := target(it, results.get(it["id"], {}))) and phrases.hits(it | {"target": t}):
+            shared[it["cat"]] += 1
+        elif t:
             items.append({k: v for k, v in it.items() if k not in ("lang", "rule")} | {"target": t})
             kept[it["cat"]] += 1
-    print(f"teacher: {sum(kept.values())}/{len(results)} kept {dict(kept)}", file=sys.stderr)
+    print(f"teacher: {sum(kept.values())}/{len(results)} kept {dict(kept)}; dropped for a bench/held-out phrase "
+          f"{dict(shared)}", file=sys.stderr)
     return items
 
 
