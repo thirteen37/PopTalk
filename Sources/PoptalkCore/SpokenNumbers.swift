@@ -15,6 +15,8 @@ extension Pipeline {
     /// - A run that isn't one number stays as said: "one two three", "twelve fifty", "nineteen ninety nine".
     ///   A run can't start with hundred/thousand: "a hundred times".
     /// - A 0–9 word corrected to digits goes to digits too: "three actually twenty" → "3 actually 20" (`correctedSmall`).
+    /// - Never half a phrase (#125): a run next to number words it can't absorb ("twenty oh five", "twelve dollars fifty",
+    ///   "ten twelve and fourteen") leaves the whole phrase as words, for the model to write.
     public static func spokenNumbers(_ s: String) -> String {
         let s = s.replacing(time) { m in
             var t = "\(number[m.1.lowercased()]!.value)"
@@ -48,13 +50,15 @@ extension Pipeline {
             }
             return j
         }
-        var out = "", done = s.startIndex, i = 0
+        // Every run of number words, converted or not: `next` is the first word after it (past a unit), `edit` its digits.
+        var runs: [(i: Int, next: Int, ordinal: Bool, edit: (start: String.Index, end: String.Index, text: String)?)] = []
+        var i = 0, done = s.startIndex
         while i < words.count {
             guard let first = number[words[i].text] else { i += 1; continue }
             var j = extend(i)
             // "a hundred and fifty": no leading number, leave the whole run.
             guard first.kind != .hundred, first.kind != .scale, let parsed = parse(words[i..<j].map(\.text)) else {
-                i = j; continue
+                runs.append((i, j, false, nil)); i = j; continue
             }
             let (value, ordinal) = parsed
             var text = value >= 10_000 ? value.formatted(.number.locale(Locale(identifier: "en_US"))) : "\(value)"
@@ -66,10 +70,11 @@ extension Pipeline {
                 j = digits.last! + 1
                 forced = true
             }
-            var end = words[j - 1].range.upperBound
+            var end = words[j - 1].range.upperBound, next = j
             if !ordinal, adjacent(j - 1, j), ["percent", "dollar", "dollars"].contains(words[j].text) {
                 text = words[j].text == "percent" ? text + "%" : "$" + text
                 end = words[j].range.upperBound
+                next = j + 1
                 forced = true
                 // "five dollars and fifty cents" → $5.50 (1–99 cents, whole dollars only).
                 var k = j + 1
@@ -79,7 +84,7 @@ extension Pipeline {
                    let c = parse(words[k..<e].map(\.text)), !c.ordinal, (1...99).contains(c.value) {
                     text += c.value < 10 ? ".0\(c.value)" : ".\(c.value)"
                     end = words[e].range.upperBound
-                    j = e + 1
+                    j = e + 1; next = j
                 }
             }
             // "minus five" / "negative five" → -5; not in an expression ("ten minus two") or "plus or minus".
@@ -94,18 +99,46 @@ extension Pipeline {
             let cue = i > 0 && adjacent(i - 1, i) ? words[i - 1].text : nil
             let hash = s[done..<start].wholeMatch(of: /(?s).*#\h*/) != nil
             if ordinal {
-                guard j - i > 1 else { i = j; continue }
+                guard j - i > 1 else { runs.append((i, j, true, nil)); i = j; continue }
                 let tail = value % 100
                 text += (11...13).contains(tail) ? "th" : [1: "st", 2: "nd", 3: "rd"][value % 10] ?? "th"
             } else if value < 10, !forced, !hash, !cues.contains(cue ?? "") {
-                i = j; continue
+                runs.append((i, next, false, nil)); i = j; continue
             }
             if hash { start = s[..<start].lastIndex(of: "#").map { s.index(after: $0) } ?? start }
             else if cue == "q" || cue == "v" { start = words[i - 1].range.upperBound }
             if signed { start = words[i - 1].range.lowerBound }
-            out += s[done..<start] + text
+            runs.append((i, next, ordinal, (start, end, text)))
             done = end
             i = j
+        }
+        // #125: back off rather than hand the model a half-converted phrase ("20 oh five", "$12 50", "ten twelve and 14").
+        // Runs chain when only a comma and/or "and" sits between them (a list), or nothing / "oh" + a digit word does
+        // (tight: "twelve dollars fifty", "twenty oh five"). A chain that is tight anywhere, or has a run that stays
+        // words, stays words whole. A list that converts throughout keeps its digits: "10, 20 and 30". Ordinals don't chain.
+        func link(_ a: Int) -> (list: Bool, tight: Bool) {
+            let (x, y) = (runs[a], runs[a + 1])
+            guard !x.ordinal, !y.ordinal else { return (false, false) }
+            let gap = s[words[x.next - 1].range.upperBound..<words[y.i].range.lowerBound].lowercased()
+            if x.next == y.i, adjacent(x.next - 1, y.i) { return (true, true) }
+            if x.next + 1 == y.i, words[x.next].text == "oh", adjacent(x.next - 1, x.next), adjacent(x.next, y.i),
+               number[words[y.i].text]?.kind == .unit { return (true, true) }
+            return (gap.wholeMatch(of: /\s*,?\s*(?:and\s+)?/) != nil, false)
+        }
+        var a = 0
+        while a < runs.count {
+            var b = a, tight = false
+            while b + 1 < runs.count, case let l = link(b), l.list { tight = tight || l.tight; b += 1 }
+            if b > a, tight || runs[a...b].contains(where: { $0.edit == nil }) {
+                for k in a...b { runs[k].edit = nil }
+            }
+            a = b + 1
+        }
+        var out = ""
+        done = s.startIndex
+        for case let (start, end, text)? in runs.map(\.edit) {
+            out += s[done..<start] + text
+            done = end
         }
         return (out + s[done...]).replacing(correctedSmall) { "\(number[$0.1.lowercased()]!.value)" }
     }

@@ -169,3 +169,31 @@ func correctionLookalikesUnchanged(_ said: String) {
 func nemoWinsThatStayWords(_ said: String) {
     #expect(n(said) == said)
 }
+
+// #125: a number run next to number words it can't absorb backs off, so the model never sees a half-converted mix
+// ("20 oh five", "$12 50", "ten twelve and 14"): the whole phrase stays words and the model writes it.
+@Test(arguments: [
+    "the old footbridge was repainted in twenty oh five",
+    "the meeting room is eleven oh five",
+    "the parking meter takes twelve dollars fifty for the afternoon",
+    "the shop only had sizes ten twelve and fourteen in stock",
+    "sizes eight, ten and twelve",
+    "between five and ten",
+    "do step one and two",
+])
+func groupedNumbersBackOff(_ said: String) {
+    #expect(n(said) == said)
+}
+
+@Test(arguments: [
+    ("ten and twenty", "10 and 20"),
+    ("issue twelve and thirteen", "issue 12 and 13"),
+    ("ten, twenty and thirty", "10, 20 and 30"),
+    ("ten percent and twenty percent", "10% and 20%"),
+    ("it was five dollars, twenty people came", "it was $5, 20 people came"),
+    ("the first ten people", "the first 10 people"),
+    ("the twenty first and twenty second", "the 21st and 22nd"),
+])
+func numberListsThatAllConvertStay(_ said: String, _ written: String) {
+    #expect(n(said) == written)
+}
