@@ -1115,3 +1115,13 @@ AS_SAID = [
 ]
 # How two said clauses join in one breath: kept as said in the target, only punctuation added.
 AS_SAID_JOIN = [" and ", " so ", " but ", " and then ", " because "]
+
+# ---------- #116: a terminal with a sidebar pane (build7) ----------
+# Real terminal screens put a sidebar next to the agent: one "│" at column 20–39 on each line, and few end on "> "
+# (counts only, #116). Invented rows for the pane ({w}: REPO_WORDS); blank rows fill most of it, as below a short list.
+SIDEBAR_ROWS = ["Sessions", "● {w}", "○ {w}", "  {w}/main", "  fix/{w}-retry", "  feat/{w}", "Files", "  src/",
+                "  tests/", "  README.md", "  package.json", "Branches", "  main", "  ↑2 ↓0", "Agents", "  1 running",
+                "  2 idle", "  ✓ tests passed", "  ✗ lint failed", "Recent", "  {w} · 3m", "  {w} · 1h"]
+# The agent pane's last line: a status or hint line, never the "> " prompt.
+SIDEBAR_ENDS = ["  ? for shortcuts", "  esc to interrupt", "✻ Thinking…", "  ⏵⏵ accept edits on (shift+tab to cycle)",
+                "  ⎿  Running…", "✻ Working… (12s · esc to interrupt)", "  ctrl+t to show todos"]

@@ -10,7 +10,8 @@
   gen.py split            → out/data/{train,valid}.jsonl from out/rendered.jsonl (PoptalkDatagen render)
   gen.py v8               → out/pool-v8/{train,val}.jsonl  dictation pool matched to real use (#103), for GEPA and E2B data
   gen.py teach6 / build6 / split6   the same three stages for the E2B v6 adapter, in out/v6/ (make_data_v6.zsh)
-  gen.py build7 / split7  E2B v7 (#105): v6's items plus d-keep-lead, d-numgroup (#125) and kept-as-said (#126), in out/v7/
+  gen.py build7 / split7  E2B v7 (#105): v6's items plus d-keep-lead, d-numgroup (#125), kept-as-said (#126)
+                          and d-short-sidebar (#116), in out/v7/
   gen.py check            → asserts the v5–v7 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
@@ -2125,7 +2126,70 @@ def check_as_said():
           f"keep \"and then\"/\"and also\"; {len(mut)} d-mutated keep a homophone")
 
 
-SCRIPTS = {"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
+# ---------- #116: short dictations over a sidebar terminal (build7) ----------
+# Real terminal screens have a sidebar pane (one "│" at column 20–39 per line) and rarely end on "> "; every other
+# synthetic terminal ends on "> " with no bar. Short replies (1–8 words, most 6–8: up to Pipeline.shortDictationWords
+# the render drops the screen anyway) over a long screen of that layout, the target the cleaned dictation, never screen
+# text. Only build7 adds them, so v6 rebuilds as it was.
+
+SIDEBAR_N = 300
+SIDEBAR_SAYS = [sentence(s) for s in V8_SHORTS + L.V8_SHORT_ASK + L.AGENT_SAID + L.V8_DEV if "{" not in s and v8_words(s) <= 8]
+
+
+def sidebar_screen(r, avoid):
+    """A long terminal (2500–3990 characters, inside Prompts.window's field limit) with a sidebar pane left of the
+    agent on every line, the cursor at the end of an agent status line. No line holds `avoid` (lowercase)."""
+    w, total = r.randint(20, 39), r.randint(2500, 3990)
+    side = lambda: (r.choice(L.SIDEBAR_ROWS).format(w=r.choice(L.REPO_WORDS)) if r.random() < 0.3 else "").ljust(w)
+    row = lambda agent: side() + "│ " + agent
+    end = row(r.choice(L.SIDEBAR_ENDS))
+    lines, size, miss = [], len(end), 0
+    while miss < 30:
+        block = [row(x) for x in v8_line(r, "agent").split("\n")]
+        n = sum(len(x) + 1 for x in block)
+        if any(avoid in x.lower() for x in block) or size + n > total:
+            miss += 1
+            continue
+        lines += block
+        size += n
+    text = "\n".join(lines + [end])
+    app, win = r.choice(L.AGENT_APPS)
+    return {"appName": app, "windowTitle": win.format(w=r.choice(L.REPO_WORDS)), "text": text, "cursorOffset": utf16(text)}
+
+
+def sidebar_dictation():
+    checker, r, out = Checker(), R("d-short-sidebar"), []
+    longer = [s for s in SIDEBAR_SAYS if v8_words(s) >= 6]
+    while len(out) < SIDEBAR_N:
+        target = r.choice(longer if r.random() < 0.6 else SIDEBAR_SAYS)
+        x = r.random()  # as Parakeet writes it, bare, or with an "uh"/"um"
+        t = target if x < 0.45 else lower_transcript(target) if x < 0.75 else v8_um(r, target, 1)
+        t = lower_transcript(t) if x >= 0.75 and r.random() < 0.5 else t
+        ctx = sidebar_screen(r, " ".join(norm(target)) if v8_words(target) > 1 else target.lower().rstrip(".!?"))
+        it = {"id": f"d-short-sidebar-{len(out)}", "cat": "d-short-sidebar", "transcript": t, "context": ctx, "target": target}
+        if not checker.reason(it):
+            out.append(it)
+    return out
+
+
+def check_sidebar():
+    """`gen.py check`: d-short-sidebar is 1–8 words, mostly 6–8, its target the transcript minus fillers and not on
+    the screen; each screen is long, has the bar at one column in 20–39 on every line, and doesn't end on "> "."""
+    checker, items = Checker(), sidebar_dictation()
+    for it in items:
+        t, y, text = it["transcript"], it["target"], it["context"]["text"]
+        assert 1 <= v8_words(y) <= 8 and m6_words(t) == norm(y) and y[0].isupper() and y[-1] in ".!?", it
+        assert not checker.reason(it), it
+        assert v8_words(y) == 1 or " ".join(norm(y)) not in " ".join(norm(text)), it
+        cols = {x.index("│") for x in text.split("\n")}
+        assert len(cols) == 1 and 20 <= cols.pop() <= 39 and all(x.count("│") == 1 for x in text.split("\n")), it["id"]
+        assert 2400 <= len(text) <= 4000 and not text.rstrip().endswith(">"), it["id"]
+    long_ = sum(v8_words(it["target"]) >= 6 for it in items)
+    assert long_ >= 0.5 * len(items), long_
+    print(f"sidebar check ok: {len(items)} d-short-sidebar, {long_} of 6–8 words, {len(SIDEBAR_SAYS)} sayings")
+
+
+SCRIPTS ={"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
 
 
 def teacher_target(it, reply):
@@ -2400,6 +2464,7 @@ def main(cmd):
         check_keep7()
         check_numgroup()
         check_as_said()
+        check_sidebar()
     elif cmd == "v8":
         train, val = v8_pools()
         write(OUT / "pool-v8" / "train.jsonl", train)
@@ -2420,7 +2485,7 @@ def main(cmd):
         skipped, v7 = {}, cmd == "build7"
         AS_SAID = v7
         items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
-        items += (keep7_dictation() + numg_dictation() + as_said_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
+        items += (keep7_dictation() + numg_dictation() + as_said_dictation() + sidebar_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
         build(OUT7 if v7 else OUT6, items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
     elif cmd in ("split", "split6", "split7"):
         v = cmd[5:]
