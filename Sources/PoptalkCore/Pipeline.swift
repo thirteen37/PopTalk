@@ -4,11 +4,14 @@ public struct Request: Sendable {
     public var transcript: String
     public var selection: String?
     public var context: ScreenSnapshot
+    /// The press's resolved cleanup level (#96); dictations only, and only for `Pipeline.levels` models.
+    public var cleanup: CleanupLevel
 
-    public init(transcript: String, selection: String?, context: ScreenSnapshot) {
+    public init(transcript: String, selection: String?, context: ScreenSnapshot, cleanup: CleanupLevel = .clean) {
         self.transcript = transcript
         self.selection = selection
         self.context = context
+        self.cleanup = cleanup
     }
 }
 
@@ -73,6 +76,9 @@ public struct Pipeline: Sendable {
     public var remembers = true
     /// The yes/no term check for `DictationFeatures.soundAlikeTerms` (#75 step 2): MLX only; nil skips it.
     public var termScore: TermScore?
+    /// The cleanup model was trained on the level tag (#96): `ModelSettings.levelModels`, or PoptalkBench `--levels`.
+    /// Otherwise every dictation is sent and checked as Clean.
+    public var levels: Bool
 
     public init(complete: @escaping Complete, vocabulary: VocabularyStore, learned: [VocabTerm] = [], cleanupModel: String, editModel: String,
                 cleanupTimeout: TimeInterval = 4, editTimeout: TimeInterval = 20, features: DictationFeatures = DictationFeatures()) {
@@ -84,6 +90,7 @@ public struct Pipeline: Sendable {
         self.editModel = editModel
         self.cleanupTimeout = cleanupTimeout
         self.editTimeout = editTimeout
+        self.levels = ModelSettings.levelModels.contains(cleanupModel)
     }
 
     private static let literally = try! NSRegularExpression(pattern: #"^\s*literally\s*[:,]?\s*"#, options: .caseInsensitive)
@@ -131,7 +138,9 @@ public struct Pipeline: Sendable {
             if let gate, gate.stop == nil { return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true) }
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
-            let messages = Self.dictationMessages(model: cleanupModel, transcript: transcript, context: r.context, vocabulary: vocabulary.terms)
+            let level = levels ? r.cleanup : .clean
+            let messages = Self.dictationMessages(model: cleanupModel, transcript: transcript, context: r.context,
+                                                  vocabulary: vocabulary.terms, cleanup: level)
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
             // Providers stop generating once a reply is certainly past it (#100), unless `length` is off (#118).
             let limit = Self.maxCleanupLength(transcript)
@@ -154,7 +163,7 @@ public struct Pipeline: Sendable {
                 }
                 return next
             }
-            let check = ReplyCheck(limit: limit, screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context))
+            let check = ReplyCheck(limit: limit, screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context), cleanup: level)
             let rejectedBy = Self.rejects.first { !off.contains($0.name) && $0.test(cleaned, transcript, check) }?.name
             var res = result(rejectedBy == nil ? .insert(space + cleaned, label: "Dictated") : .insert(space + transcript, label: "Dictated (raw)"))
             res.rejectedBy = rejectedBy
@@ -237,9 +246,10 @@ extension Pipeline {
     /// The cleanup chat for `transcript` (after `dictationPrepass`), with `cleanupContext`'s screen. `PoptalkDatagen
     /// render` builds training prompts with it too, so they match the app's (#124).
     public static func dictationMessages(model: String, transcript: String, context: ScreenSnapshot,
-                                         vocabulary: [VocabTerm]) -> [ChatMessage] {
+                                         vocabulary: [VocabTerm], cleanup: CleanupLevel = .clean) -> [ChatMessage] {
         let words = transcript.split(whereSeparator: \.isWhitespace).count
-        return Prompts.dictation(model: model, transcript: transcript, context: cleanupContext(context, words: words), vocabulary: vocabulary)
+        return Prompts.dictation(model: model, transcript: transcript, context: cleanupContext(context, words: words),
+                                 vocabulary: vocabulary, cleanup: cleanup)
     }
 
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
@@ -302,13 +312,16 @@ extension Pipeline {
         ("restoreMarks", { restoreMarks($0, transcript: $1) }),
         ("openingCue", { restoreOpeningCue($0, transcript: $1) }),  // #105
     ]
-    /// What a reject sees besides the reply and the transcript: `maxCleanupLength`, and the screen the model saw.
-    public struct ReplyCheck: Sendable { var limit: Int, screen: String }
+    /// What a reject sees besides the reply and the transcript: `maxCleanupLength`, the screen the model saw, and the
+    /// level it was sent (#96: Clean unless the model takes levels).
+    public struct ReplyCheck: Sendable { var limit: Int, screen: String, cleanup = CleanupLevel.clean }
     public static let rejects: [(name: String, test: @Sendable (_ out: String, _ said: String, _ check: ReplyCheck) -> Bool)] = [
         ("empty", { out, _, _ in out.isEmpty }),
         // Before length, so a long screen echo is named an echo (#116).
         ("echoesContext", { out, said, c in echoesContext(out, transcript: said, context: c.screen) }),
         ("length", { out, _, c in out.count > c.limit }),
+        // ponytail: the same at every level. Polished fixes grammar and homophones (#96), so its rewording will need a
+        // looser `lost` share (or synonym-tolerant matching) when c.cleanup == .polished, once a level-trained model is benched.
         ("dropsContent", { out, said, _ in dropsContent(out, transcript: said) }),
         ("dropsProtected", { out, said, _ in dropsProtected(out, transcript: said) }),
     ]

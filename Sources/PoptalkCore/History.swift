@@ -38,6 +38,9 @@ public struct HistoryRequest: Codable, Equatable, Sendable {
     public var sharedPrefix: Int?
     /// The speech model id (`ModelSettings.speechModels`) loaded when this was recorded (#73); absent in older lines.
     public var speechModel: String?
+    /// The press's resolved `CleanupLevel` raw value (#96), as set, whether or not the model takes levels; absent in
+    /// older lines. A string, so a level added later can't make the line undecodable on an older Mac.
+    public var cleanup: String?
 
     public init(id: UUID, at: Date, app: String, bundleID: String? = nil, rawTranscript: String, transcript: String,
                 boost: [String] = [], selection: String? = nil, provider: String, model: String? = nil,

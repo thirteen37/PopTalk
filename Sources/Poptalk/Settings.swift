@@ -84,6 +84,7 @@ struct SettingsView: View {
     @AppStorage(DictationFeatures.Key.recaseTerms) private var recaseTerms = true
     @AppStorage(DictationFeatures.Key.skipGate) private var skipGate = false
     @AppStorage(DictationFeatures.Key.soundAlikeTerms) private var soundAlikeTerms = false
+    @AppStorage(CleanupLevel.key) private var cleanupLevel = CleanupLevel.clean
     @AppStorage(LivePreview.key) private var liveCleanup = true
     @AppStorage(Settings.showAdvancedKey) private var showAdvanced = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -241,6 +242,15 @@ struct SettingsView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
+            }
+            Section {
+                Picker("Cleanup level", selection: $cleanupLevel) {
+                    ForEach(CleanupLevel.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .disabled(!cleanupTakesLevels)
+            } footer: {
+                Text(cleanupTakesLevels ? cleanupLevel.note + " Apps can set their own." : levelsNote)
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             if showAdvanced {
                 Section("Advanced") {
@@ -496,9 +506,10 @@ private struct AppProfilesView: View {
     private func save(_ p: [AppProfile]) { AppProfiles.save(p, to: .standard) }
 
     private func summary(_ p: AppProfile) -> String {
-        if ContextSource.screen.isSubset(of: p.off) { return "Screen not read" }
         let off = ContextSource.allCases.filter(p.off.contains).map(\.label)
-        return off.isEmpty ? "Nothing off" : "Off: " + off.joined(separator: ", ")
+        let sources = ContextSource.screen.isSubset(of: p.off) ? "Screen not read"
+            : off.isEmpty ? "Nothing off" : "Off: " + off.joined(separator: ", ")
+        return sources + (p.cleanup.map { " · Cleanup: \($0.displayName)" } ?? "")
     }
 }
 
@@ -560,6 +571,15 @@ private struct ProfileSheet: View {
                     Text("Greyed out: off in Context for every app. Selected text and saved vocabulary are still used.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                Section {
+                    Picker("Cleanup level", selection: $draft.cleanup) {
+                        Text("Same as Settings").tag(CleanupLevel?.none)
+                        ForEach(CleanupLevel.allCases, id: \.self) { Text($0.displayName).tag(Optional($0)) }
+                    }
+                    .disabled(!cleanupTakesLevels)
+                } footer: {
+                    if !cleanupTakesLevels { Text(levelsNote).font(.footnote).foregroundStyle(.secondary) }
+                }
             }
             .formStyle(.grouped)
             HStack {
@@ -597,6 +617,20 @@ private extension ContextSource {
         case .screenVocabulary: "Boost recognition with words on screen"
         case .rememberScreenTerms: "Use remembered screen terms"
         case .learnScreenTerms: "Remember screen terms from here"
+        }
+    }
+}
+
+/// The cleanup model takes the level tag (#96); otherwise both level pickers are greyed out with `levelsNote`.
+private var cleanupTakesLevels: Bool { ModelSettings.levelModels.contains(Settings.selection.cleanupModel) }
+private let levelsNote = "The current model always uses Clean. Levels need a model trained for them."
+
+private extension CleanupLevel {
+    var note: String {
+        switch self {
+        case .verbatim: "Removes um and uh only. Fillers and self-corrections stay as said."
+        case .clean: "Removes fillers and applies self-corrections. Grammar stays as said."
+        case .polished: "Like Clean, and also fixes grammar. Your wording stays."
         }
     }
 }

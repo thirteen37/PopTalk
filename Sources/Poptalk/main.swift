@@ -42,7 +42,7 @@ if args.count >= 3, args[1] == "--pipeline" {
         cleanupModel: sel.cleanupModel, editModel: sel.editModel)
     let ctx = opt("--context").map { ScreenSnapshot(text: $0) } ?? ScreenSnapshot()
     let start = Date()
-    let r = await pipeline.run(Request(transcript: args[2], selection: opt("--selection"), context: ctx))
+    let r = await pipeline.run(Request(transcript: args[2], selection: opt("--selection"), context: ctx, cleanup: CleanupLevel(.standard)))
     print(r.outcome, r.vocabularyOffer.map { "offer: \($0)" } ?? "", String(format: "(%.2fs)", Date().timeIntervalSince(start)))
     exit(0)
 }
