@@ -56,8 +56,8 @@ extension Pipeline {
         .sorted { $0.count > $1.count }
     }
 
-    /// `source` case-folded per Character, without whitespace, with each folded Character's range in `source`: the
-    /// casing fix's matching, once per string (#121). Per Character, since a folded form can be longer ("İ", "ß" → "ss").
+    /// `source` lowercased per Character, without whitespace, with each lowercased Character's range in `source`: the
+    /// casing fix's matching, once per string (#121). Per Character, so offsets stay right after non-ASCII text.
     struct Folded {
         let source: String
         private(set) var chars: [Character] = [], ranges: [Range<String.Index>] = []
@@ -71,7 +71,7 @@ extension Pipeline {
         }
 
         static func fold(_ c: Character) -> [Character] {
-            Array(c.isASCII ? c.lowercased() : String(c).folding(options: .caseInsensitive, locale: nil))
+            Array(c.lowercased())
         }
         static func fold(_ s: String) -> [Character] { s.filter { !$0.isWhitespace }.flatMap(fold) }
 
