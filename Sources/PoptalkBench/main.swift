@@ -18,6 +18,7 @@ import PoptalkSpeech
 //     [--context-off text,ocr,title,vocab]   (#96: blank those sources in every case, as an app profile turning them off)
 //     [--guards -name,…]   (#108: turn off Pipeline.guardNames steps, or -prepass/-repairs/-rejects. Result files get
 //       a -guards suffix, -model with every repair and reject off: training/bench.zsh's model-only pass)
+//     [--levels]   (#96: send cases' `cleanup` level tag to the cleanup model, as if in ModelSettings.levelModels; -levels suffix)
 // --provider raw (#75): no LLM; dictation inserts the pre-passed transcript, scored without the raw-fallback failure.
 // Cases with `speak` or `audio` (`--filter 's-*'`) run end to end: Parakeet → CTC boosting from the
 // case's context → Pipeline. `speak` audio is cached in bench/audio-cache/.
@@ -345,6 +346,8 @@ if !contextOff.isEmpty { meta["contextOff"] = contextOff.sorted().joined(separat
 features.screenTerms = !contextOff.contains("vocab")
 features.guardsOff = guardsOff
 if !guardsOff.isEmpty { meta["guards"] = guardsOff.sorted().map { "-" + $0 }.joined(separator: ",") }
+let levels = args.contains("--levels")
+if levels { meta["levels"] = "on" }
 meta["macOS"] = ProcessInfo.processInfo.operatingSystemVersionString
 var size = 0
 sysctlbyname("hw.model", nil, &size, nil, 0)
@@ -406,6 +409,7 @@ let pipeline = { (calls: ModelCallRecorder?, vocabulary: [String]) in
     var p = Pipeline(complete: calls?.wrap(complete) ?? complete, vocabulary: store,
                      cleanupModel: cleanupModel, editModel: editModel, features: features)
     if provider == "mlx" { p.termScore = MLXProvider.termScore }
+    if levels { p.levels = true }
     return p
 }
 
@@ -437,7 +441,7 @@ for c in cases {
                                                   fromScreen: !contextOff.contains("vocab")) : []
             do { heard = try await transcriber.transcribeDetailed(audio, boost: boost, cbw: cbw, minSimilarity: minSimilarity) }
             catch { fail("\(c.id): \(error)") }
-            request = Request(transcript: heard!.text, selection: request.selection, context: request.context)
+            request.transcript = heard!.text
         }
         if oracleTerms, c.kind == .dictation { request.transcript = c.oracleRecase(request.transcript) }
         // --hold (#43): first the hold, as the app runs it: growing prefixes at 500 ms ticks, then 0.6 s of
@@ -456,7 +460,8 @@ for c in cases {
                                             paused: LivePreview.paused(prefix), edit: request.selection != nil) else { continue }
                 var p = pipeline(nil, c.vocabulary)
                 p.remembers = false
-                let spec = Request(transcript: text, selection: request.selection, context: request.context)
+                var spec = request
+                spec.transcript = text
                 held = (spec, await LivePreview.$speculative.withValue(true) { await p.run(spec) })
                 holdStats.preview.append(Date().timeIntervalSince(tick))
             }
@@ -514,6 +519,7 @@ if skipGate {
 
 let model = (provider == "lmstudio" || provider == "mlx" ? cleanupModel + (editModel == cleanupModel ? "" : "+" + editModel) : appleVariant ?? "default") + (audioCases.isEmpty ? "" : audioDir == nil ? "-audio" : "-real")
     + (guardsOff.isEmpty ? "" : guardsOff.isSuperset(of: guardGroups["repairs"]! + guardGroups["rejects"]!) ? "-model" : "-guards")
+    + (levels ? "-levels" : "")
 // Real-voice results hold what the user said, ad-libs included: gitignored, commit counts only (#99).
 let dir = URL(fileURLWithPath: opt("--out") ?? (audioDir == nil ? "bench/results" : "bench/results-real"))
 let file = dir.appendingPathComponent(BenchReport.fileName(date: date, provider: provider, model: model, filter: opt("--filter")))

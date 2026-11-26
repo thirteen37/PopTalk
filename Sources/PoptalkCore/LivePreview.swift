@@ -35,6 +35,7 @@ public enum LivePreview {
     /// The final request is what the speculative run saw: same transcript, selection and screen.
     public static func sameInput(_ ran: Request, _ final: Request) -> Bool {
         ran.transcript == final.transcript && ran.selection == final.selection && ran.context == final.context
+            && ran.cleanup == final.cleanup
     }
 
     /// A finished speculative result fit to insert as is; nil (cancelled), raw inserts, errors and "remember" edits

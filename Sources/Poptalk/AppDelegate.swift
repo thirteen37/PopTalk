@@ -315,7 +315,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             defer { busy = false; offerCleanup() }  // the model may have become ready while this ran
             let t0 = Timing.start()
-            let (snapshot, profile) = await ctx?.value ?? (ScreenSnapshot(), ResolvedProfile(sources: ContextSources(.standard)))
+            let (snapshot, profile) = await ctx?.value
+                ?? (ScreenSnapshot(), ResolvedProfile(sources: ContextSources(.standard), cleanup: CleanupLevel(.standard)))
             let sources = profile.sources
             Timing.mark("release: context awaited", since: t0)
             let selection = await sel?.value
@@ -332,7 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             Timing.mark("release: transcribed", since: t0)
             overlay.showWorking(heard: heard.text)
-            let request = Request(transcript: heard.text, selection: selection, context: snapshot)
+            let request = Request(transcript: heard.text, selection: selection, context: snapshot, cleanup: profile.cleanup)
             // #43: the speculative run already saw this exact request: insert its result (waiting if still running).
             var reused: (result: PipelineResult, calls: ModelCallRecorder)?
             if let spec {
@@ -403,6 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         entry.outcome = shown
         entry.system = system
         entry.speechModel = transcriberModel
+        entry.cleanup = request.cleanup.rawValue
         (entry.kind, entry.promptTokens, entry.sharedPrefix) = (call?.kind, call?.promptTokens, call?.sharedPrefix)
         history.append(entry)
         if let corrects { history.append(HistoryEvent(.correction, id: corrects, by: id)) }
@@ -621,7 +623,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if let s = speculation, s.request.transcript != text { s.task.cancel() }  // new words: stale
                 if let fixed, LivePreview.shouldRun(text, lastRun: speculation?.request.transcript, previous: previous,
                                                     paused: LivePreview.paused(samples), edit: fixed.selection != nil) {
-                    speculate(Request(transcript: text, selection: fixed.selection, context: fixed.context), fixed, since: tick)
+                    speculate(Request(transcript: text, selection: fixed.selection, context: fixed.context, cleanup: fixed.cleanup),
+                              fixed, since: tick)
                 }
                 showLive()
             }
@@ -631,7 +634,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// What every speculative run of a press shares (#43): the context and selection captured at key-down, the boost
     /// terms the final pass will use, and the model settings.
     private struct LiveInput {
-        let context: ScreenSnapshot, selection: String?, boost: [VocabTerm], learned: [VocabTerm]
+        let context: ScreenSnapshot, selection: String?, cleanup: CleanupLevel, boost: [VocabTerm], learned: [VocabTerm]
         let complete: Pipeline.Complete, models: ModelSettings.Selection, features: DictationFeatures
     }
 
@@ -642,7 +645,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let complete: Pipeline.Complete
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
         let learned = learnedTerms(sources)
-        return LiveInput(context: context, selection: selection,
+        return LiveInput(context: context, selection: selection, cleanup: profile.cleanup,
                          boost: Pipeline.boostTerms(saved: store.terms, learned: learned, context: context,
                                                     fromScreen: sources.screenVocabulary), learned: learned,
                          complete: complete, models: Settings.selection, features: DictationFeatures(.standard, sources: sources))

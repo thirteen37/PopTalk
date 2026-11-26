@@ -104,10 +104,14 @@ public enum Prompts {
     summarize content. Output only the cleaned transcript.
     """
 
+    /// A `cleanup` other than Clean adds one `<style cleanup="…"/>` line before `<transcript>` (#96); Clean adds
+    /// nothing, so the default prompt stays byte-identical and keeps the prefix cache. The caller decides whether the
+    /// model gets a level (`Pipeline.levels`).
     public static func dictation(transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm],
-                                 system: String = dictationSystem) -> [ChatMessage] {
-        [ChatMessage(role: "system", content: system),
-         ChatMessage(role: "user", content: "\(contextBlock(context, vocabulary))\n<transcript>\(esc(transcript))</transcript>")]
+                                 system: String = dictationSystem, cleanup: CleanupLevel = .clean) -> [ChatMessage] {
+        let style = cleanup == .clean ? "" : "<style cleanup=\"\(cleanup.rawValue)\"/>\n"
+        return [ChatMessage(role: "system", content: system),
+                ChatMessage(role: "user", content: "\(contextBlock(context, vocabulary))\n\(style)<transcript>\(esc(transcript))</transcript>")]
     }
 
     /// S1-mini by Superwhisper (#67): its model card's exact system prompt and control line, then the transcript
@@ -118,11 +122,12 @@ public enum Prompts {
     public static func isS1Mini(_ model: String) -> Bool { model.lowercased().contains("s1-mini") }
 
     /// The dictation prompt for `model`: S1-mini's own format, else `dictation(transcript:context:vocabulary:)`
-    /// with E4B's own system prompt (#74) or the default.
-    public static func dictation(model: String, transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm]) -> [ChatMessage] {
+    /// with E4B's own system prompt (#74) or the default. S1-mini never gets a `cleanup` tag.
+    public static func dictation(model: String, transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm],
+                                 cleanup: CleanupLevel = .clean) -> [ChatMessage] {
         guard isS1Mini(model) else {
             return dictation(transcript: transcript, context: context, vocabulary: vocabulary,
-                             system: model == ModelSettings.e4b ? e4bDictationSystem : dictationSystem)
+                             system: model == ModelSettings.e4b ? e4bDictationSystem : dictationSystem, cleanup: cleanup)
         }
         return [ChatMessage(role: "system", content: s1MiniSystem),
                 ChatMessage(role: "user", content: "\(s1MiniControl)\n\(transcript)")]

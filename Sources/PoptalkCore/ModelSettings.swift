@@ -9,6 +9,10 @@ public enum ModelSettings {
     public static let fineTune = "adapters/gemma-4-e2b-poptalk-v6"
     public static let e4b = "mlx-community/gemma-4-e4b-it-4bit"
 
+    /// Model ids and adapter dirs trained on the cleanup-level tag (#96): only these get `<style cleanup=…/>`.
+    /// None yet; PoptalkBench `--levels` sends it to an unmarked candidate.
+    public static let levelModels: Set<String> = []
+
     /// The MLX models offered by name in Settings; any other id is "Custom".
     public static let knownMLXModels: [(id: String, name: String)] = [
         (fineTune, "Gemma 4 E2B · PopTalk fine-tune"),

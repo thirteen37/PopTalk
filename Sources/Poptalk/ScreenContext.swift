@@ -14,11 +14,13 @@ enum ScreenContext {
     static func capture() async -> Captured {
         let start = ContinuousClock.now
         defer { Timing.mark("context total", since: start) }
-        let (profiles, defaults) = (AppProfiles.load(.standard), ContextSources(.standard))
-        guard let app = NSWorkspace.shared.frontmostApplication else { return (ScreenSnapshot(), ResolvedProfile(sources: defaults)) }
+        let (profiles, defaults, cleanup) = (AppProfiles.load(.standard), ContextSources(.standard), CleanupLevel(.standard))
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            return (ScreenSnapshot(), ResolvedProfile(sources: defaults, cleanup: cleanup))
+        }
         let resolve = { (domain: String?, isPrivate: Bool, isSensitive: Bool) in
             AppProfiles.resolve(bundleID: app.bundleIdentifier, domain: domain, isPrivate: isPrivate, isSensitive: isSensitive,
-                                profiles: profiles, defaults: defaults)
+                                profiles: profiles, defaults: defaults, cleanup: cleanup)
         }
         var snap = ScreenSnapshot(appName: app.localizedName ?? "")
         guard !isSensitive() else { return (snap, resolve(nil, false, true)) }
@@ -40,7 +42,10 @@ enum ScreenContext {
         let profile = resolve(domain, isPrivate, false)
         let sources = profile.sources  // #40, #96: a disabled source is never read
         let off = ContextSource.allCases.filter { defaults[$0] && !sources[$0] }.map(\.rawValue)
-        Timing.log.info("context profile \(profile.custom ? "custom" : "default", privacy: .public), off: \(off.joined(separator: ","), privacy: .public)")
+        Timing.log.info("""
+            context profile \(profile.custom ? "custom" : "default", privacy: .public), off: \(off.joined(separator: ","), privacy: .public), \
+            cleanup \(profile.cleanup.rawValue, privacy: .public)
+            """)
         if sources.webDomain, let domain { snap.webDomain = domain }
         if let focused, sources.focusedText {
             let parent: AXUIElement? = attr(focused, kAXParentAttribute)

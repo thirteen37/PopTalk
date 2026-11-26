@@ -39,11 +39,13 @@ public struct BenchCase: Decodable, Sendable {
     /// The intended written text, the reference for the final WER when it differs from what is said
     /// (self-corrections, spoken formatting); defaults to `transcript`.
     public var written: String?
+    /// The cleanup level the case dictates at (#96); Clean when absent. Sent only to `Pipeline.levels` models.
+    public var cleanup: CleanupLevel?
     public var hasAudio: Bool { speak != nil || audio != nil }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, transcript, selection, context, cursor, ocr, app, window, expectAction, expectExact, expectAnyOf
-        case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio, speak, voice, rate, audio, vocabulary, written
+        case mustContain, mustNotContain, expectVocabOffer, maxLengthRatio, speak, voice, rate, audio, vocabulary, written, cleanup
     }
 
     public init(from decoder: Decoder) throws {
@@ -56,6 +58,7 @@ public struct BenchCase: Decodable, Sendable {
         audio = try c.decodeIfPresent(String.self, forKey: .audio)
         vocabulary = try c.decodeIfPresent([String].self, forKey: .vocabulary) ?? []
         written = try c.decodeIfPresent(String.self, forKey: .written)
+        cleanup = try c.decodeIfPresent(CleanupLevel.self, forKey: .cleanup)
         transcript = try speak.map { try c.decodeIfPresent(String.self, forKey: .transcript) ?? $0 } ?? c.decode(String.self, forKey: .transcript)
         selection = try c.decodeIfPresent(String.self, forKey: .selection)
         context = try c.decodeIfPresent(String.self, forKey: .context)
@@ -86,7 +89,7 @@ public struct BenchCase: Decodable, Sendable {
     public var request: Request {
         Request(transcript: transcript, selection: selection,
                 context: ScreenSnapshot(appName: app ?? "", windowTitle: window ?? "", text: context ?? "", cursorOffset: cursor,
-                                        ocrText: ocr ?? ""))
+                                        ocrText: ocr ?? ""), cleanup: cleanup ?? .clean)
     }
 
     public func score(_ r: PipelineResult, seconds: Double) -> BenchRun {

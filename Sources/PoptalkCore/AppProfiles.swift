@@ -29,7 +29,22 @@ extension ContextSources {
     }
 }
 
-/// A per-app profile (#96): a match rule and the context sources it turns off. A profile only turns sources off,
+/// How much a dictation cleanup changes (#96, "Cleanup level"): Verbatim keeps word fillers and self-corrections as
+/// said, Clean (the default) removes them, Polished also fixes grammar and homophones. Sent to the model as a prompt
+/// tag only for models trained on it (`ModelSettings.levelModels`); hesitations go at every level (`stripHesitations`).
+public enum CleanupLevel: String, Codable, CaseIterable, Sendable {
+    case verbatim, clean, polished
+
+    /// The global setting, in local `UserDefaults`; a per-app profile can override it.
+    public static let key = "cleanupLevel"
+
+    /// Unset or unknown: Clean.
+    public init(_ d: UserDefaults) { self = d.string(forKey: Self.key).flatMap(Self.init(rawValue:)) ?? .clean }
+
+    public var displayName: String { rawValue.capitalized }
+}
+
+/// A per-app profile (#96): a match rule, the context sources it turns off, and an optional cleanup level. A profile only turns sources off,
 /// so one off in Settings → Context stays off everywhere.
 public struct AppProfile: Codable, Identifiable, Equatable, Sendable {
     public var id = UUID()
@@ -38,9 +53,11 @@ public struct AppProfile: Codable, Identifiable, Equatable, Sendable {
     /// "" matches any page; "example.com" also matches "mail.example.com", not "notexample.com".
     public var domain = ""
     public var off: Set<ContextSource> = []
+    /// nil: the global level. Optional, so profiles saved before it decode.
+    public var cleanup: CleanupLevel?
 
-    public init(bundleID: String = "", domain: String = "", off: Set<ContextSource> = []) {
-        (self.bundleID, self.domain, self.off) = (bundleID, domain, off)
+    public init(bundleID: String = "", domain: String = "", off: Set<ContextSource> = [], cleanup: CleanupLevel? = nil) {
+        (self.bundleID, self.domain, self.off, self.cleanup) = (bundleID, domain, off, cleanup)
     }
 
     /// The host part of what a user typed: "https://Mail.Example.com/inbox" → "mail.example.com", "*.example.com" →
@@ -66,16 +83,17 @@ public struct AppProfile: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-/// The context sources for one press, resolved once at capture and carried with the request (#96).
+/// The context sources and cleanup level for one press, resolved once at capture and carried with the request (#96).
 public struct ResolvedProfile: Sendable, Equatable {
     public var sources: ContextSources
+    public var cleanup: CleanupLevel
     /// A per-app profile matched, for the log and the status strip. Which one, and the domain, never leave here.
     public var custom = false
     /// The sources the profile turned off that Settings → Context had on, for the status strip (#127).
     public var appOff: Set<ContextSource> = []
 
-    public init(sources: ContextSources, custom: Bool = false, appOff: Set<ContextSource> = []) {
-        (self.sources, self.custom, self.appOff) = (sources, custom, appOff)
+    public init(sources: ContextSources, cleanup: CleanupLevel = .clean, custom: Bool = false, appOff: Set<ContextSource> = []) {
+        (self.sources, self.cleanup, self.custom, self.appOff) = (sources, cleanup, custom, appOff)
     }
 }
 
@@ -91,15 +109,17 @@ public enum AppProfiles {
         d.set(try? JSONEncoder().encode(profiles), forKey: key)
     }
 
-    /// The most specific profile matching the app and page (`AppProfile.rank`) turns its sources off `defaults`.
+    /// The most specific profile matching the app and page (`AppProfile.rank`) turns its sources off `defaults`, and
+    /// its level, if set, replaces the global `cleanup`.
     /// Hard exclusions win over any profile: a password field or manager (`isSensitive`, or a listed bundle ID)
     /// reads nothing; a private window ignores domain profiles and reads no nearby text, OCR or domain.
     public static func resolve(bundleID: String?, domain: String?, isPrivate: Bool, isSensitive: Bool = false,
-                               profiles: [AppProfile], defaults: ContextSources) -> ResolvedProfile {
-        var r = ResolvedProfile(sources: defaults)
+                               profiles: [AppProfile], defaults: ContextSources, cleanup: CleanupLevel = .clean) -> ResolvedProfile {
+        var r = ResolvedProfile(sources: defaults, cleanup: cleanup)
         if let match = profiles.filter({ $0.matches(bundleID: bundleID, host: isPrivate ? nil : domain) })
             .max(by: { $0.rank < $1.rank }) {
             r.custom = true
+            r.cleanup = match.cleanup ?? cleanup
             r.appOff = match.off.filter { defaults[$0] }
             for s in match.off { r.sources[s] = false }
         }
@@ -132,14 +152,14 @@ public enum AppProfiles {
     }
 
     /// Turns every screen source off (or back on) in `bundleID`'s app-only profile, adding it, or dropping it once it
-    /// turns nothing off.
+    /// turns nothing off and sets no level.
     public static func setScreenOff(_ on: Bool, bundleID: String, in profiles: inout [AppProfile]) {
         guard let i = profiles.firstIndex(where: { $0.matchesAppOnly(bundleID) }) else {
             if on { profiles.append(AppProfile(bundleID: bundleID, off: ContextSource.screen)) }
             return
         }
         if on { profiles[i].off.formUnion(ContextSource.screen) } else { profiles[i].off.subtract(ContextSource.screen) }
-        if profiles[i].off.isEmpty { profiles.remove(at: i) }
+        if profiles[i].off.isEmpty, profiles[i].cleanup == nil { profiles.remove(at: i) }
     }
 }
 
