@@ -1,11 +1,13 @@
 #!/usr/bin/env zsh
 # Ship check for prompt, model and guard changes: replays real history dictations through Pipeline
 # (`PoptalkBench --replay`) for each config, back to back, and prints counts only. Run outside the sandbox.
-# Usage: scripts/replay.zsh [--model ID] [--timeout S] [--subset REGEX] [--guards -NAME,...] [--history FILE]... [CONFIG ...]
+# Usage: scripts/replay.zsh [--model ID] [--timeout S] [--subset REGEX] [--guards -NAME,...] [--skip-gate on|off]
+#          [--history FILE]... [CONFIG ...]
 #   CONFIG: `current` (the built prompt; the default) or a dictation system prompt file (--dictation-prompt-file).
 #   --model defaults to the shipped E2B v6 fine-tune, --timeout to the app's 4 s; --history to this Mac's file plus every Mac's synced file.
 #   --subset adds rows for dictations whose transcript matches REGEX (jq regex, case-insensitive).
 #   --guards turns off the named Pipeline guards for every config (PoptalkBench --guards, #108).
+#   --skip-gate turns the skip gate on or off for every config (PoptalkBench --skip-gate, #122; default off).
 # Input: opt-in history dictations (no selection) that called a model, deduped by id; app, window, screen text and
 #   vocabulary are read back from the recorded prompt, the transcript is the one Pipeline got. Older prompt formats
 #   that don't parse are skipped and counted.
@@ -44,7 +46,7 @@ build() {
          // null) as $m
     | if $m == null then {skipped: true} else
         {id: $id, transcript: $t, app: ($m.app | unesc), window: ($m.window | unesc),
-         vocabulary: [($m.vocab // "") | split(", ")[] | select(. != "") | unesc]}
+         bundleID: .bundleID, vocabulary: [($m.vocab // "") | split(", ")[] | select(. != "") | unesc]}
         + ($m.screen | unesc | split_screen)
       end'
 }
@@ -89,8 +91,9 @@ if [[ ${1:-} == counts ]]; then
   names=(${@[2,-1]:t}); counts "$@"; exit
 fi
 
-zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -guards:=guards -history+:=hist || exit 1
+zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -guards:=guards -skip-gate:=gate -history+:=hist || exit 1
 model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v6} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
+[[ ${gate[-1]:-off} == (on|off) ]] || { print -u2 -- "--skip-gate takes on or off"; exit 1 }
 files=(${^${hist:#--history}}(:A))
 (( $#files )) || files=(
   ~/Library/Application\ Support/Poptalk/history/history.jsonl(N)
@@ -118,7 +121,7 @@ for c in "${configs[@]}"; do
   scripts/wait-idle.zsh
   outs+=$dir/out-$#outs.jsonl
   print "== ${names[$#outs]}"
-  .build/release/PoptalkBench --replay $dir/in.jsonl $outs[-1] --cleanup-model $model --cleanup-timeout $timeout $guards \
+  .build/release/PoptalkBench --replay $dir/in.jsonl $outs[-1] --cleanup-model $model --cleanup-timeout $timeout $guards $gate \
     ${c:+--dictation-prompt-file} $c
 done
 counts $dir/in.jsonl $outs
