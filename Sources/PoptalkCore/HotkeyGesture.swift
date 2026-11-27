@@ -13,6 +13,8 @@ public struct HotkeyGesture {
 
     /// When the current press went down, nil while up.
     public private(set) var pressedAt: Date?
+    /// Shift was down at some point in the current press, or the last one once released (#131): insert it raw.
+    public private(set) var shifted = false
     private var cancelled = false
     /// The current press came within `doubleTapGap` of a tap.
     private var second = false
@@ -32,7 +34,7 @@ public struct HotkeyGesture {
     public mutating func press(at now: Date) -> Bool {
         guard pressedAt == nil else { return false }
         pressedAt = now
-        cancelled = false
+        (cancelled, shifted) = (false, false)
         second = tappedAt.map { now.timeIntervalSince($0) < doubleTapGap } ?? false
         tappedAt = nil
         return second
@@ -44,6 +46,11 @@ public struct HotkeyGesture {
         guard pressedAt != nil, !cancelled else { return false }
         cancelled = true
         return true
+    }
+
+    /// The modifier keys changed (or right ⌥ went down) with Shift down or not (#131).
+    public mutating func modifiers(shift: Bool) {
+        if shift, pressedAt != nil { shifted = true }
     }
 
     /// Right ⌥ came up: what the press was, nil if cancelled or not pressed.

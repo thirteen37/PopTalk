@@ -313,3 +313,14 @@ func replaceEditsStillReachModel(utterance: String) async {
     #expect(await pipeline(reply: "Hi.").run(req("hi")).modelAction == nil)
     #expect(await pipeline(reply: nil).run(req("fix", selection: "y")).modelAction == nil)
 }
+
+// #131: Shift inserts the transcript as heard: no prepass, no model; a selection is replaced, not edited.
+@Test func asHeardSkipsCleanup() {
+    let ctx = ScreenSnapshot(appName: "Notes", windowTitle: "", text: "Hi", cursorOffset: 2, ocrText: "")
+    let said = "um new line two dogs scratch that"
+    let r = Pipeline.asHeard(Request(transcript: said, selection: nil, context: ctx))
+    #expect(r.outcome == .insert(" " + said, label: "Raw") && r.asHeard)
+    #expect(Pipeline.asHeard(Request(transcript: said, selection: "cats", context: ctx)).outcome
+            == .replaceSelection(said, label: "Raw"))
+    #expect(Pipeline.asHeard(Request(transcript: " ", selection: nil, context: ctx)).outcome == .nothing)
+}

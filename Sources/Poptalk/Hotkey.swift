@@ -7,7 +7,7 @@ import PoptalkCore
 /// and once the double-tap window passes with nothing else pressed, `onTapSettled`, which accepts a showing offer
 /// (#111). A second tap soon after (`HotkeyGesture`) calls `onTap` and then `onDoubleTap` (undo, #109), on its
 /// release so ⌥ is up before any keystrokes are sent. A press soon after a tap is `onPress(true)`: held, it's a
-/// tap-then-hold, which edits the last insert (#110).
+/// tap-then-hold, which edits the last insert (#110). Shift during a hold (`shifted`) makes it raw (#131).
 @MainActor
 final class Hotkey {
     private static let rightOption: Int64 = 61
@@ -17,6 +17,8 @@ final class Hotkey {
     private var gesture = HotkeyGesture()
     /// Key-downs seen from other processes: an insert in a terminal is only taken back if none came since (#79).
     private(set) var keyDowns = 0
+    /// Shift was down during this hold, or the last one (#131): insert the transcript raw.
+    var shifted: Bool { gesture.shifted }
 
     init(onPress: @escaping (_ afterTap: Bool) -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void,
          onTap: @escaping () -> Void, onTapSettled: @escaping () -> Void, onDoubleTap: @escaping () -> Void) {
@@ -64,7 +66,9 @@ final class Hotkey {
             if rightDown, !gesture.isPressed {
                 // Read at each press, so a change in Settings applies to the next one (#112).
                 (gesture.tap, gesture.doubleTapGap) = (GestureTiming.tap(.standard), GestureTiming.doubleTapGap(.standard))
-                onPress(gesture.press(at: Date()))
+                let afterTap = gesture.press(at: Date())
+                gesture.modifiers(shift: event.flags.contains(.maskShift))  // Shift already down
+                onPress(afterTap)
             } else if !rightDown {
                 let now = Date(), held = gesture.pressedAt.map { now.timeIntervalSince($0) }
                 let release = gesture.release(at: now)
@@ -85,6 +89,8 @@ final class Hotkey {
                 case nil: break
                 }
             }
+        case .flagsChanged:  // another modifier: Shift (either side) makes the hold raw (#131); it never cancels
+            gesture.modifiers(shift: event.flags.contains(.maskShift))
         default:
             break
         }
