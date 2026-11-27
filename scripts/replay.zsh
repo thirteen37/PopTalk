@@ -2,14 +2,14 @@
 # Ship check for prompt, model and guard changes: replays real history dictations through Pipeline
 # (`PoptalkBench --replay`) for each config, back to back, and prints counts only. Run outside the sandbox.
 # Usage: scripts/replay.zsh [--model ID] [--timeout S] [--subset REGEX] [--guards -NAME,...] [--skip-gate on|off]
-#          [--fidelity shadow|on] [--history FILE]... [--words] [CONFIG ...]
+#          [--fidelity on|shadow|off] [--history FILE]... [--words] [CONFIG ...]
 #   CONFIG: `current` (the built prompt; the default) or a dictation system prompt file (--dictation-prompt-file).
 #   --model defaults to the shipped E2B v7 fine-tune, --timeout to the app's 4 s; --history to this Mac's file plus every Mac's synced file.
 #   --subset adds rows for dictations whose transcript matches REGEX (jq regex, case-insensitive).
 #   --guards turns off the named Pipeline guards for every config (PoptalkBench --guards, #108).
 #   --skip-gate turns the skip gate on or off for every config (PoptalkBench --skip-gate, #122; default off).
-#   --fidelity scores every reply with the fidelity probe (PoptalkBench --fidelity, #75 step 2): `shadow` only counts,
-#     `on` also rejects. Adds a second table: replies the probe would reject, overlap with the deterministic rejects
+#   --fidelity: the fidelity probe (PoptalkBench --fidelity, #75 step 2), `on` by default like the app: scores every
+#     reply and rejects; `shadow` only counts; `off` skips it. Adds a second table: replies the probe would reject, overlap with the deterministic rejects
 #     (guard), replies it rejected (acted), and its own ms per reply. Of the probe-only rejects: po-same have the
 #     transcript's words exactly (casing and punctuation only: likely false rejects), po-new add a word it lacks.
 #   --words adds training/word_changes.py tables per config (#126): word changes from the transcript the model saw to
@@ -90,7 +90,7 @@ counts() {
   fidelity $names $@
 }
 
-# The fidelity probe table (#75 step 2), for configs whose outputs carry `fidelity` (--fidelity shadow|on); over
+# The fidelity probe table (#75 step 2), for configs whose outputs carry `fidelity` (--fidelity on|shadow); over
 # replies (timeouts excluded). guard: a deterministic reject. probe: the score is below Pipeline.fidelityProbeThreshold.
 fidelity() {
   local -a names=(${@[1,$# / 2]}) outs=(${@[$# / 2 + 1,-1]})
@@ -126,7 +126,7 @@ fi
 zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -guards:=guards -skip-gate:=gate -fidelity:=fid -history+:=hist -words=words || exit 1
 model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v7} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
 [[ ${gate[-1]:-off} == (on|off) ]] || { print -u2 -- "--skip-gate takes on or off"; exit 1 }
-[[ ${fid[-1]:-shadow} == (shadow|on) ]] || { print -u2 -- "--fidelity takes shadow or on"; exit 1 }
+[[ ${fid[-1]:-on} == (on|shadow|off) ]] || { print -u2 -- "--fidelity takes on, shadow or off"; exit 1 }
 files=(${^${hist:#--history}}(:A))
 (( $#files )) || files=(
   ~/Library/Application\ Support/Poptalk/history/history.jsonl(N)

@@ -56,4 +56,6 @@ diff =(zsh ./replay.zsh counts $dir/in.jsonl $dir/c.jsonl | sed '1,/^$/d' | awk 
 config replies scored probe both probe-only po-same po-new guard-only acted p50ms p90ms
 c.jsonl 4 4 3 1 2 1 1 1 1 200 300
 EOF
+# --fidelity takes on (the default, like the app), shadow or off; checked before the build.
+[[ $(zsh ./replay.zsh --fidelity maybe 2>&1) == "--fidelity takes on, shadow or off" ]]
 print "replay: ok"
