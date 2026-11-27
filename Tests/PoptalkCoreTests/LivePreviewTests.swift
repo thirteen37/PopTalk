@@ -2,6 +2,15 @@ import Foundation
 import Testing
 @testable import PoptalkCore
 
+// #131 follow-up: once Shift is seen, the recording footer says the hold goes in raw, ahead of the edit note; it
+// replaces the degraded mode's own "raw — …" note rather than repeating it.
+@Test func rawNoteLeadsTheFooter() {
+    #expect(LivePreview.rawNote(nil) == "Raw — no cleanup")
+    #expect(LivePreview.rawNote("Editing the last insert") == "Raw — no cleanup · Editing the last insert")
+    #expect(LivePreview.rawNote("raw — model loading") == "Raw — no cleanup")
+    #expect(LivePreview.rawNote(LivePreview.rawNote(nil)) == "Raw — no cleanup")
+}
+
 // #43: speculative cleanup while the key is held.
 
 private func words(_ s: String, _ ranges: [Range<String.Index>]) -> [String] { ranges.map { String(s[$0]) } }

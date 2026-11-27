@@ -12,6 +12,14 @@ public enum LivePreview {
     public static let key = "liveCleanupPreview"
     public static func enabled(_ d: UserDefaults) -> Bool { d.object(forKey: key) as? Bool ?? true }
 
+    /// The recording footer once Shift is seen (#131): the raw cue, then any other note ("Editing the last insert").
+    /// The degraded mode's "raw — model loading" says the same thing, so the cue replaces it (as it does itself).
+    public static func rawNote(_ note: String?) -> String {
+        let cue = "Raw — no cleanup"
+        guard let note, !note.lowercased().hasPrefix("raw") else { return cue }
+        return "\(cue) · \(note)"
+    }
+
     /// Edits preview only from this many words: shorter ones ("make this", "translate") are mostly unfinished and
     /// plan the wrong action, while short complete ones ("make it formal", "fix the typo") have three.
     public static let minEditWords = 3

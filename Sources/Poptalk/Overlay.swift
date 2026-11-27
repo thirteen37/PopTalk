@@ -83,12 +83,18 @@ final class Overlay {
     /// The last live transcript, kept on screen while working after release.
     private var preview: String?
 
-    func showRecording(note: String? = nil) {
-        self.note = note
+    /// `raw`: Shift is already down (#131).
+    func showRecording(note: String? = nil, raw: Bool = false) {
+        self.note = raw ? LivePreview.rawNote(note) : note
         preview = nil
         fieldRead = false  // a new press
         sparkles = .init()
-        show(Self.recordingHUD(preview: nil, note: note, strip: statusStrip()), for: nil)
+        show(Self.recordingHUD(preview: nil, note: self.note, strip: statusStrip()), for: nil)
+    }
+    /// Shift seen mid-hold (#131): the footer says raw from now on, redrawn now rather than at the next partial.
+    func showRaw() {
+        note = LivePreview.rawNote(note)
+        if let preview { showPreview(preview) } else { show(Self.recordingHUD(preview: nil, note: note, strip: statusStrip()), for: nil) }
     }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible. `cleaned` (#43): the
     /// latest speculative result, run on `input`; stale (greyed) once the transcript has moved on from it.

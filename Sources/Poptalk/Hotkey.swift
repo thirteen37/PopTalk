@@ -19,6 +19,8 @@ final class Hotkey {
     private(set) var keyDowns = 0
     /// Shift was down during this hold, or the last one (#131): insert the transcript raw.
     var shifted: Bool { gesture.shifted }
+    /// Shift made the held press raw, once per press; not called when Shift was already down at the press.
+    var onShift: () -> Void = {}
 
     init(onPress: @escaping (_ afterTap: Bool) -> Void, onRelease: @escaping () -> Void, onCancel: @escaping () -> Void,
          onTap: @escaping () -> Void, onTapSettled: @escaping () -> Void, onDoubleTap: @escaping () -> Void) {
@@ -90,7 +92,7 @@ final class Hotkey {
                 }
             }
         case .flagsChanged:  // another modifier: Shift (either side) makes the hold raw (#131); it never cancels
-            gesture.modifiers(shift: event.flags.contains(.maskShift))
+            if gesture.modifiers(shift: event.flags.contains(.maskShift)) { onShift() }
         default:
             break
         }

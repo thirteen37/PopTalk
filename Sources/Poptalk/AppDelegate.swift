@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         onTap: { [weak self] in self?.cancelled() },
                         onTapSettled: { [weak self] in self?.overlay.tapped() },
                         onDoubleTap: { [weak self] in self?.overlay.doubleTapped() })
+        hotkey.onShift = { [weak self] in self?.shifted() }
         installHotkeyWhenTrusted()  // also checks permissions
         if let tab = status.value.launchTab { openSettings(at: tab) }
     }
@@ -256,7 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             selectionTask = if let text = editTarget?.text.trimmingCharacters(in: .whitespacesAndNewlines) { Task { text } }
                 else { Task { await TextIO.selectedText() } }
             overlay.showRecording(note: editTarget != nil ? "Editing the last insert"
-                                  : { if case .raw(let note) = mode { note } else { nil } }())
+                                  : { if case .raw(let note) = mode { note } else { nil } }(), raw: hotkey.shifted)
             // Live cleanup (#43) only with the model ready: degraded mode (#39) previews the raw transcript alone.
             startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
@@ -282,6 +283,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if shown { overlay.hide() }
     }
 
+
+    /// Shift mid-hold (#131): drop the cleaned preview and say raw now. Before the delayed start the HUD isn't up
+    /// yet; it reads `hotkey.shifted` itself.
+    private func shifted() {
+        guard recording, contextTask != nil else { return }
+        speculation?.task.cancel()
+        cleaned = nil
+        overlay.showRaw()
+    }
 
     private func released() {
         guard recording else { return }

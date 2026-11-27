@@ -48,9 +48,13 @@ public struct HotkeyGesture {
         return true
     }
 
-    /// The modifier keys changed (or right ⌥ went down) with Shift down or not (#131).
-    public mutating func modifiers(shift: Bool) {
-        if shift, pressedAt != nil { shifted = true }
+    /// The modifier keys changed (or right ⌥ went down) with Shift down or not (#131). True when this made the press
+    /// raw, once per press, so the overlay can say so at once.
+    @discardableResult
+    public mutating func modifiers(shift: Bool) -> Bool {
+        guard shift, pressedAt != nil, !shifted else { return false }
+        shifted = true
+        return true
     }
 
     /// Right ⌥ came up: what the press was, nil if cancelled or not pressed.
