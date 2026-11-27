@@ -35,14 +35,12 @@ private func texts(_ text: String, cursor: Int? = nil, title: String = "", limit
     #expect(terms.first == "Bob")
 }
 
-// #26: rank by distance from the cursor, window title and frequency; score is the weight.
+// #26: rank by distance from the cursor, window title and frequency.
 @Test func nearCursorOutranksFrequentFar() {
     let far = String(repeating: "see Farley. ", count: 5)
     let text = far + String(repeating: "a ", count: 1_500) + "ping Nearby"
     let terms = TermExtractor.terms(from: text, cursor: text.utf16.count)
     #expect(terms.map(\.text) == ["Nearby", "Farley"])
-    #expect(terms[0].weight > terms[1].weight)
-    #expect(terms.allSatisfy { $0.weight > 0 && $0.weight <= 10 })
 }
 
 @Test func cursorIsUTF16Offset() {
@@ -57,12 +55,11 @@ private func texts(_ text: String, cursor: Int? = nil, title: String = "", limit
     #expect(texts(text, title: "Quarterly Zephyr Review").first == "Quarterly Zephyr Review")
 }
 
-@Test func boostTermsAreRankedCappedAndWeighted() {
+@Test func boostTermsAreRankedAndCapped() {
     let text = (0..<200).map { "word Name\($0)x" }.joined(separator: " ")
-    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice", weight: 7)],
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice")],
                                     context: ScreenSnapshot(text: text, cursorOffset: 0))
-    #expect(terms.first == VocabTerm(text: "FluidVoice", aliases: ["fluid voice"], weight: 7))
+    #expect(terms.first == VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]))
     #expect(terms.count == 61)
     #expect(terms[1].text == "Name0x")
-    #expect(terms[1].weight > terms[60].weight)
 }

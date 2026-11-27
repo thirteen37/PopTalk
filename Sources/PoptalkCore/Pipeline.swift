@@ -6,6 +6,9 @@ public struct Request: Sendable {
     public var context: ScreenSnapshot
     /// The press's resolved cleanup level (#96); dictations only, and only for `Pipeline.levels` models.
     public var cleanup: CleanupLevel
+    /// The press's `boostTerms` over `context` (with screen terms), worked out once by the app (#149); nil: `run`
+    /// works them out.
+    public var terms: [VocabTerm]?
 
     public init(transcript: String, selection: String?, context: ScreenSnapshot, cleanup: CleanupLevel = .clean) {
         self.transcript = transcript
@@ -115,7 +118,7 @@ public struct Pipeline: Sendable {
         guard let selection = r.selection, !selection.isEmpty else {
             let screen = r.context.titleAndDomain + "\n" + Prompts.trimmedContext(r.context)
             let saved = vocabulary.terms.map(\.text)
-            let terms = Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context).map(\.text)
+            let terms = (r.terms ?? Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context)).map(\.text)
             let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
             let recaseWith = features.screenTerms ? terms : saved + learned.map(\.text).filter { !Self.isDictionaryPhrase($0) }
             var recased = !recase ? transcript : Self.recaseTerms(transcript, terms: recaseWith, screen: screen)

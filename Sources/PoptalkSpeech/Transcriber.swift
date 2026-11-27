@@ -84,7 +84,7 @@ public actor Transcriber {
 
         let start = Date()
         let vocab = CustomVocabularyContext(terms: boost.map {
-            CustomVocabularyTerm(text: $0.text, weight: $0.weight, aliases: $0.aliases.isEmpty ? nil : $0.aliases)
+            CustomVocabularyTerm(text: $0.text, aliases: $0.aliases.isEmpty ? nil : $0.aliases)
         })
         let session = try await VocabularyBoostingSession(
             vocabulary: vocab, ctcModels: ctcModels,

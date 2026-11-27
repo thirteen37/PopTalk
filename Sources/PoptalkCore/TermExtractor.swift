@@ -11,7 +11,7 @@ public enum TermExtractor {
     private static let token = try! NSRegularExpression(pattern: #"[\p{L}\p{N}](?:[\p{L}\p{N}_\-']*[\p{L}\p{N}])?"#)
 
     /// Terms ranked by distance from `cursor` (UTF-16 offset into `text`; nil = end), presence in
-    /// the window title, and frequency. `weight` is the score, at most 10 (a saved term's default).
+    /// the window title, and frequency.
     public static func terms(from text: String, cursor: Int? = nil, title: String = "", limit: Int = 60) -> [VocabTerm] {
         let cursor = cursor ?? text.utf16.count
         var seen: [String: (term: String, count: Int, first: Int, dist: Int, title: Bool)] = [:]
@@ -82,6 +82,6 @@ public enum TermExtractor {
         return scored
             .sorted { $0.score != $1.score ? $0.score > $1.score : $0.first < $1.first }
             .prefix(limit)
-            .map { VocabTerm(text: $0.term, weight: $0.score) }
+            .map { VocabTerm(text: $0.term) }
     }
 }

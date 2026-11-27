@@ -3,19 +3,16 @@ import Foundation
 public struct VocabTerm: Codable, Hashable, Sendable {
     public var text: String
     public var aliases: [String]
-    public var weight: Float
 
-    public init(text: String, aliases: [String] = [], weight: Float = 10) {
+    public init(text: String, aliases: [String] = []) {
         self.text = text
         self.aliases = aliases
-        self.weight = weight
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         text = try c.decode(String.self, forKey: .text)
         aliases = try c.decodeIfPresent([String].self, forKey: .aliases) ?? []
-        weight = try c.decodeIfPresent(Float.self, forKey: .weight) ?? 10
     }
 }
 
@@ -50,16 +47,15 @@ public final class VocabularyStore: @unchecked Sendable {
         try save(Self.merging(term, into: _terms, at: _terms.endIndex))
     }
 
-    /// Replaces the term with text `old` (case-insensitive) by `term`, in place and keeping its weight.
+    /// Replaces the term with text `old` (case-insensitive) by `term`, in place.
     /// Renamed onto another saved term, it merges into that one like `add`; a missing `old` just adds.
     public func update(_ old: String, to term: VocabTerm) throws {
-        var term = try Self.normalized(term)
+        let term = try Self.normalized(term)
         lock.lock()
         defer { lock.unlock() }
         var terms = _terms
         var at = terms.endIndex
         if let i = terms.firstIndex(where: { $0.text.lowercased() == old.lowercased() }) {
-            term.weight = terms[i].weight
             terms.remove(at: i)
             at = i
         }

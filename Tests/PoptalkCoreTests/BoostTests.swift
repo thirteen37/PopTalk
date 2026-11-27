@@ -41,10 +41,10 @@ import Testing
 }
 
 @Test func boostTermsGetSpokenAliases() {
-    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]), VocabTerm(text: "TestFlight", weight: 7)],
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]), VocabTerm(text: "TestFlight")],
                                     context: ScreenSnapshot(text: "the Kubernetes PR for FluidAudio"))
     #expect(terms[0] == VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]))  // no duplicate alias
-    #expect(terms[1] == VocabTerm(text: "TestFlight", aliases: ["test flight"], weight: 7))
+    #expect(terms[1] == VocabTerm(text: "TestFlight", aliases: ["test flight"]))
     #expect(terms.first { $0.text == "FluidAudio" }?.aliases == ["fluid audio"])
     #expect(terms.first { $0.text == "Kubernetes" }?.aliases == [])
 }

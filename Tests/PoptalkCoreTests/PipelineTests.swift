@@ -162,6 +162,15 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(echo.rejectedBy == "echoesContext")
 }
 
+// #149: the app works out a press's terms once and passes them in; `run` recases with them, not its own scan.
+@Test func runUsesTheRequestsTerms() async {
+    var request = Request(transcript: "ship it to zorvex", selection: nil, context: ScreenSnapshot())
+    request.terms = [VocabTerm(text: "Zorvex")]
+    let r = await Pipeline(complete: { _, _, _, _ in "Ok." }, vocabulary: VocabularyStore(url: tmp()),
+                           cleanupModel: "adapters/gemma-4-e2b-poptalk-v7", editModel: "big").run(request)
+    #expect(r.recased == ["Zorvex"])
+}
+
 @Test func literallyBypassesLLM() async {
     let calls = Calls()
     let r = await pipeline(reply: "x", calls: calls).run(req("Literally: make it shorter", selection: "Heading"))

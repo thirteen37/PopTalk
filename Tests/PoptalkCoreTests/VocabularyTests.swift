@@ -50,16 +50,16 @@ private func tempURL() -> URL {
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data(#"{"alpha":2.8,"terms":[{"text":"FluidVoice","aliases":["fluid voice"],"weight":10.0}]}"#.utf8).write(to: url)
     #expect(try VocabularyStore.importFluidVoice(from: url)
-        == [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"], weight: 10)])
+        == [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"])])
 }
 
-@Test func updateRenamesInPlaceKeepingPositionAndWeight() throws {
+@Test func updateRenamesInPlaceKeepingPosition() throws {
     let url = tempURL()
     let store = VocabularyStore(url: url)
-    try store.add(VocabTerm(text: "Todo", aliases: ["to do"], weight: 5))
+    try store.add(VocabTerm(text: "Todo", aliases: ["to do"]))
     try store.add(VocabTerm(text: "Poptalk"))
     try store.update("todo", to: VocabTerm(text: "Todoist", aliases: ["todo list"]))
-    let want = [VocabTerm(text: "Todoist", aliases: ["todo list"], weight: 5), VocabTerm(text: "Poptalk")]
+    let want = [VocabTerm(text: "Todoist", aliases: ["todo list"]), VocabTerm(text: "Poptalk")]
     #expect(store.terms == want)
     #expect(VocabularyStore(url: url).terms == want)
 }

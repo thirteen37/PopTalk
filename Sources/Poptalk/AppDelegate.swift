@@ -204,7 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var profile: ResolvedProfile?
     private var selectionTask: Task<String?, Never>?
     private var startWork: DispatchWorkItem?
-    private var previewTask: Task<Void, Never>?
+    private var previewTask: Task<LiveInput?, Never>?
     private var recording = false { didSet { syncBusyMarker() } }
     /// Going idle applies a speech model change that waited for the request (#73).
     private var busy = false { didSet { syncBusyMarker(); if !busy { loadTranscriber() } } }
@@ -337,10 +337,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timing.mark("release: context awaited", since: t0)
             let selection = await sel?.value
             Timing.mark("release: selection awaited", since: t0)
-            await preview?.value  // an in-flight preview must not interleave with the final pass on the actor
+            // An in-flight preview must not interleave with the final pass on the actor. Its terms are this press's (#149).
+            let live = await preview?.value ?? nil
             Timing.mark("release: preview drained", since: t0)
-            let (saved, learned) = (store.terms, learnedTerms(sources))
-            let boost = Pipeline.boostTerms(saved: saved, learned: learned, context: snapshot, fromScreen: sources.screenVocabulary)
+            let (saved, learned) = (store.terms, live?.learned ?? learnedTerms(sources))
+            let (terms, boost) = live.map { ($0.terms, $0.boost) } ?? pressTerms(snapshot, sources, learned: learned)
             let split = Pipeline.boostSources(boost, saved: saved, learned: learned)
             Timing.log.info("release: boost \(split.saved) saved, \(split.learned) learned, \(split.screen) screen")
             let heard: Transcription
@@ -349,7 +350,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             Timing.mark("release: transcribed", since: t0)
             overlay.showWorking(heard: heard.text)
-            let request = Request(transcript: heard.text, selection: selection, context: snapshot, cleanup: profile.cleanup)
+            var request = Request(transcript: heard.text, selection: selection, context: snapshot, cleanup: profile.cleanup)
+            request.terms = terms
             // #43: the speculative run already saw this exact request: insert its result (waiting if still running).
             var reused: (result: PipelineResult, calls: ModelCallRecorder)?
             if let spec {
@@ -646,19 +648,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if hotkey.shifted { speculation?.task.cancel(); cleaned = nil }  // #131: raw, nothing to clean
                 else if let fixed, LivePreview.shouldRun(text, lastRun: speculation?.request.transcript, previous: previous,
                                                     paused: LivePreview.paused(samples), edit: fixed.selection != nil) {
-                    speculate(Request(transcript: text, selection: fixed.selection, context: fixed.context, cleanup: fixed.cleanup),
-                              fixed, since: tick)
+                    var request = Request(transcript: text, selection: fixed.selection, context: fixed.context, cleanup: fixed.cleanup)
+                    request.terms = fixed.terms
+                    speculate(request, fixed, since: tick)
                 }
                 showLive()
             }
+            return fixed
         }
     }
 
-    /// What every speculative run of a press shares (#43): the context and selection captured at key-down, the boost
-    /// terms the final pass will use, and the model settings.
+    /// What every speculative run of a press shares (#43): the context and selection captured at key-down, the terms
+    /// and boost terms the final pass also uses (`pressTerms`), and the model settings.
     private struct LiveInput {
-        let context: ScreenSnapshot, selection: String?, cleanup: CleanupLevel, boost: [VocabTerm], learned: [VocabTerm]
+        let context: ScreenSnapshot, selection: String?, cleanup: CleanupLevel, terms: [VocabTerm], boost: [VocabTerm], learned: [VocabTerm]
         let complete: Pipeline.Complete, models: ModelSettings.Selection, features: DictationFeatures
+    }
+
+    /// A press's terms, worked out once (#149): `boostTerms` with screen terms, which the pipeline recases with
+    /// (`Request.terms`), and the ones speech recognition boosts: screen terms only with screen boosting on (#130).
+    private func pressTerms(_ context: ScreenSnapshot, _ sources: ContextSources,
+                            learned: [VocabTerm]) -> (terms: [VocabTerm], boost: [VocabTerm]) {
+        let terms = Pipeline.boostTerms(saved: store.terms, learned: learned, context: context)
+        return (terms, sources.screenVocabulary ? terms
+                : Pipeline.boostTerms(saved: store.terms, learned: learned, context: context, fromScreen: false))
     }
 
     private func liveInput(_ ctx: Task<ScreenContext.Captured, Never>, _ sel: Task<String?, Never>?) async -> LiveInput {
@@ -668,9 +681,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let complete: Pipeline.Complete
         do { complete = try await makeComplete() } catch { complete = { _, _, _, _ in throw error } }
         let learned = learnedTerms(sources)
-        return LiveInput(context: context, selection: selection, cleanup: profile.cleanup,
-                         boost: Pipeline.boostTerms(saved: store.terms, learned: learned, context: context,
-                                                    fromScreen: sources.screenVocabulary), learned: learned,
+        let (terms, boost) = pressTerms(context, sources, learned: learned)
+        return LiveInput(context: context, selection: selection, cleanup: profile.cleanup, terms: terms, boost: boost, learned: learned,
                          complete: complete, models: Settings.selection, features: DictationFeatures(.standard, sources: sources))
     }
 
