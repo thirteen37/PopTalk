@@ -19,7 +19,7 @@ For each case it shows the screen context or vocabulary the case has, then the l
 ## Bench
 
 ```sh
-.build/release/PoptalkBench --provider mlx --cleanup-model adapters/gemma-4-e2b-poptalk-v6 --runs 1 --filter 's-*' --audio-dir bench/audio-real
+.build/release/PoptalkBench --provider mlx --cleanup-model adapters/gemma-4-e2b-poptalk-v7 --runs 1 --filter 's-*' --audio-dir bench/audio-real
 ```
 
 Recognition uses the app's default speech model, Parakeet TDT v2; add `--speech-model v3` (or another id from Settings → Models) to compare. Cases with a recording use it and the rest use the synthesized voice. The result JSON records the speech model in `provider.speechModel`, each case's `audio` source (`real`, `file` or `speak`) and the count in `provider.realAudio`, and the speech table prints real and synthetic rows separately. Results go to `bench/results-real/`. `training/bench.zsh <model> --audio-dir bench/audio-real` passes the flag to every set; only the speech set uses it.

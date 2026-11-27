@@ -1,13 +1,13 @@
 {
-    "adapter_path": "training/out/adapters-v6",
+    "adapter_path": "training/out/adapters-v7",
     "batch_size": 1,
     "clear_cache_threshold": 0,
-    "config": "training/lora-v6.yaml",
-    "data": "training/out/v6/data",
+    "config": "training/lora-v7.yaml",
+    "data": "training/out/v7/data",
     "fine_tune_type": "lora",
     "grad_accumulation_steps": 4,
     "grad_checkpoint": true,
-    "iters": 5388,
+    "iters": 6016,
     "learning_rate": 0.0001,
     "lora_parameters": {
         "keys": [
@@ -28,7 +28,7 @@
         "warmup": 10,
         "arguments": [
             0.0001,
-            1347,
+            1504,
             1e-06
         ]
     },
@@ -49,7 +49,7 @@
     "resume_adapter_file": null,
     "save_every": 300,
     "seed": 61,
-    "steps_per_eval": 2694,
+    "steps_per_eval": 3008,
     "steps_per_report": 100,
     "test": false,
     "test_batches": 500,

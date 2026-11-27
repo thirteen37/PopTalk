@@ -94,7 +94,7 @@ if [[ ${1:-} == counts ]]; then
 fi
 
 zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -guards:=guards -skip-gate:=gate -history+:=hist -words=words || exit 1
-model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v6} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
+model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v7} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
 [[ ${gate[-1]:-off} == (on|off) ]] || { print -u2 -- "--skip-gate takes on or off"; exit 1 }
 files=(${^${hist:#--history}}(:A))
 (( $#files )) || files=(

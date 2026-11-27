@@ -50,7 +50,7 @@ PY
 if [[ ${1:-} == report ]]; then shift; report "$@"; exit; fi
 
 zparseopts -D -E -F -- -model:=model -timeout:=timeout -history+:=hist -out:=o || exit 1
-model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v6} timeout=${timeout[-1]:-4}
+model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v7} timeout=${timeout[-1]:-4}
 out=${${o[-1]:-$HOME/Library/Application Support/Poptalk/history/skipgate-review.md}:A}
 files=(${^${hist:#--history}}(:A))
 (( $#files )) || files=(

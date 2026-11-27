@@ -6,7 +6,7 @@
 # Invented input: a question, and a system prompt asking for a long answer, so the reply runs past the limit.
 set -euo pipefail
 cd "${0:A:h}/.."
-m=${1:-adapters/gemma-4-e2b-poptalk-v6} runs=${2:-3} bench=${POPTALK_BENCH:-.build/release/PoptalkBench}
+m=${1:-adapters/gemma-4-e2b-poptalk-v7} runs=${2:-3} bench=${POPTALK_BENCH:-.build/release/PoptalkBench}
 dir=$(mktemp -d "${TMPDIR:-/tmp}/reply-limit-exit.XXXXXX")
 trap 'rm -rf -- $dir' EXIT
 print -r -- 'You are a helpful assistant. Answer the question in <transcript> in detail, in at least 150 words.' > $dir/prompt.txt

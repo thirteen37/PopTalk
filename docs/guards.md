@@ -73,7 +73,7 @@ The order matters for the `rejectedBy` count, not for what is inserted: any reje
 `DictationFeatures.guardsOff` is a set of step names that `Pipeline.run` skips. The app never sets it; only `PoptalkBench --guards` does:
 
 ```sh
-.build/release/PoptalkBench --provider mlx --cleanup-model adapters/gemma-4-e2b-poptalk-v6 --filter 'd-*' --guards -length
+.build/release/PoptalkBench --provider mlx --cleanup-model adapters/gemma-4-e2b-poptalk-v7 --filter 'd-*' --guards -length
 ```
 
 `--guards` takes a comma-separated list of `-name`, where a name is any of `Pipeline.guardNames` or a whole list: `-prepass`, `-repairs`, `-rejects`. It works in bench mode and in `--replay` (`scripts/replay.zsh --guards`). Result files get a `-guards` suffix, or `-model` when every repair and reject is off. `training/bench.zsh` runs the model-only pass with `--guards -repairs,-rejects`; it keeps the prepass, which shapes what the model is asked.

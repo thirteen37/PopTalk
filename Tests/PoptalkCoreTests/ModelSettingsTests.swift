@@ -79,10 +79,11 @@ private func tempDir(_ files: [String: String]) -> URL {
     #expect(ModelSettings.selection(d).cleanupModel == ModelSettings.fineTune)
 }
 
-// The fine-tunes before v6 (bundled until #101) move to v6, every launch; other ids, base E2B and a local
+// Fine-tunes no longer bundled (v2-v4 until #101, v6 until #123) move to the default, every launch; other ids, base E2B and a local
 // adapter folder included, stay.
-@Test func migrationMapsOldFineTunesToV6() {
-    for old in ["adapters/gemma-4-e2b-poptalk-v2", "adapters/gemma-4-e2b-poptalk-v3", "adapters/gemma-4-e2b-poptalk-v4"] {
+@Test func migrationMapsOldFineTunesToDefault() {
+    for old in ["adapters/gemma-4-e2b-poptalk-v2", "adapters/gemma-4-e2b-poptalk-v3", "adapters/gemma-4-e2b-poptalk-v4",
+                "adapters/gemma-4-e2b-poptalk-v6"] {
         let d = suite(["mlxCleanupModel": old, "mlxEditModel": old])
         ModelSettings.migrate(d)
         ModelSettings.migrate(d)

@@ -7,7 +7,7 @@
 set -euo pipefail
 umask 077
 zparseopts -D -E -F -- -model:=model -guards:=guards || exit 1
-model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v6}
+model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v7}
 files=(${@:A})
 (( $#files )) || files=(
   ~/Library/Application\ Support/Poptalk/history/history.jsonl(N)

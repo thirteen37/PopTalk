@@ -4,9 +4,9 @@ import Foundation
 /// so switching providers never hands one provider another's model ids.
 public enum ModelSettings {
     public static let e2b = "mlx-community/gemma-4-e2b-it-4bit"
-    /// The E2B v6 fine-tune (#103), the default for dictation and edits: a LoRA adapter applied unfused on `e2b` at
-    /// load, trained on `Prompts.dictationSystem` / `editSystem`. Relative: see `adapter(_:roots:)`.
-    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v6"
+    /// The E2B v7 fine-tune (#123; v6 from #103), the default for dictation and edits: a LoRA adapter applied unfused
+    /// on `e2b` at load, trained on `Prompts.dictationSystem` / `editSystem`. Relative: see `adapter(_:roots:)`.
+    public static let fineTune = "adapters/gemma-4-e2b-poptalk-v7"
     public static let e4b = "mlx-community/gemma-4-e4b-it-4bit"
 
     /// Model ids and adapter dirs trained on the cleanup-level tag (#96): only these get `<style cleanup=…/>`.
@@ -51,8 +51,8 @@ public enum ModelSettings {
 
     /// Set once E4B saved as #101's default has moved to the fine-tune, so an E4B picked later stays.
     static let movedToFineTune = "mlxMovedToFineTuneV6"
-    /// Fine-tunes bundled before v6 (until #101): they fall back to the default.
-    static let oldFineTunes = ["v2", "v3", "v4"].map { "adapters/gemma-4-e2b-poptalk-\($0)" }
+    /// Fine-tunes no longer bundled (v2-v4 until #101, v6 until #123): they fall back to the default.
+    static let oldFineTunes = ["v2", "v3", "v4", "v6"].map { "adapters/gemma-4-e2b-poptalk-\($0)" }
 
     /// Before per-provider fields, `cleanupModel`/`editModel` held LM Studio ids: move them to the LM Studio fields.
     /// #103: the fine-tune is the default again; old bundled fine-tunes fall back to it, and E4B (#101's default)

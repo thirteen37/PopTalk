@@ -156,7 +156,7 @@ if args.contains("--warmup-probe") {
 // #75 step 2: adds `candidate` to each line of a term_probe.py pairs file: the best `termShortlist` run of `heard`
 // for `term`, or null when the shortlist drops the pair. `--score MODEL` adds `score`, `MLXProvider.termScore` of
 // the whole pair, and prints ms per pair to stderr.
-//   PoptalkBench --term-shortlist training/term_pairs.jsonl [--score adapters/gemma-4-e2b-poptalk-v6] > pairs.jsonl
+//   PoptalkBench --term-shortlist training/term_pairs.jsonl [--score adapters/gemma-4-e2b-poptalk-v7] > pairs.jsonl
 if let path = opt("--term-shortlist") {
     guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
     let model = opt("--score")
