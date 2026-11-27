@@ -110,6 +110,10 @@ private func words(_ s: String, _ ranges: [Range<String.Index>]) -> [String] { r
     #expect(LivePreview.reusable(PipelineResult(outcome: .insert("hello there", label: "Dictated (raw)"), degraded: true)) == nil)
     #expect(LivePreview.reusable(PipelineResult(outcome: .error("Model took too long"))) == nil)
     #expect(LivePreview.reusable(PipelineResult(outcome: .insert("hello there", label: "Dictated (raw)"))) == nil)
+    // #147: a guard's reject is the raw fallback again at temperature 0: insert it rather than run it again.
+    var rejected = PipelineResult(outcome: .insert("hello there", label: "Dictated (raw)"))
+    rejected.rejectedBy = "length"
+    #expect(LivePreview.reusable(rejected) == rejected)
     // Only the final run saves vocabulary, so a "remember" edit runs again.
     #expect(LivePreview.reusable(PipelineResult(outcome: .replaceSelection("Todoist", label: "Corrected"),
                                                 remembered: VocabTerm(text: "Todoist"))) == nil)
@@ -149,4 +153,15 @@ private func words(_ s: String, _ ranges: [Range<String.Index>]) -> [String] { r
     let late = s.sweeping([r(c, "GitHub"), r(c, "TestFlight")], in: c, now: 11)
     #expect(late.map(\.range) == [r(c, "TestFlight")])
     #expect(late.map(\.start) == [11])
+}
+
+// #147: a speculative run whose reply a guard rejected is reused at release: the same raw fallback the final pass gives.
+@Test func rejectedSpeculativeRunIsTheFinalRawFallback() async {
+    let p = Pipeline(complete: { _, _, _, _ in String(repeating: "Sure, here is a much longer answer. ", count: 5) },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")),
+                     cleanupModel: "s", editModel: "b")
+    let request = Request(transcript: "send the notes to the team today", selection: nil, context: ScreenSnapshot())
+    let spec = await LivePreview.$speculative.withValue(true) { await p.run(request) }
+    #expect(spec.rejectedBy == "length" && spec.outcome == .insert("send the notes to the team today", label: "Dictated (raw)"))
+    #expect(LivePreview.reusable(spec) == (await p.run(request)))
 }
