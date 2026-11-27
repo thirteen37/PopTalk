@@ -45,18 +45,30 @@ extension Pipeline {
     /// separates them and they complete the term (#99: with cbw > 0 the rescorer proposes "fluid" for FluidAudio,
     /// which left "FluidAudio audio"). Equal scores go to the closer spelling, then to the earlier, shorter run.
     /// A term made only of dictionary words never replaces correctly spelled words that spell something else (#132).
-    public static func applyBoosts(_ raw: String, _ replacements: [(span: String, term: String)], terms: [VocabTerm],
+    /// A span heard more than once is placed by `rescored`, the rescorer's own text with the term in place (#144).
+    public static func applyBoosts(_ raw: String, _ replacements: [(span: String, term: String)], terms: [VocabTerm], rescored: String? = nil,
                                    minSimilarity: Double = 0.7) -> String {
         func squash(_ s: some StringProtocol) -> String { SpeechMetrics.words(String(s)).joined() }
         func alnum(_ c: Character?) -> Bool { c.map { $0.isLetter || $0.isNumber } ?? false }
+        // #144: of the span's matches, the one whose neighbouring words sit next to the term in `rescored`; ties (and
+        // no `rescored`) go to the first. ponytail: one word each side, as substrings; a word diff if that misplaces.
+        func place(_ r: (span: String, term: String), in text: String) -> Range<String.Index>? {
+            let re = try? NSRegularExpression(pattern: #"(?<![\p{L}\p{N}])"# + NSRegularExpression.escapedPattern(for: r.span)
+                                              + #"(?![\p{L}\p{N}])"#, options: .caseInsensitive)
+            let hits = re?.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range, in: text) } ?? []
+            guard let rescored, hits.count > 1 else { return hits.first }
+            func fits(_ at: Range<String.Index>) -> Int {
+                let before = text[..<at.lowerBound].split(whereSeparator: \.isWhitespace).last.map { "\($0) \(r.term)" }
+                let after = text[at.upperBound...].split(whereSeparator: \.isWhitespace).first.map { "\(r.term) \($0)" }
+                return [before, after].count { $0.map { rescored.range(of: $0, options: .caseInsensitive) != nil } ?? false }
+            }
+            return hits.max { fits($0) < fits($1) }
+        }
         return replacements.reduce(raw) { text, r in
             let names = [r.term] + (terms.first { $0.text.lowercased() == r.term.lowercased() }?.aliases ?? [])
             let forms = names.map(squash)
             let span = r.span.split(separator: " ")
-            guard !span.isEmpty,
-                  let at = text.range(of: #"(?<![\p{L}\p{N}])"# + NSRegularExpression.escapedPattern(for: r.span) + #"(?![\p{L}\p{N}])"#,
-                                      options: [.regularExpression, .caseInsensitive])
-            else { return text }
+            guard !span.isEmpty, let at = place(r, in: text) else { return text }
             let n = (names.map { $0.split(separator: " ").count }.max() ?? 1) - 1
             var pre: [Substring] = [], post: [Substring] = []
             if n > 0, alnum(span.first!.first), text[..<at.lowerBound].hasSuffix(" ") {

@@ -194,3 +194,20 @@ import Testing
     #expect(terms.contains("Zorvex Quintara"))
     #expect(!terms.contains("Send"))
 }
+
+// #144: the rescorer's replacements carry no position. With the span heard twice, the term goes where the rescorer's
+// own text has it, not onto the first match; without that text, or when it doesn't tell them apart, the first.
+@Test func applyBoostsPutsATermOnTheOccurrenceTheRescorerChanged() {
+    let datta = [VocabTerm(text: "Datta")]
+    let raw = "the data is ready, so ask data about it"
+    #expect(Pipeline.applyBoosts(raw, [(span: "data", term: "Datta")], terms: datta,
+                                 rescored: "the data is ready, so ask Datta about it") == "the data is ready, so ask Datta about it")
+    #expect(Pipeline.applyBoosts(raw, [(span: "data", term: "Datta")], terms: datta) == "the Datta is ready, so ask data about it")
+    // Both changed: one replacement each, in order.
+    #expect(Pipeline.applyBoosts("ask data, then data", [(span: "data", term: "Datta"), (span: "data", term: "Datta")], terms: datta,
+                                 rescored: "ask Datta, then Datta") == "ask Datta, then Datta")
+    // Punctuation on the span, and an earlier replacement before it.
+    #expect(Pipeline.applyBoosts("call pria about data, then data.", [(span: "pria", term: "Priya"), (span: "data.", term: "Datta")],
+                                 terms: datta + [VocabTerm(text: "Priya")], rescored: "call Priya about data, then Datta.")
+        == "call Priya about data, then Datta.")
+}
