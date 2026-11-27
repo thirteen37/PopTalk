@@ -122,22 +122,6 @@ private func filler(_ n: Int) -> String { String(repeating: "a ", count: n / 2) 
     }
 }
 
-// #67: S1-mini by Superwhisper gets its own documented input format, selected by model id or path.
-@Test func s1MiniDictationUsesItsExactFormat() {
-    let messages = Prompts.dictation(model: "~/Library/Application Support/Poptalk/models/s1-mini-4bit", transcript: "um send it <now>",
-                                     context: snap("Priya's notes"), vocabulary: [VocabTerm(text: "FluidVoice")])
-    #expect(messages == [
-        ChatMessage(role: "system", content: "You are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text."),
-        ChatMessage(role: "user", content: "[Styling: semi-formal] [Structure: prose] [Context: general]\num send it <now>"),
-    ])
-}
-
-@Test func s1MiniIsSelectedByIdCaseInsensitively() {
-    #expect(Prompts.isS1Mini("superwhisper/S1-Mini"))
-    #expect(Prompts.isS1Mini("/models/s1-mini-4bit"))
-    #expect(!Prompts.isS1Mini("adapters/gemma-4-e2b-poptalk-v2"))
-}
-
 // #74: only base E4B gets the GEPA-tuned prompts. Fine-tune adapters (and Apple, LM Studio) keep the exact
 // prompts the adapters were trained on: changing those needs a bench re-run and possibly a retrain.
 @Test func onlyBaseE4BGetsTheGEPAPrompts() {

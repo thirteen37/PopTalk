@@ -152,7 +152,7 @@ Every insert gets a leading space when the cursor follows a non-space that isn't
 
 ## Performance
 
-Measured 2026-11-26 on main d545fb6 (with #117's counts-only `repaired` field, which doesn't change what is inserted), with the default model: the E2B v6 LoRA `adapters/gemma-4-e2b-poptalk-v6` on base Gemma 4 E2B, MLX, an M-series Mac (Mac17,9). The numbers go stale when the model, the prompts, the guards or the bench cases change. Results: [`bench/results/guards-117/`](../bench/results/guards-117/).
+Measured 2026-11-26 on main d545fb6 (with #117's counts-only `repaired` field, which doesn't change what is inserted), with the default model then, the E2B v6 LoRA `adapters/gemma-4-e2b-poptalk-v6` on base Gemma 4 E2B, MLX, an M-series Mac (Mac17,9). Every bench, replay and cleanup-time number in this section is v6's; v7 has been the default since #123 and these haven't been re-measured on it (the string-code timings don't depend on the model). The numbers go stale when the model, the prompts, the guards or the bench cases change. Results: [`bench/results/guards-117/`](../bench/results/guards-117/).
 
 ### What the guards buy on the bench
 
@@ -218,7 +218,7 @@ The prepass, repairs and rejects are string code. Per call, median of 200, Popta
 | Skip gate (`skipsLLM`, off), on a clean dictation of the same length (median of 9) | 4.8 ms (170 ms before #120) | 0.4 ms: over 40 words, stops at `length` (870 ms) |
 | Its term shortlist alone (`termShortlist`), past the cap | 4.7 ms | 19.7 ms |
 
-The prepass, repairs and rejects together take about 0.9 ms on the short dictation and 2.3 ms on the long one, against 0.31 s mean for the cleanup itself on the replay (p90 0.49 s). The casing fix runs by default with v6, once per dictation, so its cost isn't per word: it scales with the terms and the screen. It lowercases the transcript and the screen once (about 0.35 ms of it for this screen), then searches the transcript for each term, and the screen only for the terms the transcript has. Before #121 it compiled a regex per term and scanned the whole screen with each, about 20 ms whatever the length.
+The prepass, repairs and rejects together take about 0.9 ms on the short dictation and 2.3 ms on the long one, against 0.31 s mean for the v6 cleanup itself on the replay (p90 0.49 s). The casing fix runs by default with v7, as with every E2B fine-tune, once per dictation, so its cost isn't per word: it scales with the terms and the screen. It lowercases the transcript and the screen once (about 0.35 ms of it for this screen), then searches the transcript for each term, and the screen only for the terms the transcript has. Before #121 it compiled a regex per term and scanned the whole screen with each, about 20 ms whatever the length.
 
 **The skip gate's cost.** The rows above are a synthetic worst case: a clean dictation, so no cue stops the gate before the term shortlist, against 64 invented terms that aren't dictionary words. The shortlist compares every run of 1–3 words with every term, by edit distance on the squashed strings, their consonant skeletons, and the sound-folded versions of both. Before #120 that took 170 ms at 38 words and 870 ms at 190, more than the cleanup it would skip. Two changes bound it:
 
@@ -231,4 +231,4 @@ The `replyLimit` early stop: on the 2 history dictations `length` rejects, the c
 
 ### Known issues
 
-- #116: dictations of 6 words or more over long screens can still echo the screen (1 of 492 on the replay, 8 words). They count as `echoesContext` and go in raw. A wider no-screen rule costs bench cases that need a name from the screen; a retrain with such cases is open (#123).
+- #116: dictations of 6 words or more over long screens can still echo the screen: v6 did on 1 of 492 replayed dictations (8 words). They count as `echoesContext` and go in raw. A wider no-screen rule costs bench cases that need a name from the screen. v7 (#123), retrained with #116's short terminal-sidebar items, had no `echoesContext` reject on the 520-dictation replay (v6: 1), so the rule stays as is.

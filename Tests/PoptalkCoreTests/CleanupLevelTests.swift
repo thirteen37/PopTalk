@@ -15,9 +15,6 @@ private let vocab = [VocabTerm(text: "Corvelle")]
         #expect(m == [ChatMessage(role: "system", content: system), ChatMessage(role: "user", content: user)], "\(model)")
         #expect(m == Prompts.dictation(model: model, transcript: "hello world", context: screen, vocabulary: vocab))
     }
-    let s1 = Prompts.dictation(model: "/models/s1-mini-4bit", transcript: "hello world", context: screen, vocabulary: vocab, cleanup: .polished)
-    #expect(s1 == [ChatMessage(role: "system", content: Prompts.s1MiniSystem),
-                   ChatMessage(role: "user", content: "\(Prompts.s1MiniControl)\nhello world")])
 }
 
 @Test func nonDefaultLevelAddsOneLineBeforeTranscript() {

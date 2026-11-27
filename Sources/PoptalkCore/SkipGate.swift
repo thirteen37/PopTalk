@@ -137,8 +137,9 @@ extension Pipeline {
 
     /// The lowest `MLXProvider.termScore` with no false yes on training/term_pairs.jsonl, on the v6 E2B LoRA
     /// (`PoptalkBench --term-shortlist … --score`): on term_pairs_heldout.jsonl with the shortlist in front,
-    /// precision 0.96, recall 0.79. ponytail: one threshold for every E2B fine-tune; refit per adapter if another
-    /// ships (base E2B fits about −12 in `training/term_probe.py`).
+    /// precision 0.96, recall 0.79. Fitted on v6 and not refitted for the default v7 (#123, #149). ponytail: one
+    /// threshold for every E2B fine-tune; refit per adapter if another ships (base E2B fits about −12 in
+    /// `training/term_probe.py`).
     public static let termScoreThreshold = -7.12
 
     /// The yes/no question `TermScore` asks, as `training/term_probe.py` does.

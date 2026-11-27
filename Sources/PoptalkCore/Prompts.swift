@@ -114,24 +114,13 @@ public enum Prompts {
                 ChatMessage(role: "user", content: "\(contextBlock(context, vocabulary))\n\(style)<transcript>\(esc(transcript))</transcript>")]
     }
 
-    /// S1-mini by Superwhisper (#67): its model card's exact system prompt and control line, then the transcript
-    /// only. It was never trained with screen text or vocabulary, so those are left out.
-    static let s1MiniSystem = "You are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text."
-    static let s1MiniControl = "[Styling: semi-formal] [Structure: prose] [Context: general]"
-
-    public static func isS1Mini(_ model: String) -> Bool { model.lowercased().contains("s1-mini") }
-
-    /// The dictation prompt for `model`: S1-mini's own format, else `dictation(transcript:context:vocabulary:)`
-    /// with E4B's own system prompt (#74) or the default. S1-mini never gets a `cleanup` tag.
+    /// The dictation prompt for `model`: `dictation(transcript:context:vocabulary:)` with E4B's own system prompt
+    /// (#74) or the default.
     public static func dictation(model: String, transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm],
                                  cleanup: CleanupLevel = .clean) -> [ChatMessage] {
-        guard isS1Mini(model) else {
-            let system = model != ModelSettings.e4b ? dictationSystem
-                : e4bLevelRules[cleanup].map { e4bDictationSystem + "\n\n" + $0 } ?? e4bDictationSystem
-            return dictation(transcript: transcript, context: context, vocabulary: vocabulary, system: system, cleanup: cleanup)
-        }
-        return [ChatMessage(role: "system", content: s1MiniSystem),
-                ChatMessage(role: "user", content: "\(s1MiniControl)\n\(transcript)")]
+        let system = model != ModelSettings.e4b ? dictationSystem
+            : e4bLevelRules[cleanup].map { e4bDictationSystem + "\n\n" + $0 } ?? e4bDictationSystem
+        return dictation(transcript: transcript, context: context, vocabulary: vocabulary, system: system, cleanup: cleanup)
     }
 
     public nonisolated(unsafe) static var editSystem = """
