@@ -141,3 +141,13 @@ private func run(_ transcript: String, selection: String? = nil, reply: String) 
     #expect(!Pipeline.dropsContent("Meet at the library on Main Street at noon.",
                                    transcript: "meet at the downtown coffee shop no wait the library on main street at noon"))
 }
+
+// #137 follow-up: number words the reply wrote as digits ("nineteen eighty four" → 1984) aren't lost, and "instead"
+// is a self-correction marker like "actually", so "X no Y instead" loses only X.
+@Test func digitsAndInsteadAreNotLostContent() {
+    #expect(!Pipeline.dropsContent("The bakery opened in the summer of 1984.", transcript: "the bakery opened in the summer of nineteen eighty four"))
+    #expect(!Pipeline.dropsContent("My seat on the train is 7 3 2.", transcript: "my seat on the train is seven three two"))
+    #expect(!Pipeline.dropsContent("Bring the red mugs.", transcript: "bring the blue mugs no the red ones instead"))
+    // Without a digit in the reply, number words still count.
+    #expect(Pipeline.dropsContent("The bakery opened in the summer.", transcript: "the bakery opened in the summer of nineteen eighty four"))
+}

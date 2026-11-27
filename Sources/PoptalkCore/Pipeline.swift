@@ -431,7 +431,7 @@ extension Pipeline {
         "the", "and", "but", "for", "that", "this", "those", "these", "was", "were", "are", "had", "have", "has",
         "with", "from", "our", "your", "you", "they", "them", "she", "his", "her", "its", "can", "will", "would",
         "should", "could", "about", "into", "than", "then", "there", "what", "also", "just", "like", "basically",
-        "know", "mean", "really", "okay", "well", "sorry", "actually", "scratch", "wait", "thing", "kind", "sort"]
+        "know", "mean", "really", "okay", "well", "sorry", "actually", "instead", "rather", "scratch", "wait", "thing", "kind", "sort"]
 
     /// Cancellation cues the e4b prompt names. "forget that/it/the" only opens its own unit (#148): after the start, a
     /// . ! ? , ; : or newline, or a lead-in "actually"/"wait"/"no", like `spokenCancel`'s command. "I always forget the
@@ -444,7 +444,10 @@ extension Pipeline {
     /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3: 2 never count, and 3
     /// count only past 40%, so "X no Y" with a 3-word X needs 8 content words to pass. Fitted on the invented
     /// training/fidelity_pairs.jsonl (#137); 35% catches more there but rejects that 3-of-8 self-correction.
-    /// A word counts as kept if it appears anywhere in the output, so "fluid audio" → "FluidAudio" survives.
+    /// A word counts as kept if it appears anywhere in the output, so "fluid audio" → "FluidAudio" survives, and a
+    /// number word counts as kept if the output has a digit ("nineteen ninety nine" → 1999). The correction markers
+    /// ("actually", "instead", …) are `droppable`, so "X no Y instead" loses only X.
+    /// ponytail: any digit keeps every number word; a reply that drops one number and keeps another passes on them.
     /// ponytail: a dropped sentence under 40% of a long dictation passes; tighten if that shows up in history.
     /// #102: a spoken cancellation drops what it cancels, so only what follows the last cue must stay.
     static func dropsContent(_ output: String, transcript: String) -> Bool {
@@ -454,7 +457,9 @@ extension Pipeline {
             .map { ns.substring(from: NSMaxRange($0.range)) } ?? transcript
         let content = said.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }
             .filter { $0.count >= 3 && !droppable.contains(String($0)) }
-        let lost = content.filter { !out.contains($0) }.count
+        // Number words the model wrote as digits ("nineteen ninety nine" → 1999) are kept.
+        let digits = out.contains(where: \.isNumber)
+        let lost = content.filter { !out.contains($0) && !(digits && isNumberWord($0)) }.count
         return lost >= 3 && Double(lost) > 0.4 * Double(content.count)
     }
 
