@@ -440,8 +440,10 @@ extension Pipeline {
         pattern: #"\b(?:scratch that|never ?mind)\b|(?:^|[.!?,;:\n]|\b(?:actually|wait|no))[ \t]*[,;:]?[ \t]*forget (?:that|it|the)\b"#,
         options: .caseInsensitive)
 
-    /// True when the cleanup lost more than 3 content words and over 40% of them (#47): the model kept
-    /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3.
+    /// True when the cleanup lost at least 3 content words and over 40% of them (#47, #137): the model kept
+    /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3: 2 never count, and 3
+    /// count only past 40%, so "X no Y" with a 3-word X needs 8 content words to pass. Fitted on the invented
+    /// training/fidelity_pairs.jsonl (#137); 35% catches more there but rejects that 3-of-8 self-correction.
     /// A word counts as kept if it appears anywhere in the output, so "fluid audio" → "FluidAudio" survives.
     /// ponytail: a dropped sentence under 40% of a long dictation passes; tighten if that shows up in history.
     /// #102: a spoken cancellation drops what it cancels, so only what follows the last cue must stay.
@@ -453,7 +455,7 @@ extension Pipeline {
         let content = said.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }
             .filter { $0.count >= 3 && !droppable.contains(String($0)) }
         let lost = content.filter { !out.contains($0) }.count
-        return lost > 3 && Double(lost) > 0.4 * Double(content.count)
+        return lost >= 3 && Double(lost) > 0.4 * Double(content.count)
     }
 
     /// True when the cleanup lost a protected span (#61): the words of each ( … ), “ … ” or " … " in the

@@ -132,3 +132,12 @@ private func run(_ transcript: String, selection: String? = nil, reply: String) 
     #expect(Pipeline.stripHesitations("um") == "")
     #expect(Pipeline.stripHesitations("hmm, let me think. um ok") == "let me think. ok")
 }
+
+// #137: 3 lost content words over 40% is a drop, so half of a short dictation can't vanish; 2 never are (a
+// self-correction), and 3 at 40% or less of it aren't either.
+@Test func dropsContentThresholds() {
+    #expect(Pipeline.dropsContent("Send the invoice tomorrow.", transcript: "send the invoice tomorrow and call the bank first"))
+    #expect(!Pipeline.dropsContent("Tuesday afternoon.", transcript: "monday morning no tuesday afternoon"))
+    #expect(!Pipeline.dropsContent("Meet at the library on Main Street at noon.",
+                                   transcript: "meet at the downtown coffee shop no wait the library on main street at noon"))
+}

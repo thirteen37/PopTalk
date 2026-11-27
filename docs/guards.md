@@ -37,8 +37,19 @@ Pipeline keeps three named, ordered lists. Each step has a name, so the bench an
 | `empty` | Nothing is left after the repairs. | the first pipeline, abf4563 (no issue) |
 | `echoesContext` | At least 3 of the reply's words, and more than half of them, weren't said but are on the screen the model saw: it copied `<screen>`. A word at least 0.7 `similarity` to a run of 1–3 said words, joined, doesn't count: it is a misheard term the model fixed ("core vanta" → "Korvanta"). For a short dictation the screen is only the window title and domain, all its prompt had (#143). | #29; before `length` since #116; #143 |
 | `length` | The reply is longer than `maxCleanupLength`: 1.5 × the transcript's characters + 40. A reply that long is the model answering, not cleaning. | chatter guard, 42dfd60 (no issue); early stop #100 |
-| `dropsContent` | The reply lost more than 3 content words and more than 40% of them: the model kept only part of the dictation. After a spoken cancel ("scratch that", "never mind", "forget that"), only the words after the last cue count. "Forget that/it/the" is a cue only as its own unit: at the start, after a mark, or after "actually", "wait" or "no" ("Actually, forget the umbrella"); "I always forget the door code" is dictation (#148). | #47, #102, #148 |
+| `dropsContent` | The reply lost at least 3 content words and more than 40% of them: the model kept only part of the dictation. A self-correction loses 1–3, so 2 never count, and a 3-word one needs 8 content words in all to pass. After a spoken cancel ("scratch that", "never mind", "forget that"), only the words after the last cue count. "Forget that/it/the" is a cue only as its own unit: at the start, after a mark, or after "actually", "wait" or "no" ("Actually, forget the umbrella"); "I always forget the door code" is dictation (#148). | #47, #102, #137, #148 |
 | `dropsProtected` | A ( … ), “ … ” or " … " span from the transcript isn't in the reply in order, or the reply has fewer line breaks than the transcript. | #61 |
+
+**`dropsContent`'s thresholds (#137)** were fitted on the invented pairs below (`training/fidelity_pairs.jsonl`), each pair checked once with `PoptalkBench --fidelity-pairs` (no model, deterministic rejects only), and checked on `fidelity_pairs_heldout.jsonl`. Drops and answers caught by `dropsContent`, and acceptable rows (any level) rejected by any reject:
+
+| Rule | Fit: drops | answers | false rejects | Held out: drops | answers | false rejects |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before (> 3 lost, > 40%) | 6/16 | 6/15 | 0/32 | 4/11 | 5/13 | 0/29 |
+| **≥ 3 lost, > 40%** | **8/16** | **9/15** | **0/32** | **4/11** | **7/13** | **0/29** |
+| ≥ 3 lost, > 35% | 10/16 | 10/15 | 0/32 | 6/11 | 7/13 | 0/29 |
+| ≥ 2 lost, > 35% | 14/16 | 11/15 | 0/32 | 7/11 | 9/13 | 1/29 |
+
+The pairs' acceptable rows lose at most 3 words, so they barely constrain the share; real self-corrections set it. At 35%, "meet at the downtown coffee shop, no wait, the library on Main Street at noon" (3 of 8 lost) would go in raw, and a 2-word floor rejects "Monday morning, no, Tuesday afternoon" (and a held-out self-correction, 2 of 5). The pick is the conservative one; the replay decides whether 35% is safe. The other rows come from a Python copy of the rule on the same pairs.
 
 The order matters for the `rejectedBy` count, not for what is inserted: any reject means a raw fallback. `echoesContext` runs before `length` (#116), so a long screen echo is counted as an echo. Before #116 it ran last, and most real `length` hits were screen echoes over long terminal screens. It now also runs before `dropsContent` and `dropsProtected`, so an echo that also drops content is counted as an echo. No reject assumes an earlier one passed. The `replyLimit` early stop still cuts a long reply at the limit, and the cut reply is still counted as an echo when most of its words are screen words that weren't said. The move costs `echoesContext` (0.25 ms or less, see What they cost) only on replies `length` used to stop first; every used reply ran it already.
 
@@ -70,9 +81,10 @@ The order matters for the `rejectedBy` count, not for what is inserted: any reje
 
   | Rejects | Precision | Recall | Answers | Echoes | Invented | Wrong numbers | Kept a correction | Dropped parts | Reworded below polished | False rejects |
   | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-  | Deterministic (`Pipeline.rejects`) | 1.00 | 0.22 | 15/39 | 9/9 | 0/18 | 0/30 | 0/15 | 12/33 | 0/12 | 0/70 |
+  | Deterministic (`Pipeline.rejects`), since #137 | 1.00 | 0.26 | 21/39 | 9/9 | 0/18 | 0/30 | 0/15 | 12/33 | 0/12 | 0/70 |
+  | Deterministic, before #137 | 1.00 | 0.22 | 15/39 | 9/9 | 0/18 | 0/30 | 0/15 | 12/33 | 0/12 | 0/70 |
   | Probe | 1.00 | 0.58 | 30/39 | 9/9 | 17/18 | 26/30 | 7/15 | 1/33 | 3/12 | 0/70 |
-  | Either | 1.00 | 0.68 | 34/39 | 9/9 | 17/18 | 26/30 | 7/15 | 12/33 | 3/12 | 0/70 |
+  | Either, before #137 | 1.00 | 0.68 | 34/39 | 9/9 | 17/18 | 26/30 | 7/15 | 12/33 | 3/12 | 0/70 |
 
   Per level the probe's recall is 0.63 verbatim, 0.57 clean, 0.54 polished. It catches what the thresholds can't see (a changed number or day, an added clause, a reply that answers in the dictation's own words) and misses most dropped clauses, which `dropsContent` catches only when the drop is large. On the fit split it rejected 3 of 78 acceptable rows (1 clean, 2 polished).
 
