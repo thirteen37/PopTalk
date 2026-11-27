@@ -26,7 +26,7 @@ Pipeline keeps three named, ordered lists. Each step has a name, so the bench an
 
 | Step | Catches | Does | From |
 | --- | --- | --- | --- |
-| `stripChatter` | `<think>…</think>` blocks and echoed `<transcript>` tags | Removes them and trims the reply. | chatter guard, 42dfd60 (no issue) |
+| `stripChatter` | `<think>…</think>` blocks, echoed `<transcript>` tags, and `&amp;`, `&lt;`, `&gt;`, `&quot;` copied from the escaped prompt ("R&amp;D") | Removes the blocks and tags, trims the reply, and unescapes the entities, `&amp;` last so "&amp;lt;" stays "&lt;" (#145). | chatter guard, 42dfd60 (no issue); #145 |
 | `restoreMarks` | Marks the prepass made that the model changed or added | Curly quotes the model straightened go back, with a `,` or `.` it moved inside put back outside. A line break the model flattened goes back between the same two words, if the reply has them next to each other. A list marker the model put on a lone item goes, unless the transcript is a list. | #75, #77 |
 | `openingCue` | An opening "no", "sorry", "wait" or "actually" the model dropped (E2B v6 reads it as a self-correction with nothing before it) | Puts the cue back as "No, " and lowercases the next word, unless that word is "I", an acronym or a name. Not after a spoken cancel (the `dropsContent` cues). | #105 |
 
@@ -98,7 +98,7 @@ Turning `length` off also turns off the `replyLimit` early stop (#118), so a `-l
 
 ### Edits
 
-Edits (a selection, or tap-then-hold on the last insert) don't go through the repairs or the rejects. They have their own checks in `Pipeline.run`: "literally", a trailing spelling and "replace this with" are handled in code; the model's reply must parse as an edit; an insert the instruction didn't ask for becomes a replace; a blank replacement does nothing; and an insert that repeats the selection has it removed. A failed or timed-out edit leaves the selection unchanged and says so.
+Edits (a selection, or tap-then-hold on the last insert) don't go through the repairs or the rejects. They have their own checks in `Pipeline.run`: "literally", a trailing spelling and "replace this with" are handled in code; the model's reply must parse as an edit, and its text is unescaped as in `stripChatter` (#145); an insert the instruction didn't ask for becomes a replace; a blank replacement does nothing; and an insert that repeats the selection has it removed. A failed or timed-out edit leaves the selection unchanged and says so.
 
 ## Sequence
 

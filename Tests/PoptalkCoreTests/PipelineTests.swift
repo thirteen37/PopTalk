@@ -324,3 +324,16 @@ func replaceEditsStillReachModel(utterance: String) async {
             == .replaceSelection(said, label: "Raw"))
     #expect(Pipeline.asHeard(Request(transcript: " ", selection: nil, context: ctx)).outcome == .nothing)
 }
+
+// #145: the prompt escapes &, <, > (and " in attributes), so a reply that copies a term from it is unescaped.
+// &amp; goes last: "&amp;lt;" was a literal "&lt;".
+@Test func repliesAreUnescaped() async {
+    #expect(Pipeline.stripChatter("<think>x</think>R&amp;D sent &lt;b&gt; and &quot;ok&quot;, not &amp;lt;") == #"R&D sent <b> and "ok", not &lt;"#)
+    #expect(Pipeline.stripChatter(Prompts.attr("&lt; R&D <tag> \"q\"")) == "&lt; R&D <tag> \"q\"")
+    let r = await pipeline(reply: "Ask R&amp;D for the Q&amp;A notes.").run(req("ask r and d for the q and a notes"))
+    #expect(r.outcome == .insert("Ask R&D for the Q&A notes.", label: "Dictated"))
+    let edit = await pipeline(reply: #"{"action":"edit","text":"Fish &amp; chips &lt;3","vocabulary":null,"remember":false}"#)
+        .run(req("make it fancier", selection: "fish and chips"))
+    #expect(edit.outcome == .replaceSelection("Fish & chips <3", label: "Edited"))
+}
+

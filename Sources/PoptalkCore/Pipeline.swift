@@ -213,9 +213,10 @@ public struct Pipeline: Sendable {
             let timedOut = (error as? URLError)?.code == .timedOut
             return PipelineResult(outcome: .error(timedOut ? "Model took too long" : "Couldn't reach the language model"))
         }
-        guard let edit = try? LLMClient.parseEditResult(raw) else {
+        guard var edit = try? LLMClient.parseEditResult(raw) else {
             return PipelineResult(outcome: .error("Didn't understand the model's reply"))
         }
+        edit.text = Self.unescape(edit.text)  // #145: the selection went in escaped
 
         // A bare phrase over a selection replaces it; models sometimes pick insert anyway.
         var action = edit.action
@@ -525,10 +526,17 @@ extension Pipeline {
     /// can also start the next break).
     private static let lineBreak = try! NSRegularExpression(pattern: #"([\p{L}\p{N}]+)[^\p{L}\p{N}\n]*(\n+)[^\p{L}\p{N}\n]*(?=([\p{L}\p{N}]+))"#)
 
-    /// Removes reasoning blocks and echoed tags from a model reply.
+    /// Removes reasoning blocks and echoed tags from a model reply, then undoes `Prompts.attr`'s escaping (#145).
     static func stripChatter(_ s: String) -> String {
-        think.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        unescape(think.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// The inverse of `Prompts.attr` (#145): the prompt shows "R&D" as "R&amp;D", and the model can copy that.
+    /// &amp; goes last, so "&amp;lt;" stays a literal "&lt;".
+    static func unescape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&amp;", with: "&")
     }
 
     /// A space before inserted text when the cursor follows a non-space, non-opening character.
