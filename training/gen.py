@@ -12,7 +12,9 @@
   gen.py teach6 / build6 / split6   the same three stages for the E2B v6 adapter, in out/v6/ (make_data_v6.zsh)
   gen.py build7 / split7  E2B v7 (#105): v6's items plus d-keep-lead, d-numgroup (#125), kept-as-said (#126)
                           and d-short-sidebar (#116), in out/v7/
-  gen.py check            → asserts the v5–v7 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
+  gen.py teach8 / build8 / split8   E2B v8 (#96): v7's items plus the same dictations at Verbatim and Polished
+                          (the cleanup-level section), in out/v8/; teach8 → the E4B teacher's Verbatim inputs
+  gen.py check            → asserts the v5–v8 families, the v8 pool and v6's m6 data are shaped right (writes nothing)
 
 Dictation targets are the clean source text; edit targets are exact where programmatic, else the
 teacher's reply after checks. Items: {id, cat, transcript, selection?, context?, vocabulary?, target}."""
@@ -2049,30 +2051,35 @@ def keep_heard_row(row):
 
 
 def as_said_clause(r):
-    """(as said, as written) for one AS_SAID sentence, with a self-correction in its slot about a third of the time."""
+    """(as said, as written, as Polished writes it, #96) for one AS_SAID sentence, with a self-correction in its slot
+    about a third of the time."""
     tmpl, kind = r.choice(L.AS_SAID)
+    fixed = L.AS_SAID_FIXED[tmpl]
     if not kind:
-        return tmpl, tmpl
+        return tmpl, tmpl, fixed
     a, b = r.sample(slot_pool(kind), 2)
     if r.random() < 0.35:
         cue = r.choice(L.CUES)
-        return tmpl.replace("{X}", f"{a}, {cue}, {b}" if r.random() < 0.5 else f"{a} {cue} {b}"), tmpl.replace("{X}", b)
-    return tmpl.replace("{X}", b), tmpl.replace("{X}", b)
+        return (tmpl.replace("{X}", f"{a}, {cue}, {b}" if r.random() < 0.5 else f"{a} {cue} {b}"), tmpl.replace("{X}", b),
+                fixed.replace("{X}", b))
+    return tmpl.replace("{X}", b), tmpl.replace("{X}", b), fixed.replace("{X}", b)
 
 
-def as_said_dictation():
+def as_said_dictation(polished=False):
+    """d-as-said; with `polished` (build8), each item also carries its Polished target (same draws, same items)."""
     checker, r, out, seen = Checker(), R("d-as-said"), [], set()
     while len(out) < AS_SAID_N:
         n = r.choices(*zip(*AS_SAID_CLAUSES))[0]
         parts = [as_said_clause(r) for _ in range(n)]
-        said, target = parts[0]
-        for s_, y_ in parts[1:]:
+        said, target, fixed = parts[0]
+        for s_, y_, f_ in parts[1:]:
             if r.random() < 0.4:  # one breath: the join word stays, the target only adds punctuation
                 j = r.choice(L.AS_SAID_JOIN)
                 comma = "," if j in (" so ", " but ") else ""
                 said, target = said[:-1] + j + decap(s_), target[:-1] + comma + j + decap(y_)
+                fixed = fixed[:-1] + comma + j + decap(f_)
             else:
-                said, target = said + " " + s_, target + " " + y_
+                said, target, fixed = said + " " + s_, target + " " + y_, fixed + " " + f_
         v = r.random()  # as Parakeet punctuates it, run together lowercase, with an "uh"/"um" or two
         t = said if v < 0.3 else lower_transcript(said) if v < 0.55 else v8_um(r, said, r.choice([1, 1, 2]))
         t = lower_transcript(t) if v >= 0.55 and r.random() < 0.4 else t
@@ -2082,6 +2089,8 @@ def as_said_dictation():
         ctx = m6_screen(r, avoid=[target]) if r.random() < 0.4 else unrelated_context(r)
         it = {"id": f"d-as-said-{len(out)}", "cat": "d-as-said", "transcript": t, "context": ctx, "target": target}
         if not checker.reason(it):
+            if polished:
+                it["polished"] = fixed
             seen.add(t)
             out.append(it)
     return out
@@ -2187,6 +2196,164 @@ def check_sidebar():
     long_ = sum(v8_words(it["target"]) >= 6 for it in items)
     assert long_ >= 0.5 * len(items), long_
     print(f"sidebar check ok: {len(items)} d-short-sidebar, {long_} of 6–8 words, {len(SIDEBAR_SAYS)} sayings")
+
+
+# ---------- #96: cleanup levels (build8) ----------
+# build7 plus the same dictations at Verbatim and Polished, tagged `cleanup` (render adds <style cleanup="…"/>).
+# Levels (owner, #96): Verbatim keeps every word as said (word fillers "like"/"you know"/"basically"/"I mean",
+# repeats, false starts, self-corrections with their cue); only um/uh/er/hmm go, which Pipeline.stripHesitations drops
+# at every level before the model. It still adds punctuation and casing and fixes terms and numbers like Clean.
+# Polished is Clean plus grammar and homophones, nothing shortened. Clean rows are build7's, untouched.
+# Families, per transcript where they apply, so the same words are seen at two or three levels:
+#   l-polished-fix        d-as-said with each sentence's grammar fixed (lexicon.AS_SAID_FIXED). Rule.
+#   l-polished-homophone  d-mutated whose homophone Clean keeps as heard: Polished writes the base's word. Rule.
+#   l-verbatim-keep       Clean dropped word fillers or applied a self-correction: E4B at Verbatim (teach8) writes the
+#                         punctuation, accepted only with exactly the said words plus Clean's term fixes. Teacher.
+#   l-verbatim-same       Clean changed nothing but hesitations, punctuation, casing, terms or numbers: same target.
+#   l-polished-same       a grammatical base: Polished is Clean (no tightening, no rewording). Rule.
+# Sizes: ~1,300 rows per level against ~15,700 Clean rows (Clean stays ~85%, so untagged prompts keep v7's
+# behaviour), about half where the level differs from Clean (what the tag does) and half where it doesn't (what it
+# leaves alone: terms, numbers, punctuation at Verbatim; correct wording at Polished).
+
+OUT8 = OUT / "v8"
+LEVEL_N = {"keep": 600, "same": 150}  # bases drawn for l-verbatim-keep and for l-verbatim-same, each also l-polished-same
+HESITATION = re.compile(r"^(?:u+m+|u+h+|e+r+m*|h+m+)$")  # Pipeline.stripHesitations' sounds
+SCRATCH = re.compile(r"\b(?:scratch|delete) that\b", re.I)  # spokenCancel cuts these at every level, before the model
+
+
+def said_words(t):
+    """The transcript's words as the cleanup model gets them: hesitations stripped."""
+    return [w for w in W.words(t) if not HESITATION.match(w)]
+
+
+def level_changes(it, target):
+    """(said words, target words, change opcodes, their word_changes buckets) from transcript to `target`."""
+    ctx = it.get("context") or {}
+    terms = W.term_set(" ".join(ctx.get(k) or "" for k in ("windowTitle", "text", "ocrText")),
+                       ", ".join(v["text"] for v in it.get("vocabulary") or []))
+    old, new = said_words(it["transcript"]), W.words(target)
+    ops = [o for o in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes() if o[0] != "equal"]
+    # A term fix next to a cue word reads as a cue to word_changes ("eye no" → "Aino"): a new screen term wins.
+    kinds = [("term" if any(w in terms for w in new[j1:j2]) else k) for (_, _, _, j1, j2), k in zip(ops, W.changes(old, new, terms))]
+    return old, new, ops, kinds
+
+
+def verbatim_words(it):
+    """A Verbatim target's words: as said, with Clean's term fixes; None if Clean changed more than fillers,
+    self-corrections and terms."""
+    old, new, ops, kinds = level_changes(it, it["target"])
+    if not set(kinds) <= {"filler", "cue", "term"}:
+        return None
+    out, i = [], 0
+    for (_, i1, i2, j1, j2), k in zip(ops, kinds):
+        out += old[i:i1] + (new[j1:j2] if k == "term" else old[i1:i2])
+        i = i2
+    return out + old[i:]
+
+
+def keeps_all(b):
+    """A base whose Verbatim target the teacher writes: Clean dropped fillers or applied a self-correction, and
+    nothing a deterministic step rewrites (numbers, "scratch that") is said."""
+    return (bool({"filler", "cue"} & set(level_changes(b, b["target"])[3])) and verbatim_words(b) is not None
+            and not SCRATCH.search(b["transcript"]) and not any(map(W.is_number, W.words(b["transcript"]))))
+
+
+def level_item(b, level, fam, **kw):
+    keep = {k: v for k, v in b.items() if k not in ("id", "cat", "target", "mutators", "base", "polished")}
+    return keep | {"id": f"{b['id']}@{level}", "cat": fam, "baseCat": b["cat"], "cleanup": level} | kw
+
+
+def level_items(bases):
+    """(rule items, teacher inputs) at Verbatim and Polished, from build7's dictations `bases`. `baseCat` lets split8
+    treat a row like its base (keep_heard, the d-list check)."""
+    bases = [b for b in bases if not b.get("selection") and b.get("target")]
+    by_id, fixed = {b["id"]: b for b in bases}, {it["id"]: it["polished"] for it in as_said_dictation(polished=True)}
+    rule, teach, used = [], [], set()
+
+    def verbatim(b):  # l-verbatim-same, l-verbatim-keep (teacher) or neither
+        if set(level_changes(b, b["target"])[3]) <= {"term", "number", "format"}:
+            rule.append(level_item(b, "verbatim", "l-verbatim-same", target=b["target"]))
+        elif keeps_all(b):
+            teach.append(level_item(b, "verbatim", "l-verbatim-keep", rule=" ".join(verbatim_words(b))))
+
+    for b in bases:
+        if b["cat"] == "d-as-said" and b["id"] in fixed:
+            rule.append(level_item(b, "polished", "l-polished-fix", target=fixed[b["id"]]))
+        elif "homophone" in b.get("mutators", ()) and (base := by_id.get(b.get("base"))) \
+                and W.changes(W.words(b["target"]), W.words(base["target"])) == ["homophone"]:
+            it = level_item(b, "polished", "l-polished-homophone", target=base["target"])
+            del it["baseCat"]  # split8's keep_heard (d-mutated) would put the homophone back
+            rule.append(it)
+        else:
+            continue
+        used.add(b["id"])
+        verbatim(b)
+    r = R("levels")
+    rest = [b for b in bases if b["id"] not in used and b["cat"] != "d-as-said" and "homophone" not in b.get("mutators", ())]
+    keep = [b for b in rest if keeps_all(b)]
+    same = [b for b in rest if set(level_changes(b, b["target"])[3]) <= {"term", "number", "format"}]
+    for b in r.sample(keep, min(LEVEL_N["keep"], len(keep))) + r.sample(same, min(LEVEL_N["same"], len(same))):
+        verbatim(b)
+        rule.append(level_item(b, "polished", "l-polished-same", target=b["target"]))
+    return rule, teach
+
+
+def level_teacher(it, res):
+    """An l-verbatim-keep teacher result as a target, or None: what Pipeline inserted, only when no guard rejected it
+    and its words are exactly the said words plus Clean's term fixes (`rule`)."""
+    y = (res.get("output") or "").strip()
+    if res.get("rejectedBy") or res.get("label") != "Dictated" or not y or "\n" in y:
+        return None
+    return y if W.words(y) == it["rule"].split() and y[0].isupper() and y[-1] in ".!?" else None
+
+
+def check_levels():
+    """`gen.py check`: the level families (on the program-built bases: no audio or teacher files needed) are shaped
+    right, Polished fixes but keeps the said words otherwise, the same transcripts appear at both levels, the
+    teacher check accepts only the said words, and nothing is contaminated."""
+    global AS_SAID
+    assert set(L.AS_SAID_FIXED) == {t for t, _ in L.AS_SAID}, "every AS_SAID sentence needs its fix"
+    assert all(f != t and f.count("{X}") == t.count("{X}") for t, f in L.AS_SAID_FIXED.items())
+    AS_SAID = True
+    try:
+        bases = program_items() + m6_dictation() + keep7_dictation() + numg_dictation() + as_said_dictation() + sidebar_dictation()
+        rule, teach = level_items(bases)
+    finally:
+        AS_SAID = False
+    assert as_said_dictation() == [{k: v for k, v in it.items() if k != "polished"} for it in as_said_dictation(polished=True)]
+    by_id, checker = {b["id"]: b for b in bases}, Checker()
+    cats = Counter(it["cat"] for it in rule + teach)
+    for it in rule + teach:
+        b = by_id[it["id"].rsplit("@", 1)[0]]
+        if checker.reason(b):  # build drops a contaminated base, and its level rows with it
+            continue
+        assert it["transcript"] == b["transcript"] and it["cleanup"] in ("verbatim", "polished") and not it.get("selection"), it
+        if "target" in it:
+            y = it["target"]
+            if it["cat"].endswith("-same"):
+                assert y == b["target"], it
+            else:  # Polished fixes something and keeps Clean's words otherwise ("more better" → "better" drops one)
+                assert y[0].isupper() and y[-1] in ".!?" and not checker.reason(it), it
+                kinds = W.changes(W.words(b["target"]), W.words(y))
+                assert kinds and (it["cat"] != "l-polished-homophone" or kinds == ["homophone"]), it
+                assert len(W.words(y)) >= len(W.words(b["target"])) - 2, it
+        else:  # teacher input: the said words, more than Clean's, every Clean word among them
+            ws = it["rule"].split()
+            assert len(ws) > len(W.words(b["target"])) and not Counter(W.words(b["target"])) - Counter(ws), it
+            assert not checker.reason(it | {"target": it["rule"]}), it
+    multi = Counter(it["transcript"] for it in rule + teach)
+    both = sum(n == 2 for n in multi.values())
+    assert both >= 0.8 * len(multi), (both, len(multi))
+    assert all(cats[c] >= 200 for c in ("l-polished-fix", "l-verbatim-same", "l-polished-same")) and len(teach) >= 600, cats
+    t = {"rule": "so we need like three more chairs no four"}
+    ok = {"label": "Dictated", "output": " So we need, like, three more chairs, no, four."}
+    assert level_teacher(t, ok)
+    assert level_teacher(t, ok | {"output": " So we need four more chairs."}) is None  # cleaned, not verbatim
+    assert level_teacher(t, ok | {"output": " So we need, like, three more chairs, no, four"}) is None
+    assert level_teacher(t, ok | {"rejectedBy": "dropsContent", "label": "Dictated (raw)"}) is None
+    assert said_words("Um, so uh we need it") == ["so", "we", "need", "it"]
+    print("levels check ok: " + ", ".join(f"{n} {c}" for c, n in sorted(cats.items())) + f" ({len(teach)} teacher inputs); "
+          f"{both}/{len(multi)} transcripts at both levels; {len(L.AS_SAID_FIXED)} AS_SAID fixes; 0 contaminated")
 
 
 SCRIPTS ={"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}
@@ -2415,7 +2582,7 @@ def build(out, items, skipped, manifest):
     assert not bad, f"list targets must keep the dictated casing: {bad[:5]}"
     checker, clean, seen, rejected = Checker(), [], set(), {}
     for it in items:
-        key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True))
+        key = (it["transcript"], it.get("selection"), json.dumps(it.get("context"), sort_keys=True), it.get("cleanup"))
         if key in seen:
             continue
         seen.add(key)
@@ -2434,7 +2601,7 @@ def split(out, samples, as_said=False):
     """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match; with `as_said`
     (split7, #126), names with nothing in the prompt to fix them toward stay as heard (keep_heard_row)."""
     items = {i["id"]: i for i in jl(out / "items.jsonl")}
-    cats = {k: i["cat"] for k, i in items.items()}
+    cats = {k: i.get("baseCat", i["cat"]) for k, i in items.items()}  # a level row (#96) is checked like its base
     rows, dropped, heard = [], {}, Counter()
     for row in jl(out / "rendered.jsonl"):
         if (why := prepass_mismatch(row, cats[row["id"]], items[row["id"]].get("digits", ()))):
@@ -2465,6 +2632,7 @@ def main(cmd):
         check_numgroup()
         check_as_said()
         check_sidebar()
+        check_levels()
     elif cmd == "v8":
         train, val = v8_pools()
         write(OUT / "pool-v8" / "train.jsonl", train)
@@ -2480,16 +2648,21 @@ def main(cmd):
         build(OUT, items, skipped, Path("training") / "manifest.json")
     elif cmd == "teach6":
         write(OUT6 / "teach.jsonl", m6_teach_items())
-    elif cmd in ("build6", "build7"):  # E2B v6 (#103): see the m6 section; v7 (#105) adds d-keep-lead
+    elif cmd in ("build6", "build7", "build8", "teach8"):  # E2B v6 (#103): see the m6 section; v7 (#105) adds d-keep-lead
         global AS_SAID
-        skipped, v7 = {}, cmd == "build7"
+        skipped, v7 = {}, cmd != "build6"
         AS_SAID = v7
         items = audio_items(skipped) + program_items() + m6_dictation() + m6_edits() + m6_v8()
         items += (keep7_dictation() + numg_dictation() + as_said_dictation() + sidebar_dictation() if v7 else []) + taught(OUT6, skipped, m6_teacher)
-        build(OUT7 if v7 else OUT6, items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
-    elif cmd in ("split", "split6", "split7"):
+        if cmd == "teach8":  # #96: build7's items are the bases; E4B writes l-verbatim-keep
+            write(OUT8 / "teach.jsonl", level_items(items)[1])
+            return
+        if cmd == "build8":
+            items += level_items(items)[0] + taught(OUT8, skipped, level_teacher)
+        build({"build6": OUT6, "build7": OUT7, "build8": OUT8}[cmd], items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
+    elif cmd in ("split", "split6", "split7", "split8"):
         v = cmd[5:]
-        split({"": OUT, "6": OUT6, "7": OUT7}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl", v == "7")
+        split({"": OUT, "6": OUT6, "7": OUT7, "8": OUT8}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl", v in ("7", "8"))
     elif cmd == "heldout":
         keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
         write(Path("training/heldout.jsonl"), heldout(keys))

@@ -2,8 +2,9 @@
 # Benches a cleanup model on the bench sets and the held-out set (#21), twice (#108). From the repo root:
 #   training/bench.zsh <model id or local dir> [edit model] [--flag ...]
 #   (edit model defaults to the cleanup model; trailing --flags go to PoptalkBench, e.g. --dictation-prompt-file F)
-# 1. Ship gate: the full Pipeline on d-*, e-*, s-* and held-out h-*.
-# 2. Model only: d-*, e-* and h-* again with every repair and reject off (`--guards -repairs,-rejects`; the prepass
+# 1. Ship gate: the full Pipeline on d-*, e-*, l-* (cleanup levels, #96: a level model needs --levels, else every
+#    case is sent as Clean), s-* and held-out h-*.
+# 2. Model only: d-*, e-*, l-* and h-* again with every repair and reject off (`--guards -repairs,-rejects`; the prepass
 #    stays, it shapes the model's input), so no repair or raw fallback hides what the model did. Its result files end
 #    in -model: compare them with other -model files only.
 # Then a summary line per set and pass: cases passing every run, and runs passed.
@@ -24,6 +25,7 @@ for guards in "" -repairs,-rejects; do
   g=(${guards:+--guards} $guards)
   run --runs 3 --filter 'd-*' $g
   run --runs 3 --filter 'e-*' $g
+  run --runs 3 --filter 'l-*' $g
   [[ -n $guards ]] || run --runs 1 --filter 's-*'
   run --runs 3 --cases training/heldout.jsonl --filter 'h-*' $g
 done

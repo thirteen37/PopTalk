@@ -115,3 +115,22 @@ private func level(_ bundleID: String?, _ domain: String?, _ profiles: [AppProfi
     #expect(c.request.cleanup == .verbatim)
     #expect(try BenchCase.load(jsonl: #"{"id":"d-y","kind":"dictation","transcript":"hi"}"#)[0].request.cleanup == .clean)
 }
+
+// #96 step 2: the E4B teacher (PoptalkDatagen pipeline, `levels` on) gets the tag plus a rule saying what it means;
+// at Clean its prompt is unchanged, so v6/v7's teacher outputs still hold.
+@Test func e4bGetsALevelRuleOnlyAtNonDefaultLevels() async {
+    for level in [CleanupLevel.verbatim, .polished] {
+        let m = Prompts.dictation(model: ModelSettings.e4b, transcript: "hello world", context: screen, vocabulary: vocab, cleanup: level)
+        #expect(m[0].content == Prompts.e4bDictationSystem + "\n\n" + Prompts.e4bLevelRules[level]!)
+        #expect(m[0].content.contains("<style cleanup=\"\(level.rawValue)\"/>"))
+        #expect(m[1].content.hasSuffix("<style cleanup=\"\(level.rawValue)\"/>\n<transcript>hello world</transcript>"))
+        // The fine-tune learns the tag from data: its system prompt never changes.
+        #expect(Prompts.dictation(model: ModelSettings.fineTune, transcript: "hello world", context: screen, vocabulary: vocab,
+                                  cleanup: level)[0].content == Prompts.dictationSystem)
+    }
+    #expect(Prompts.e4bLevelRules[.clean] == nil)
+    let clean = Request(transcript: "hello there", selection: nil, context: ScreenSnapshot())
+    #expect(await prompts(model: ModelSettings.e4b, levels: true, [clean]) == prompts(model: ModelSettings.e4b, [clean]))
+    let verbatim = Request(transcript: "hello there", selection: nil, context: ScreenSnapshot(), cleanup: .verbatim)
+    #expect(await prompts(model: ModelSettings.e4b, levels: true, [verbatim]).allSatisfy { $0.contains("<style cleanup=\"verbatim\"/>") })
+}

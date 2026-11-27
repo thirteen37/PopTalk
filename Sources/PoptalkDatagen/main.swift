@@ -12,9 +12,10 @@ import PoptalkSpeech
 //       `cleanup` (verbatim|clean|polished, #96) adds the level tag a level-trained model sees; clean or absent adds none.
 //       Dictation targets get Pipeline.spokenNumbers too, so they keep the digits the model sees (#59).
 //   teach --model ID          {id, messages} → {id, output}   (in-process MLX, greedy, like the app)
-//   pipeline --model ID       {id, transcript, selection?, context?, vocabulary?} → {id, label, output, reply?, rejectedBy?}
+//   pipeline --model ID       {id, transcript, selection?, context?, vocabulary?, cleanup?} → {id, label, output, reply?, rejectedBy?}
 //       The app's Pipeline end to end with the model's own prompts (E4B: its dictation prompt, D, and edit prompt) and
 //       guards; `rejectedBy` names the guard that made a dictation reply a raw fallback (E2B v6 teacher, #103).
+//       `cleanup` dictates at that level (#96): the tag, and for E4B Prompts.e4bLevelRules; clean or absent is as before.
 // `context` is {appName?, windowTitle?, text?, cursorOffset?, ocrText?}, mirroring ScreenSnapshot.
 Transcriber.quietLogs()
 let args = CommandLine.arguments
@@ -115,9 +116,11 @@ case "pipeline":
             for t in it.vocabulary ?? [] { try store.add(t) }
             let calls = ModelCallRecorder()
             // Generous deadlines: a teacher is judged on its reply, not on the app's latency budget.
-            let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
+            var p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
                              cleanupTimeout: 30, editTimeout: 60)
-            let res = await p.run(Request(transcript: it.transcript ?? "", selection: it.selection, context: it.context?.snapshot ?? ScreenSnapshot()))
+            p.levels = true  // the teacher writes every level's targets (#96); Clean prompts don't change
+            let res = await p.run(Request(transcript: it.transcript ?? "", selection: it.selection, context: it.context?.snapshot ?? ScreenSnapshot(),
+                                          cleanup: it.cleanup ?? .clean))
             try? FileManager.default.removeItem(at: dir)
             let (label, output): (String, String) = switch res.outcome {
             case let .insert(s, l): (l, s)
