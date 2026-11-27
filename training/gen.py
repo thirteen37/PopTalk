@@ -2461,6 +2461,8 @@ def heldout(train_keys):
     r, cases = R("heldout"), []
     def ctx_fields(ctx):
         out = {"context": ctx.get("text", "")}
+        if ctx.get("appName"):  # #141: the prompt's <screen app window> as real use has it
+            out.update(app=ctx["appName"], window=ctx["windowTitle"])
         if ctx.get("cursorOffset") is not None:
             out["cursor"] = ctx["cursorOffset"]
         if ctx.get("ocrText"):
