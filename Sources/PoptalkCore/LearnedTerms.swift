@@ -19,8 +19,6 @@ public final class LearnedTerms: @unchecked Sendable {
     private let url: URL
     private let lock = NSLock()
     private var _terms: [LearnedTerm]
-    /// The latest `record` and the entries it replaced (nil: it added the term), for `forget(request:)`.
-    private var last: (request: UUID, prior: [String: LearnedTerm?])?
 
     public init(url: URL = LearnedTerms.defaultURL) {
         self.url = url
@@ -34,43 +32,35 @@ public final class LearnedTerms: @unchecked Sendable {
 
     /// Bumps each of `texts` (case-insensitive; the newest spelling wins), adding the new ones. Returns the list's size.
     @discardableResult
-    public func record(_ texts: [String], request: UUID, at now: Date = Date()) -> Int {
+    public func record(_ texts: [String], at now: Date = Date()) -> Int {
         guard !texts.isEmpty else { return lock.withLock { _terms.count } }
         return lock.withLock {
             var terms = _terms
-            var prior: [String: LearnedTerm?] = [:]
-            for text in texts {
-                let key = text.lowercased()
-                guard prior[key] == nil else { continue }  // once per request
-                let i = terms.firstIndex { $0.text.lowercased() == key }
-                prior[key] = .some(i.map { terms[$0] })
+            var seen = Set<String>()
+            for text in texts where seen.insert(text.lowercased()).inserted {  // once per call
+                let i = terms.firstIndex { $0.text.lowercased() == text.lowercased() }
                 let count = i.map { terms.remove(at: $0).count } ?? 0
                 terms.insert(LearnedTerm(text: text, lastUsed: now, count: count + 1), at: 0)
             }
-            last = (request, prior)
             save(Self.pruned(terms, now: now))
             return _terms.count
         }
     }
 
-    /// Undo: puts back what `request` changed, if it was the latest `record`. Returns how many terms that was.
+    /// Removes `texts` (case-insensitive), however long known: a Settings delete, or an undo or typed fix of a
+    /// dictation they changed (#130). Returns how many were removed.
     @discardableResult
-    public func forget(request: UUID) -> Int {
-        lock.withLock {
-            guard let last, last.request == request else { return 0 }
-            self.last = nil
-            var terms = _terms.filter { last.prior[$0.text.lowercased()] == nil }
-            terms += last.prior.values.compactMap { $0 }
-            save(terms.sorted { $0.lastUsed > $1.lastUsed })
-            return last.prior.count
+    public func forget(_ texts: [String]) -> Int {
+        let gone = Set(texts.map { $0.lowercased() })
+        return lock.withLock {
+            let kept = _terms.filter { !gone.contains($0.text.lowercased()) }
+            let n = _terms.count - kept.count
+            if n > 0 { save(kept) }
+            return n
         }
     }
 
-    public func forget(_ text: String) {
-        lock.withLock { save(_terms.filter { $0.text.lowercased() != text.lowercased() }) }
-    }
-
-    public func forgetAll() { lock.withLock { last = nil; save([]) } }
+    public func forgetAll() { lock.withLock { save([]) } }
 
     static func pruned(_ terms: [LearnedTerm], now: Date) -> [LearnedTerm] {
         Array(terms.filter { now.timeIntervalSince($0.lastUsed) < maxAge }.sorted { $0.lastUsed > $1.lastUsed }.prefix(cap))
@@ -92,20 +82,27 @@ extension Pipeline {
     /// `saved` ones (case-insensitive): what a boost or the casing fix wrote (#87).
     public static func termsWritten(from before: String, to after: String, terms: [String], saved: [String]) -> [String] {
         let known = Set(saved.map { $0.lowercased() })
-        func count(_ term: String, _ s: String) -> Int {
-            let re = try? NSRegularExpression(pattern: #"(?<![\p{L}\p{N}])"# + NSRegularExpression.escapedPattern(for: term) + #"(?![\p{L}\p{N}])"#)
-            return re?.numberOfMatches(in: s, range: NSRange(s.startIndex..., in: s)) ?? 0
-        }
-        return terms.filter { !known.contains($0.lowercased()) && count($0, after) > count($0, before) }
+        return terms.filter { !known.contains($0.lowercased()) && count($0, in: after) > count($0, in: before) }
     }
 
-    /// What `learn()` records for a dictation (#87): the screen terms its boost (raw → boosted transcript) or the casing
-    /// fix (`recased`) wrote, if still in the text `inserted`. Nil with learning off, in Settings or in the app's
-    /// profile (#96).
-    public static func termsToLearn(_ raw: RawInsert, recased: [String], inserted: String,
-                                    saved: [String]) -> (boost: [String], casing: [String])? {
-        guard raw.sources.learnScreenTerms else { return nil }
+    /// How often `s` spells `term` exactly, as whole words.
+    static func count(_ term: String, in s: String) -> Int {
+        let re = try? NSRegularExpression(pattern: #"(?<![\p{L}\p{N}])"# + NSRegularExpression.escapedPattern(for: term) + #"(?![\p{L}\p{N}])"#)
+        return re?.numberOfMatches(in: s, range: NSRange(s.startIndex..., in: s)) ?? 0
+    }
+
+    /// The screen and learned terms a dictation's boost (raw → boosted transcript) or casing fix (`recased`) wrote, if
+    /// still in the text `inserted`; saved terms aside (#87). What an undo or typed fix of it unlearns (#130).
+    public static func screenTermsWritten(_ raw: RawInsert, recased: [String], inserted: String,
+                                          saved: [String]) -> (boost: [String], casing: [String]) {
         let boosted = termsWritten(from: raw.rawTranscript, to: raw.request.transcript, terms: raw.boost, saved: saved)
         return (boosted.filter { inserted.contains($0) }, recased.filter { inserted.contains($0) })
+    }
+
+    /// What `learn()` records for a dictation (#87): `screenTermsWritten`. Nil with learning off, in Settings or in the
+    /// app's profile (#96).
+    public static func termsToLearn(_ raw: RawInsert, recased: [String], inserted: String,
+                                    saved: [String]) -> (boost: [String], casing: [String])? {
+        raw.sources.learnScreenTerms ? screenTermsWritten(raw, recased: recased, inserted: inserted, saved: saved) : nil
     }
 }

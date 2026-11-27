@@ -444,8 +444,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var now = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
                              prefix: raw.prefix, terminal: terminal, axUndo: axUndo, rawTranscript: raw.rawTranscript)
         if terminal == nil { now.fieldValue = TextIO.value(of: field) }  // for a tap-then-hold edit (#110)
+        now.written = written(raw, result, inserted: s)
         lastInsert = now
-        watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID)
+        watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID, written: now.written)
         overlay.showOutcome("Cleaned up", undo: undoable(now) ? { [weak self] in
             await self?.undo(now, previous: raw.prefix + last.text, id: id) ?? false
         } : nil, vocabularyOffer: nil) {}
@@ -469,9 +470,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let text = lead + edited + trail
         let (terminal, axUndo) = (terminalStamp(), axUndoStamp())
         guard await replaceLast(last, with: last.prefix + text) else { overlay.showError(Self.editFailed); return Self.editFailed }
+        let gone = last.unlearned(by: text)
+        if !gone.isEmpty { Timing.log.info("edit: forgot \(self.learned.forget(gone)) learned terms") }
         let field = TextIO.focusedElement() ?? last.target
         var now = LastInsert(target: field, text: text, requestID: history.isEnabled ? id : nil, prefix: last.prefix,
                              terminal: terminal, axUndo: axUndo)
+        now.written = last.written  // for a further edit
         if terminal == nil { now.fieldValue = TextIO.value(of: field) }
         lastInsert = now
         let undo: (() async -> Bool)? = undoable(now) ? { [weak self] in
@@ -553,7 +557,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Undo (a right-⌥ double tap, #109) on an outcome: takes `inserted` back out, putting back `previous` (what it
     /// replaced, "" for a dictation). ⌘Z, except in a terminal (#79): `replaceLast`, and in an `AXUndo` app (#93): `takeBack`; either returns false
     /// (having said so, nothing changed) once that isn't safe. Every undo goes through here.
-    private func undo(_ inserted: LastInsert<AXUIElement>?, previous: String = "", id: UUID) async -> Bool {
+    /// `unlearn`: the screen and learned terms the dictation wrote (`written`), forgotten with it (#130).
+    private func undo(_ inserted: LastInsert<AXUIElement>?, previous: String = "", id: UUID, unlearn: [String] = []) async -> Bool {
         let path = inserted?.terminal != nil ? "terminal backspaces" : inserted?.axUndo != nil ? "AX takeBack" : "⌘Z"
         let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-"
         Timing.log.info("undo: \(path, privacy: .public), app \(app, privacy: .public)")
@@ -567,7 +572,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         lastInsert = nil
         undone = inserted
         undone?.deletedAt = Date()
-        Timing.log.info("undo: forgot \(self.learned.forget(request: id)) learned terms")
+        Timing.log.info("undo: forgot \(self.learned.forget(unlearn)) learned terms")
         history.append(HistoryEvent(.undo, id: id))
         return true
     }
@@ -709,7 +714,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Starts `typing` on a dictation just pasted as `pasted` into `field`, except in a terminal or a secure field. A
     /// misheard term is offered (accepted by a right-⌥ tap); the user's version goes to history, linked to request `id`.
-    private func watchTyping(_ field: AXUIElement, pasted: String, transcript: String, id: UUID?) {
+    /// Of `written` (`written(_:_:inserted:)`), the learned terms the user typed over are forgotten (#130).
+    private func watchTyping(_ field: AXUIElement, pasted: String, transcript: String, id: UUID?, written: [String] = []) {
         typing?.end()
         typing = nil
         guard terminalStamp() == nil, !ScreenContext.isSensitive() else { return }
@@ -726,7 +732,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             },
             done: { [weak self] fix in
-                if let id { self?.history.append(HistoryEvent(.typedCorrection, id: id, text: fix.text)) }
+                guard let self else { return }
+                if let id { history.append(HistoryEvent(.typedCorrection, id: id, text: fix.text)) }
+                let reverted = fix.reverted(written)
+                if !reverted.isEmpty { Timing.log.info("typed fix: forgot \(self.learned.forget(reverted)) learned terms") }
             },
             deleted: { [weak self] in
                 guard let self, let id, lastInsert?.requestID == id else { return }
@@ -734,11 +743,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
     }
 
-    /// #87: remembers the screen terms dictation `id` wrote (`Pipeline.termsToLearn`). Undo forgets them again.
-    private func learn(_ raw: RawInsert, _ result: PipelineResult, inserted: String, id: UUID) {
+    /// The screen and learned terms a dictation's boost or casing fix wrote into `inserted` (#130).
+    private func written(_ raw: RawInsert, _ result: PipelineResult, inserted: String) -> [String] {
+        let w = Pipeline.screenTermsWritten(raw, recased: result.recased, inserted: inserted, saved: store.terms.map(\.text))
+        return w.boost + w.casing
+    }
+
+    /// #87: remembers the screen terms a dictation wrote (`Pipeline.termsToLearn`). Undo forgets them again.
+    private func learn(_ raw: RawInsert, _ result: PipelineResult, inserted: String) {
         guard let (fromBoost, fromCasing) = Pipeline.termsToLearn(raw, recased: result.recased, inserted: inserted,
                                                                   saved: store.terms.map(\.text)) else { return }
-        let size = learned.record(fromBoost + fromCasing, request: id)
+        let size = learned.record(fromBoost + fromCasing)
         Timing.log.info("learned: \(fromBoost.count) from boost, \(fromCasing.count) from casing, list \(size)")
     }
 
@@ -780,24 +795,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             reprocess?.prefix = space
             reprocess?.fieldValue = TextIO.value(of: field)  // after the paste: the text a cleanup must find unchanged
         }
+        let wrote: [String] = if case .insert = result.outcome { written(raw, result, inserted: text) } else { [] }
         lastInsert = pasted ? field.map {
             var last = LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
                                   prefix: space, terminal: terminal, axUndo: axUndo, rawTranscript: raw.rawTranscript)
+            last.written = wrote
             // After the paste: the text a tap-then-hold edit (#110) must find unchanged.
             if terminal == nil, !ScreenContext.isSensitive() { last.fieldValue = TextIO.value(of: $0) }
             return last
         } : nil
         if case .insert = result.outcome, let field, let last = lastInsert {
-            watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID)
+            watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID, written: wrote)
         }
-        if case .insert = result.outcome, pasted { learn(raw, result, inserted: text, id: id) }
+        if case .insert = result.outcome, pasted { learn(raw, result, inserted: text) }
         // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
         let inserted = lastInsert
         // What a deleting undo (#93) puts back: the selection an edit replaced. ⌘Z restores it by itself.
         var replaced = ""
         if case .replaceSelection = result.outcome, inserted?.axUndo != nil { replaced = raw.request.selection ?? "" }
-        let undo: (() async -> Bool)? = pasted && undoable(inserted) ? { [weak self, replaced] in
-            await self?.undo(inserted, previous: replaced, id: id) ?? false
+        let undo: (() async -> Bool)? = pasted && undoable(inserted) ? { [weak self, replaced, wrote] in
+            await self?.undo(inserted, previous: replaced, id: id, unlearn: wrote) ?? false
         } : nil
         return showOutcome(result, label: label, heard: raw.request.transcript, text: text,
                            edit: { if case .insert = result.outcome { false } else { true } }(), undo: undo, id: id)

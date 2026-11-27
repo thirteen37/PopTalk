@@ -8,7 +8,8 @@ public struct DictationFeatures: Sendable, Equatable {
     }
     /// "Fix screen-term casing before cleanup": still only for the models `Pipeline.recasesTerms` names.
     public var recaseTerms = true
-    /// Screen terms for recasing too (#40 "Boost recognition with words on screen"); off: saved vocabulary only.
+    /// Screen terms for recasing too: on while any screen text is read, apart from screen-word boosting (#130:
+    /// recasing can't swap words). Off ("Don't read the screen" in an app): saved and learned terms only.
     public var screenTerms = true
     /// "Skip cleanup for clean dictations (experimental)".
     public var skipGate = false
@@ -30,7 +31,8 @@ public struct DictationFeatures: Sendable, Equatable {
     public init(_ d: UserDefaults, sources: ContextSources? = nil,
                 environment: [String: String] = ProcessInfo.processInfo.environment) {
         recaseTerms = d.object(forKey: Key.recaseTerms) as? Bool ?? true
-        screenTerms = (sources ?? ContextSources(d)).screenVocabulary
+        let s = sources ?? ContextSources(d)
+        screenTerms = s.focusedText || s.nearbyText || s.ocr || s.windowTitle || s.webDomain
         skipGate = environment["POPTALK_SKIP_LLM"].map { $0 == "1" } ?? d.bool(forKey: Key.skipGate)
         soundAlikeTerms = d.bool(forKey: Key.soundAlikeTerms)
         fidelityProbe = d.bool(forKey: Key.fidelityProbe)

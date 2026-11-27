@@ -198,3 +198,16 @@ private func resaid(_ earlier: String, _ again: String, known: [VocabTerm] = [])
     #expect(resaid("Tell quill in hi.", "Tell Quillon hi.", known: [VocabTerm(text: "Quillon", aliases: ["quill on"])])
         == VocabTerm(text: "Quillon", aliases: ["quill in"]))
 }
+
+// #130: a typed fix that changes a term the boost or casing fix wrote tells PopTalk to unlearn that term.
+@Test func revertedTermsAreTheOnesATypedFixChanged() {
+    func reverted(_ inserted: String, _ typed: String, _ terms: [String]) -> [String] {
+        TypedCorrection(inserted: inserted, span: typed, transcript: inserted)?.reverted(terms) ?? []
+    }
+    #expect(reverted("I Install the app.", "I installed the app.", ["Install"]) == ["Install"])
+    #expect(reverted("Ask Quillmate about Yarrowly.", "Ask Quillman about Yarrowly.", ["Quillmate", "Yarrowly"]) == ["Quillmate"])
+    #expect(reverted("Ship it to Meal Prep today.", "Ship it to meal prep today.", ["Meal Prep"]) == ["Meal Prep"])
+    // Fixing another word, or only its punctuation, keeps the term.
+    #expect(reverted("Ask Quillmate about the bild.", "Ask Quillmate about the build.", ["Quillmate"]).isEmpty)
+    #expect(reverted("Ask Quillmate.", "Ask Quillmate!", ["Quillmate"]).isEmpty)
+}

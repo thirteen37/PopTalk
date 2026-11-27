@@ -32,7 +32,8 @@ public enum StatusStrip {
             } else if !s.isGranted(.screenRecording) {
                 b.append(.init(symbol: "eye.slash", help: "No Screen Recording permission: no screen text"))
             } else if !ocrWarm { b.append(.init(symbol: "hourglass", help: "Screen text (OCR) warming up")) }
-            let off = shown.filter { !$0.on && $0.source != .ocr && !appOff.contains($0.source) }.map(\.name)
+            // Screen vocabulary is off by default (#130): not worth a badge.
+            let off = shown.filter { !$0.on && ![.ocr, .screenVocabulary].contains($0.source) && !appOff.contains($0.source) }.map(\.name)
             if !off.isEmpty { b.append(.init(symbol: "text.badge.xmark", help: "Context off: " + off.joined(separator: ", "))) }
         }
         if history { b.append(.init(symbol: "circle.fill", help: "History recording on")) }

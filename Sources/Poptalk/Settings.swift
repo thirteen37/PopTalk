@@ -77,7 +77,7 @@ struct SettingsView: View {
     @AppStorage(ContextSources.Key.nearbyText) private var ctxNearbyText = true
     @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
     @AppStorage(ContextSources.Key.windowTitle) private var ctxWindowTitle = true
-    @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = true
+    @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = false
     @AppStorage(ContextSources.Key.rememberScreenTerms) private var rememberScreenTerms = false
     @State private var confirmForget = false
     @State private var learnedTerms: [LearnedTerm] = []
@@ -373,7 +373,7 @@ struct SettingsView: View {
                     Spacer()
                     Button { promote(t) } label: { Image(systemName: "plus.circle") }.buttonStyle(.borderless)
                         .help("Move to Vocabulary")
-                    Button { learned.forget(t.text); learnedTerms = learned.terms() } label: { Image(systemName: "trash") }
+                    Button { learned.forget([t.text]); learnedTerms = learned.terms() } label: { Image(systemName: "trash") }
                         .buttonStyle(.borderless).help("Delete")
                 }
             }
@@ -387,7 +387,7 @@ struct SettingsView: View {
 
     private func promote(_ t: LearnedTerm) {
         save(TermDraft(text: t.text))
-        if store.terms.contains(where: { $0.text.lowercased() == t.text.lowercased() }) { learned.forget(t.text) }
+        if store.terms.contains(where: { $0.text.lowercased() == t.text.lowercased() }) { learned.forget([t.text]) }
         learnedTerms = learned.terms()
     }
 

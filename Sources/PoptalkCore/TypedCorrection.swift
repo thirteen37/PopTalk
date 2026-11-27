@@ -140,6 +140,15 @@ public struct TypedCorrection: Equatable, Sendable {
         return nil
     }
 
+    /// Which of `terms` (ones the boost or casing fix wrote, #130) the user changed: spelled exactly, as a whole word,
+    /// more often in a change's old words than in its new ones.
+    /// ponytail: a phrase term split across two changes isn't seen; match against the whole texts if that shows up.
+    public func reverted(_ terms: [String]) -> [String] {
+        terms.filter { t in
+            changes.contains { Pipeline.count(t, in: $0.old.joined(separator: " ")) > Pipeline.count(t, in: $0.new.joined(separator: " ")) }
+        }
+    }
+
     static func words(_ s: String) -> [Range<String.Index>] {
         var out: [Range<String.Index>] = [], start: String.Index?
         for i in s.indices {

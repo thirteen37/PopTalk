@@ -268,13 +268,16 @@ extension Pipeline {
 
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
     /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
-    /// `fromScreen` false (#40): saved and learned terms only.
+    /// `fromScreen` false (#40): saved and learned terms only. A single dictionary word ("Install", "Setup") from the
+    /// screen or the learned list is left out, as `recaseCandidates` leaves it: boosted, it swapped real words ("installed"
+    /// → "Install", #130). Saved terms always stay.
     public static func boostTerms(saved: [VocabTerm], learned: [VocabTerm] = [], context: ScreenSnapshot,
                                   fromScreen: Bool = true) -> [VocabTerm] {
         var known = Set<String>()
         let w = Prompts.window(context)
         let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.titleAndDomain) : []
-        return (saved + learned + screen).filter { known.insert($0.text.lowercased()).inserted }
+        let guessed = (learned + screen).filter { $0.text.contains(" ") || !isCommonWord($0.text) }
+        return (saved + guessed).filter { known.insert($0.text.lowercased()).inserted }
             .map { t in
                 var t = t
                 t.aliases += boostAliases(t.text).filter { a in !t.aliases.contains { $0.lowercased() == a } }

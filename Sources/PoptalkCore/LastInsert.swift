@@ -24,6 +24,8 @@ public struct LastInsert<Target: Equatable> {
     public var fieldValue: String?
     /// When the insert was seen deleted (or the field sent, #94) or undone, for `redictated` (#95).
     public var deletedAt: Date?
+    /// The screen and learned terms the dictation's boost or casing fix wrote into `text`, for `unlearned` (#130).
+    public var written: [String] = []
 
     public init(target: Target, text: String, at: Date = Date(), requestID: UUID? = nil, reprocess: RawInsert? = nil,
                 prefix: String = "", terminal: TerminalStamp? = nil, axUndo: TerminalStamp? = nil, rawTranscript: String? = nil) {
@@ -41,6 +43,12 @@ public struct LastInsert<Target: Equatable> {
     /// Whether `target` is focused with its text exactly as PopTalk left it, so the insert can be found and edited.
     public func isUntouched(focused: Target?, value: String?) -> Bool {
         fieldValue != nil && focused == target && value == fieldValue
+    }
+
+    /// The `written` terms a tap-then-hold edit of `text` into `edited` took out (#130): spelled exactly, as whole
+    /// words, more often before than after, as `TypedCorrection.reverted` judges a typed fix.
+    public func unlearned(by edited: String) -> [String] {
+        written.filter { Pipeline.count($0, in: text) > Pipeline.count($0, in: edited) }
     }
 
     /// The space to put before `s` being dictated into `target`.
