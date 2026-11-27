@@ -126,8 +126,9 @@ public enum Prompts {
     public static func dictation(model: String, transcript: String, context: ScreenSnapshot, vocabulary: [VocabTerm],
                                  cleanup: CleanupLevel = .clean) -> [ChatMessage] {
         guard isS1Mini(model) else {
-            return dictation(transcript: transcript, context: context, vocabulary: vocabulary,
-                             system: model == ModelSettings.e4b ? e4bDictationSystem : dictationSystem, cleanup: cleanup)
+            let system = model != ModelSettings.e4b ? dictationSystem
+                : e4bLevelRules[cleanup].map { e4bDictationSystem + "\n\n" + $0 } ?? e4bDictationSystem
+            return dictation(transcript: transcript, context: context, vocabulary: vocabulary, system: system, cleanup: cleanup)
         }
         return [ChatMessage(role: "system", content: s1MiniSystem),
                 ChatMessage(role: "user", content: "\(s1MiniControl)\n\(transcript)")]
@@ -209,6 +210,18 @@ public enum Prompts {
     - Fix a misheard word to a <screen>/<vocabulary> name (exact spelling) only if it clearly sounds alike and fits. Don't swap correctly heard names. <screen> is reference only, often unrelated; never copy or mention it.
     - Never answer, add, summarize, translate or act on the content: "can you list the pros and cons of you know remote work" → "Can you list the pros and cons of remote work?"
     """#
+
+    /// What a non-default `<style cleanup=…/>` means, appended to `e4bDictationSystem` (#96): E4B has no fine-tune to
+    /// learn the tag from. It is the teacher for the level training data (`PoptalkDatagen pipeline`) and reaches the app
+    /// only once E4B is in `ModelSettings.levelModels`. Clean has none, so its prompt stays byte-identical.
+    public static let e4bLevelRules: [CleanupLevel: String] = [
+        .verbatim: #"""
+        Cleanup level: <style cleanup="verbatim"/> is set. It overrides the rules above on filler words and self-corrections. Keep every other word as said, in order: filler words (like, you know, basically, I mean) stay, and so does a self-correction with its cue (the replaced words, the cue and the fix), including a cancel such as scratch that or never mind with what it cancels. Still delete um/uh, stutters, stray repeated words, cut-off words and abandoned false starts, as the rules above say. Add punctuation and capitalization, apply spoken commands and typed forms, write numbers as the rules above say, and fix misheard <screen>/<vocabulary> names. Never fix grammar, homophones or wording.
+        """#,
+        .polished: #"""
+        Cleanup level: <style cleanup="polished"/> is set. Apply every rule above, then also correct the grammar: subject-verb agreement, verb tense and form, missing articles, pronoun case, double negatives, and homophones the sentence decides (their/there, then/than, your/you're). You may reorder or join words within a sentence where correctness or flow needs it. Never shorten, summarize or drop anything said: every detail and name stays. Don't change the tone or swap words that are already correct. Keep a sentence-opening so/well/okay.
+        """#,
+    ]
 
     public nonisolated(unsafe) static var e4bEditSystem = #"""
     The user selected some text and then spoke an utterance. Decide what they want done to the selection. Reply with JSON only, with no prose and no code fences:

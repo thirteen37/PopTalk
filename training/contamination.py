@@ -30,7 +30,9 @@ BLOCK = ["Priya", "Raman", "Marcus", "FluidAudio", "Fluid Audio", "Todoist", "Ku
          # #99's s-* cases (real-voice bench)
          "Oskar", "PaperTrail", "Paper Trail", "Tolu", "Adeyemi", "Halvorsen", "Ledgerly", "HelpNest", "Help Nest", "Tamsin",
          "Mireille", "Zentrix", "Imogen", "Brindle", "CloudNook", "Cloud Nook", "Corvel", "Lucan", "Pelham", "Okafor",
-         "Wexford", "Beatriz", "Nadia", "Felix"]
+         "Wexford", "Beatriz", "Nadia", "Felix",
+         # #96's l-* cases (cleanup levels)
+         "Quorbit", "Quor bit"]
 BLOCK_RE = re.compile("|".join(rf"(?<!\w){re.escape(b)}(?!\w)" for b in BLOCK), re.IGNORECASE)
 
 

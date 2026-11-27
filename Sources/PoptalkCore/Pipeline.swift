@@ -125,7 +125,8 @@ public struct Pipeline: Sendable {
             let fixed = !recase ? [] : Self.termsWritten(from: transcript, to: recased, terms: Self.recaseCandidates(recaseWith),
                                                          saved: saved + Self.recaseCandidates(saved))
             let off = features.guardsOff
-            let transcript = Self.dictationPrepass(recased, off: off)
+            let level = levels ? r.cleanup : .clean
+            let transcript = Self.dictationPrepass(recased, off: off, cleanup: level)
             // Everything said was cancelled ("… Scratch that.", #98).
             guard !transcript.isEmpty else { return PipelineResult(outcome: .nothing) }
             let space = Self.leadingSpace(r.context)
@@ -143,7 +144,6 @@ public struct Pipeline: Sendable {
             if let gate, gate.stop == nil { return result(.insert(space + transcript, label: "Dictated"), skippedLLM: true) }
             // Base covers cold starts; 20 ms per word covers long dictations.
             let words = transcript.split(whereSeparator: \.isWhitespace).count
-            let level = levels ? r.cleanup : .clean
             let messages = Self.dictationMessages(model: cleanupModel, transcript: transcript, context: r.context,
                                                   vocabulary: vocabulary.terms, cleanup: level)
             // Model chatter guard: a cleanup far longer than what was said is the model answering, not cleaning.
@@ -350,8 +350,9 @@ extension Pipeline {
     }
 
     /// The `prepass` steps not in `off`. PoptalkDatagen render uses it too, so training transcripts match production.
-    public static func dictationPrepass(_ s: String, off: Set<String> = []) -> String {
-        prepass.filter { !off.contains($0.name) }.reduce(s) { $1.run($0) }
+    /// Verbatim (#96) skips spokenCancel: the cue and what it cancels stay, like a self-correction.
+    public static func dictationPrepass(_ s: String, off: Set<String> = [], cleanup: CleanupLevel = .clean) -> String {
+        prepass.filter { !off.contains($0.name) && !(cleanup == .verbatim && $0.name == "spokenCancel") }.reduce(s) { $1.run($0) }
     }
 
     /// The utterance explicitly asks to add text rather than replace the selection.
