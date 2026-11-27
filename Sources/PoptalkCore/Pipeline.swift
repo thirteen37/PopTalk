@@ -170,8 +170,10 @@ public struct Pipeline: Sendable {
                 }
                 return next
             }
+            // What the model saw (#143): a short dictation's prompt has no screen text.
+            let seen = Self.cleanupContext(r.context, words: words)
             var rejectedBy = Self.rejectedBy(reply: cleaned, transcript: transcript,
-                                             screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context), level: level, off: off)
+                                             screen: seen.titleAndDomain + " " + Prompts.trimmedContext(seen), level: level, off: off)
             // Scored even after a deterministic reject, so the replay can count the overlap.
             var fidelity: (score: Double?, seconds: Double)?
             if let fidelityScore, features.fidelityProbe || features.fidelityShadow, !cleaned.isEmpty {
@@ -252,7 +254,7 @@ extension Pipeline {
 
     /// The screen the cleanup model sees for a dictation of `words` words. Up to `shortDictationWords`, no screen
     /// text: over long screens E2B v6 copied the screen instead of cleaning so short a dictation (#116). App, title,
-    /// domain and vocabulary stay. Only the prompt: the casing fix, boost terms and `echoesContext` see it all.
+    /// domain and vocabulary stay. `echoesContext` checks this too (#143); the casing fix and boost terms see it all.
     static func cleanupContext(_ c: ScreenSnapshot, words: Int) -> ScreenSnapshot {
         guard words <= shortDictationWords else { return c }
         var c = c
@@ -399,12 +401,29 @@ extension Pipeline {
     }
 
     /// True when most of `output`'s words (and at least 3) weren't said but are on screen:
-    /// the model echoed `<screen>` instead of cleaning the transcript (#29).
+    /// the model echoed `<screen>` instead of cleaning the transcript (#29). A word at least 0.7 `similarity` to a run
+    /// of 1–3 said words, joined, is a misheard term the model fixed ("core vanta" → "Korvanta", #143), not an echo.
     static func echoesContext(_ output: String, transcript: String, context: String) -> Bool {
         func words(_ s: String) -> [Substring] { s.lowercased().split { !$0.isLetter && !$0.isNumber } }
-        let said = Set(words(transcript)), shown = Set(words(context)), out = words(output)
-        let echoed = out.filter { !said.contains($0) && shown.contains($0) }.count
-        return echoed >= 3 && echoed * 2 > out.count
+        func echo(_ n: Int) -> Bool { n >= 3 && n * 2 > out.count }
+        let heard = words(transcript), said = Set(heard), shown = Set(words(context)), out = words(output)
+        let unsaid = out.filter { !said.contains($0) && shown.contains($0) }
+        guard echo(unsaid.count) else { return false }
+        // `similarity` ≥ 0.7 unrolled, as in `termShortlist`: the raw strings or their skeletons within 30% edits,
+        // each run's computed once. Edit distance is at least the length difference, so a pair whose lengths are
+        // further apart than 7 : 10 is skipped.
+        func key(_ s: String) -> [[Character]] { [Array(s), Array(skeleton(s))] }
+        let runs = Set(heard.indices.flatMap { i in (i + 1...min(i + 3, heard.count)).map { heard[i..<$0].joined() } }).map(key)
+        let fixes = Set(unsaid).filter { w in
+            let k = key(String(w))
+            return runs.contains { r in
+                zip(k, r).contains { a, b in
+                    let n = max(a.count, b.count)
+                    return n > 0 && 10 * min(a.count, b.count) >= 7 * n && 10 * levenshtein(a, b) <= 3 * n
+                }
+            }
+        }
+        return echo(unsaid.count { !fixes.contains($0) })
     }
 
     /// Words a faithful cleanup may drop: function words, fillers and self-correction markers.
