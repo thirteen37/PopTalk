@@ -52,9 +52,7 @@ public struct ContextSources: Sendable, Equatable {
         public static let windowTitle = "contextWindowTitle", screenVocabulary = "contextScreenVocabulary"
         public static let rememberScreenTerms = "contextRememberScreenTerms"
     }
-    public var focusedText = true, nearbyText = true, ocr = true, windowTitle = true
-    /// "Boost recognition with words on screen": off by default since #130, as screen words swapped real words.
-    public var screenVocabulary = false
+    public var focusedText = true, nearbyText = true, ocr = true, windowTitle = true, screenVocabulary = true
     /// Its own source per app (#96); globally it goes with the window title, as one toggle.
     public var webDomain = true
     /// #87 "Remember screen terms that fix dictations": off by default, and only with `screenVocabulary` on.
@@ -65,11 +63,11 @@ public struct ContextSources: Sendable, Equatable {
 
     public init() {}
 
-    /// Unset keys are on, but `screenVocabulary` and `rememberScreenTerms`.
+    /// Unset keys are on, but `rememberScreenTerms`.
     public init(_ d: UserDefaults) {
         func on(_ k: String) -> Bool { d.object(forKey: k) as? Bool ?? true }
         (focusedText, nearbyText, ocr) = (on(Key.focusedText), on(Key.nearbyText), on(Key.ocr))
-        (windowTitle, screenVocabulary) = (on(Key.windowTitle), d.bool(forKey: Key.screenVocabulary))
+        (windowTitle, screenVocabulary) = (on(Key.windowTitle), on(Key.screenVocabulary))
         webDomain = windowTitle
         rememberScreenTerms = screenVocabulary && d.bool(forKey: Key.rememberScreenTerms)
         learnScreenTerms = rememberScreenTerms

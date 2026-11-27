@@ -49,6 +49,23 @@ import Testing
     #expect(terms.first { $0.text == "Kubernetes" }?.aliases == [])
 }
 
+// #132: a term made only of dictionary words never replaces correctly heard words with different ones ("installed" →
+// "Install", "project" → "Projects", "the requests" → "Pull Requests"); it may still repair a misheard span, and names
+// may still replace a word.
+@Test func applyBoostsRefusesRealWordSwapsByDictionaryWordTerms() {
+    func boost(_ raw: String, _ span: String, _ term: VocabTerm) -> String {
+        Pipeline.applyBoosts(raw, [(span: span, term: term.text)], terms: [term])
+    }
+    #expect(boost("I installed the app.", "installed", VocabTerm(text: "Install")) == "I installed the app.")
+    #expect(boost("Refer to my project on it.", "project", VocabTerm(text: "Projects")) == "Refer to my project on it.")
+    #expect(boost("send the requests now", "requests", VocabTerm(text: "Pull Requests")) == "send the requests now")
+    #expect(boost("Add milk to my stin box.", "stin box", VocabTerm(text: "Inbox")) == "Add milk to my Inbox.")
+    #expect(boost("Add milk to my in box.", "in box", VocabTerm(text: "Inbox")) == "Add milk to my Inbox.")  // spells it
+    #expect(boost("ask prayer about it", "prayer", VocabTerm(text: "Priya")) == "ask Priya about it")
+    #expect(boost("Open motion now.", "motion", VocabTerm(text: "Notion")) == "Open motion now.")
+    #expect(boost("Open motion now.", "motion", VocabTerm(text: "Notion", aliases: ["motion"])) == "Open Notion now.")  // heard as
+}
+
 // #130: a learned or screen "Install" turned a heard "installed" into "Install". A single dictionary word from the
 // screen or the learned list isn't boosted (the casing fix skips them too); saved terms and phrases still are.
 @Test func boostTermsSkipDictionaryWordsFromScreenAndLearned() {
