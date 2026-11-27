@@ -33,3 +33,17 @@ import PoptalkCore
     _ = c.insert(.init(tokens: head, cache: [], maxTrim: 0), bytes: 1)
     #expect(c.plan(head + [700], enabled: true).plan == PrefixPlan(entry: 0, keep: 100))
 }
+
+// #139: the hold's prefill runs from the best entry (the system prompt) to the prefix two prompts differing only in
+// the transcript share, without counting either as recent; nothing to do once an entry covers it, or with the cache off.
+@Test func prefillPlansFromTheSystemEntryToTheSharedScreen() {
+    let system = Array(0 ..< 300), screen = system + Array(1000 ..< 1400)
+    let c = PrefixCache()
+    _ = c.insert(.init(tokens: system, cache: [], maxTrim: 0), bytes: 1)
+    #expect(c.prefillPlan(screen + [1, 2], screen + [3, 4], enabled: false) == nil)
+    let p = c.prefillPlan(screen + [1, 2], screen + [3, 4], enabled: true)
+    #expect(p?.plan == PrefixPlan(entry: 0, keep: 300, snapshot: screen.count))
+    #expect(c.plan(screen + [5], enabled: true).shared == 0)  // no recent prompt yet
+    _ = c.insert(.init(tokens: screen, cache: [], maxTrim: 0), bytes: 1)
+    #expect(c.prefillPlan(screen + [1, 2], screen + [3, 4], enabled: true) == nil)
+}

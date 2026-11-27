@@ -203,6 +203,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The last press's resolved profile (#96), once its capture is done; nil shows the global sources.
     private var profile: ResolvedProfile?
     private var selectionTask: Task<String?, Never>?
+    /// The hold's prefill of this press's dictation prompt (#139, `holdPrefill`).
+    private var prefillTask: Task<Void, Never>?
     private var startWork: DispatchWorkItem?
     private var previewTask: Task<Void, Never>?
     private var recording = false { didSet { syncBusyMarker() } }
@@ -256,6 +258,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             selectionTask = if let text = editTarget?.text.trimmingCharacters(in: .whitespacesAndNewlines) { Task { text } }
                 else { Task { await TextIO.selectedText() } }
+            prefillTask = mode == .full ? holdPrefill(contextTask!, selectionTask) : nil
             overlay.showRecording(note: editTarget != nil ? "Editing the last insert"
                                   : { if case .raw(let note) = mode { note } else { nil } }(),
                                   raw: LivePreview.rawCue(shifted: hotkey.shifted,
@@ -277,6 +280,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         previewTask = nil
         speculation?.task.cancel()
         speculation = nil
+        prefillTask?.cancel()
+        prefillTask = nil
         // Don't cancel selectionTask: its clipboard guard must finish waiting before it restores.
         // A context capture means the delayed start ran and the recording HUD is up. A tap never gets there: it
         // leaves a showing outcome up, so a second tap can still undo it (#109).
@@ -314,8 +319,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let samples = recorder.stop()
         Timing.log.info("release: key up")
         let system = SystemSample.now()
-        let (ctx, sel) = (contextTask, selectionTask)
-        (contextTask, selectionTask) = (nil, nil)
+        let (ctx, sel, prefill) = (contextTask, selectionTask, prefillTask)
+        (contextTask, selectionTask, prefillTask) = (nil, nil, nil)
         guard AudioGate.hasSpeech(samples) else { overlay.hide(); return }
         guard let transcriber else {
             overlay.showError(transcriberError.map { "Speech model failed to load (retrying): \($0)" } ?? "Speech model still loading…")
@@ -358,6 +363,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else { spec.task.cancel() }
             }
             Timing.log.info("release: speculative runs \(runs), reused \(reused != nil ? "yes" : "no", privacy: .public)")
+            await prefill?.value  // its entry must be stored before the final pass plans its prompt
+            Timing.mark("release: prefill drained", since: t0)
             await process(request, raw: heard.raw, boost: boost.map(\.text), sources: sources, samples: samples, started: started,
                           app: app, editing: editing, reused: reused, asHeard: asHeard, since: t0, system: system)
         }
@@ -629,7 +636,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startPreview(live: Bool) {
         guard let transcriber else { return }
         (speculation, speculativeRuns, liveText, cleaned) = (nil, 0, nil, nil)
-        let (ctx, sel) = (contextTask, selectionTask)
+        let (ctx, sel, prefill) = (contextTask, selectionTask, prefillTask)
         previewTask = Task {
             var fixed: LiveInput?
             while !Task.isCancelled {
@@ -637,7 +644,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let tick = ContinuousClock.now
                 let samples = recorder.snapshot()
                 guard !Task.isCancelled, AudioGate.hasSpeech(samples) else { continue }
-                if live, fixed == nil, let ctx { fixed = await liveInput(ctx, sel) }
+                // After the hold's prefill, so speculative runs start from its entry (#139).
+                if live, fixed == nil, let ctx { await prefill?.value; fixed = await liveInput(ctx, sel) }
                 guard let text = try? await transcriber.transcribe(samples, boost: fixed?.boost ?? []).text,
                       !Task.isCancelled, !text.isEmpty else { continue }
                 let previous = liveText
@@ -651,6 +659,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 showLive()
             }
+        }
+    }
+
+    /// #139: once capture is done, prefills the prompt of a long dictation up to `<transcript>` (system prompt and
+    /// screen) and stores it, so release prefills only the transcript. MLX only; skipped for an edit (a selection).
+    /// Wasted when the press turns out a dictation of `Pipeline.shortDictationWords` or fewer, whose prompt has no
+    /// screen text, or a Shift hold. Release and the first speculative run await it.
+    private func holdPrefill(_ ctx: Task<ScreenContext.Captured, Never>, _ sel: Task<String?, Never>?) -> Task<Void, Never>? {
+        let models = Settings.selection
+        guard models.provider == "mlx" else { return nil }
+        let store = store
+        return Task {
+            let (context, profile) = await ctx.value
+            guard (await sel?.value ?? "").isEmpty, !Task.isCancelled else { return }
+            let p = Pipeline(complete: { _, _, _, _ in "" }, vocabulary: store, cleanupModel: models.cleanupModel, editModel: models.editModel)
+            let (a, b) = p.dictationPrefix(context: context, cleanup: profile.cleanup)
+            try? await MLXProvider.prefill(models.cleanupModel, a, b)  // logs "hold prefill" when it stored one
         }
     }
 

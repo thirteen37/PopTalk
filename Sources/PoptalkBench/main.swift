@@ -323,9 +323,12 @@ if let i = args.firstIndex(of: "--replay") {
             var p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
                              cleanupTimeout: opt("--cleanup-timeout").flatMap(Double.init) ?? 4, features: features)
             if fidelity != nil { p.fidelityScore = MLXProvider.yesNoScore }
+            let context = ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)
+            // #139: the hold's prefill, as the app runs it once capture is done; untimed, like the hold itself.
+            let (a, b) = p.dictationPrefix(context: context, cleanup: .clean)
+            try? await MLXProvider.prefill(model, a, b)
             let t = Date()
-            let res = await p.run(Request(transcript: r.transcript, selection: nil,
-                                          context: ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)))
+            let res = await p.run(Request(transcript: r.transcript, selection: nil, context: context))
             try? FileManager.default.removeItem(at: dir)
             let (label, output): (String, String) = switch res.outcome {
             case let .insert(s, l): (l, s)

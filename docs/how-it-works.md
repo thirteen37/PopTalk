@@ -100,7 +100,7 @@ Related matching elsewhere:
 - **Typed fixes:** when you fix a dictation by typing, PopTalk diffs your version against the insert word by word (`TypedCorrection`). A replaced word that came from the transcript, where your word didn't, counts as misheard and becomes a vocabulary offer, with what was heard as its alias.
 - **Re-dictation** (history only): a dictation into the same field within 30 s of the insert, or 120 s after it was deleted or undone, that is at least 0.6 similar to the last raw transcript is recorded as saying it again (`Redictation`).
 
-On an M-series Mac, the time from releasing the key to inserted text is usually under a second. The fixed start of each prompt (instructions, screen context) is cached between requests, which cuts prompt processing time.
+On an M-series Mac, the time from releasing the key to inserted text is usually under a second. The fixed start of each prompt (instructions, screen context) is cached between requests, which cuts prompt processing time. With MLX, once the screen is read during the hold, a dictation's prompt is prefilled up to the transcript and cached (#139), so release only processes the transcript.
 
 While the key is held, screen context and the selection are read alongside the recording, so they're ready at release:
 
@@ -123,6 +123,9 @@ sequenceDiagram
         App->>Screen: read the selection
     end
     App->>Overlay: show recording
+    opt MLX, no selection
+        App->>LLM: prefill the dictation prompt up to the transcript (#139)
+    end
     loop every 0.5 s while held
         App->>ASR: transcribe the audio so far
         App->>Overlay: live transcript
