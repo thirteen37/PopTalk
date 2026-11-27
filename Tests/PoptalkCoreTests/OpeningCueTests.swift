@@ -27,6 +27,8 @@ private func dictate(_ transcript: String, selection: String? = nil, reply: Stri
     #expect(fix("The review is on.", "No. The review is on.") == "No, the review is on.")
     // Acronyms keep their case.
     #expect(fix("API is down.", "no api is down") == "No, API is down.")
+    // #148: "forget the" mid-sentence is no cancel, so the opener still goes back.
+    #expect(fix("I always forget the door code.", "no I always forget the door code") == "No, I always forget the door code.")
 }
 
 @Test func openingCueAfterFiller() {
@@ -48,6 +50,7 @@ private func dictate(_ transcript: String, selection: String? = nil, reply: Stri
     #expect(fix("", "no the review is on") == "")
     // A spoken cancel later on may take the opener with it.
     #expect(fix("It's off.", "no the review is on. never mind, it's off") == "It's off.")
+    #expect(fix("It's off.", "no the review is on. Forget it, it's off") == "It's off.")
     // Raw fallback: the guards rejected the reply, so the raw transcript goes in unchanged.
     #expect(await dictate("no the review is still on for today", reply: "")
             == .insert("no the review is still on for today", label: "Dictated (raw)"))

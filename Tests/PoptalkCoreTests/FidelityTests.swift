@@ -109,6 +109,20 @@ private func run(_ transcript: String, selection: String? = nil, reply: String) 
                                   transcript: "don't forget the passports the tickets the chargers and the snacks for the long drive"))
 }
 
+// #148: "forget the/it/that" cancels only as its own unit (after the start, a mark, or a lead-in "actually"/"wait"/"no").
+@Test func forgetCancelsOnlyAsItsOwnUnit() {
+    let ok = [
+        ("Bring the camping chairs, the cooler and the big umbrella. Forget the umbrella.", "Bring the camping chairs and the cooler."),
+        ("We could paint the garden fence this weekend, forget it, it's going to rain.", "It's going to rain."),
+        ("Pack the tent, sleeping bags and lanterns. No, forget that. We're staying at the lodge.", "We're staying at the lodge."),
+    ]
+    for (said, clean) in ok { #expect(!Pipeline.dropsContent(clean, transcript: said), "\(said)") }
+    // Mid-sentence it is dictation: the whole transcript counts.
+    #expect(Pipeline.dropsContent("I always forget the door code.",
+                                  transcript: "The lock box by the shed is broken again and I always forget the door code."))
+    #expect(Pipeline.dropsContent("Then I forget it.", transcript: "I read the whole manual twice last winter and then I forget it."))
+}
+
 // Hyphenated interjections are words: kept whole, never half-stripped.
 @Test func hesitationStripKeepsHyphenatedInterjections() {
     #expect(Pipeline.stripHesitations("Mm-hmm.") == "Mm-hmm.")

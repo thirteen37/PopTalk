@@ -413,9 +413,12 @@ extension Pipeline {
         "should", "could", "about", "into", "than", "then", "there", "what", "also", "just", "like", "basically",
         "know", "mean", "really", "okay", "well", "sorry", "actually", "scratch", "wait", "thing", "kind", "sort"]
 
-    /// Cancellation cues the e4b prompt names; "don't forget the …" is a reminder, not one.
+    /// Cancellation cues the e4b prompt names. "forget that/it/the" only opens its own unit (#148): after the start, a
+    /// . ! ? , ; : or newline, or a lead-in "actually"/"wait"/"no", like `spokenCancel`'s command. "I always forget the
+    /// door code" and "don't forget the …" are dictation.
     private static let cancelCue = try! NSRegularExpression(
-        pattern: #"\b(?:scratch that|never ?mind|(?<!n't )(?<!not )forget (?:that|it|the))\b"#, options: .caseInsensitive)
+        pattern: #"\b(?:scratch that|never ?mind)\b|(?:^|[.!?,;:\n]|\b(?:actually|wait|no))[ \t]*[,;:]?[ \t]*forget (?:that|it|the)\b"#,
+        options: .caseInsensitive)
 
     /// True when the cleanup lost more than 3 content words and over 40% of them (#47): the model kept
     /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3.
