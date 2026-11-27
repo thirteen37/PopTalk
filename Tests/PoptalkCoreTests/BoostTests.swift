@@ -170,3 +170,19 @@ import Testing
     let ok = SpeechMetrics.boostChanges(reference: ref, raw: raw, boosted: "Send the PopTalk build to Uzai at 3.30pm")
     #expect(ok.fixed == 1 && ok.broken == 0)
 }
+
+// #142: single dictionary words ("Send", "Cancel") are dropped before the 60-term cap, so a label-heavy window
+// still keeps a name further up.
+@Test func boostTermsDropDictionaryWordsBeforeTheCap() {
+    let labels = """
+        Send Cancel Reply Forward Archive Delete Move Flag Print Share Edit View Window Help File Format Insert Tools Table
+        Search Filter Sort Today Tomorrow Drafts Sent Junk Trash Notes Reminders Calendar Contacts Photos Music Settings
+        Profile Account Billing Support Feedback Upload Download Refresh Close Open Save Export Import Copy Paste Undo
+        Select Zoom Rotate Crop Resize Rename Duplicate Lock Pin Mute Hide Show Merge Split Group Label Theme Color
+        """.split(whereSeparator: \.isWhitespace)
+    #expect(labels.count > 60)
+    let text = "Zorvex Quintara wrote this." + String(repeating: " and then", count: 60) + "\n" + labels.joined(separator: "\n")
+    let terms = Pipeline.boostTerms(saved: [], context: ScreenSnapshot(text: text)).map(\.text)
+    #expect(terms.contains("Zorvex Quintara"))
+    #expect(!terms.contains("Send"))
+}

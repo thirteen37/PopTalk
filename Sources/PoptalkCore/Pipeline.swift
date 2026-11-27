@@ -271,15 +271,18 @@ extension Pipeline {
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
     /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
     /// `fromScreen` false (#40): saved and learned terms only. A single dictionary word ("Install", "Setup") from the
-    /// screen or the learned list is left out, as `recaseCandidates` leaves it: boosted, it swapped real words ("installed"
+    /// screen or the learned list is left out, before the cap (#142), as `recaseCandidates` leaves it: boosted, it swapped real words ("installed"
     /// → "Install", #130), and with them in the list the rescorer missed names next to them (#132: "todo as" stayed, not
     /// "Todoist"). Saved terms always stay; `applyBoosts` keeps any dictionary-word term from swapping real words.
     public static func boostTerms(saved: [VocabTerm], learned: [VocabTerm] = [], context: ScreenSnapshot,
                                   fromScreen: Bool = true) -> [VocabTerm] {
         var known = Set<String>()
         let w = Prompts.window(context)
-        let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.titleAndDomain) : []
-        let guessed = (learned + screen).filter { $0.text.contains(" ") || !isCommonWord($0.text) }
+        let guess = { (t: VocabTerm) in t.text.contains(" ") || !isCommonWord(t.text) }
+        // #142: filtered before the cap, so labels ("Send", "Cancel") don't push names off it.
+        let screen = !fromScreen ? [] : TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.titleAndDomain, limit: .max)
+            .filter(guess).prefix(60)
+        let guessed = learned.filter(guess) + screen
         return (saved + guessed).filter { known.insert($0.text.lowercased()).inserted }
             .map { t in
                 var t = t
