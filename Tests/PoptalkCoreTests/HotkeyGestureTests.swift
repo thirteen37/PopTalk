@@ -179,3 +179,17 @@ private func run(_ events: [Event], _ gesture: HotkeyGesture = HotkeyGesture()) 
     #expect(run([.down(0), .up(0.1), .down(0.4), .up(0.5)], quick) == [.tap, .tap])  // a double tap at 0.4 s
     #expect(run([.down(0), .up(0.1), .down(0.4), .up(2)], quick) == [.tap, .hold])
 }
+
+// #131: Shift at any point in a hold makes it raw; the flag stays readable after release, until the next press.
+@Test func shiftDuringAHoldIsRemembered() {
+    var g = HotkeyGesture()
+    g.modifiers(shift: true)  // before the press: not this hold's
+    g.press(at: t0)
+    #expect(!g.shifted)
+    g.modifiers(shift: true)
+    g.modifiers(shift: false)  // let go again: still raw
+    #expect(g.release(at: t0 + 2) == .hold)
+    #expect(g.shifted)
+    g.press(at: t0 + 3)
+    #expect(!g.shifted)
+}

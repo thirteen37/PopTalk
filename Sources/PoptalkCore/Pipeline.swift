@@ -36,6 +36,8 @@ public struct PipelineResult: Equatable, Sendable {
     public var skippedLLM: Bool
     /// Screen or learned terms (not saved vocabulary) whose spelling the casing fix wrote (#87).
     public var recased: [String] = []
+    /// Shift was held (#131, `Pipeline.asHeard`): inserted as heard, so nothing is learned from it.
+    public var asHeard = false
     /// The guard that turned a dictation reply into a raw fallback: empty, echoesContext, length, dropsContent
     /// or dropsProtected (replay counts); nil when there was no reply or it was used.
     public var rejectedBy: String?
@@ -378,6 +380,17 @@ extension Pipeline {
             .trimmingCharacters(in: CharacterSet.whitespaces.union(.punctuationCharacters).subtracting(CharacterSet(charactersIn: ".!?\"')")))
         if trimmed.first?.isUppercase == true, let f = out.first { out = f.uppercased() + out.dropFirst() }
         return out
+    }
+
+    /// Shift held while dictating (#131): the transcript as heard (boosted, nothing else), spaced like a dictation; a
+    /// selection is replaced by it. No prepass, model, casing fix or learning (`asHeard`).
+    public static func asHeard(_ r: Request) -> PipelineResult {
+        guard !isBlank(r.transcript) else { return PipelineResult(outcome: .nothing) }
+        let selected = !(r.selection ?? "").isEmpty
+        var res = PipelineResult(outcome: selected ? .replaceSelection(r.transcript, label: "Raw")
+                                 : .insert(leadingSpace(r.context) + r.transcript, label: "Raw"))
+        res.asHeard = true
+        return res
     }
 
     static func isBlank(_ s: String) -> Bool {

@@ -292,6 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recording = false
         startWork = nil
         let editing = editTarget
+        let asHeard = hotkey.shifted  // #131: Shift during the hold
         let preview = previewTask
         previewTask = nil
         preview?.cancel()
@@ -337,13 +338,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // #43: the speculative run already saw this exact request: insert its result (waiting if still running).
             var reused: (result: PipelineResult, calls: ModelCallRecorder)?
             if let spec {
-                if LivePreview.sameInput(spec.request, request), let r = LivePreview.reusable(await spec.task.value) {
+                if !asHeard, LivePreview.sameInput(spec.request, request), let r = LivePreview.reusable(await spec.task.value) {
                     reused = (r, spec.calls)
                 } else { spec.task.cancel() }
             }
             Timing.log.info("release: speculative runs \(runs), reused \(reused != nil ? "yes" : "no", privacy: .public)")
             await process(request, raw: heard.raw, boost: boost.map(\.text), sources: sources, samples: samples, started: started,
-                          app: app, editing: editing, reused: reused, since: t0, system: system)
+                          app: app, editing: editing, reused: reused, asHeard: asHeard, since: t0, system: system)
         }
     }
 
@@ -353,7 +354,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// resolved sources (#96). `editing` (#110, tap-then-hold): the last insert, which `request` edits as its selection.
     private func process(_ request: Request, raw: String, boost: [String], sources: ContextSources, samples: [Float]?, started: Date,
                          app: NSRunningApplication?, cleanup: RawInsert? = nil, editing: LastInsert<AXUIElement>? = nil,
-                         reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, since t0: ContinuousClock.Instant,
+                         reused: (result: PipelineResult, calls: ModelCallRecorder)? = nil, asHeard: Bool = false,
+                         since t0: ContinuousClock.Instant,
                          system: SystemSample = .now()) async {
         typing?.end()  // before this request pastes: a fix typed in the last seconds is still checked
         typing = nil
@@ -376,7 +378,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let earlier = repeats != nil ? (lastInsert ?? undone)?.rawTranscript : nil
         undone = nil
         Timing.mark("release: provider ready", since: t0)
-        var result = if let reused { reused.result } else { await pipeline.run(request) }
+        var result = if let reused { reused.result } else if asHeard { Pipeline.asHeard(request) } else { await pipeline.run(request) }
         // #97: a redictation re-says a misheard term; offer it as the edit offers do, the earlier hearing as alias.
         // Nothing when both takes heard it the same; the first qualifying change; the new take is taken as right.
         if result.vocabularyOffer == nil, case .insert = result.outcome, let earlier {
@@ -626,7 +628,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let previous = liveText
                 liveText = text
                 if let s = speculation, s.request.transcript != text { s.task.cancel() }  // new words: stale
-                if let fixed, LivePreview.shouldRun(text, lastRun: speculation?.request.transcript, previous: previous,
+                if hotkey.shifted { speculation?.task.cancel(); cleaned = nil }  // #131: raw, nothing to clean
+                else if let fixed, LivePreview.shouldRun(text, lastRun: speculation?.request.transcript, previous: previous,
                                                     paused: LivePreview.paused(samples), edit: fixed.selection != nil) {
                     speculate(Request(transcript: text, selection: fixed.selection, context: fixed.context, cleanup: fixed.cleanup),
                               fixed, since: tick)
@@ -807,7 +810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if case .insert = result.outcome, let field, let last = lastInsert {
             watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID, written: wrote)
         }
-        if case .insert = result.outcome, pasted { learn(raw, result, inserted: text) }
+        if case .insert = result.outcome, pasted, !result.asHeard { learn(raw, result, inserted: text) }
         // No confirmed paste: ⌘Z could undo something unrelated (e.g. a Finder move).
         let inserted = lastInsert
         // What a deleting undo (#93) puts back: the selection an edit replaced. ⌘Z restores it by itself.
