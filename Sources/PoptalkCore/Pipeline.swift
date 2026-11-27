@@ -377,7 +377,7 @@ extension Pipeline {
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
         var out = hesitation.stringByReplacingMatches(
             in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length), withTemplate: "")
-        out = out.replacingOccurrences(of: #"\s+([,.!?])"#, with: "$1", options: .regularExpression)
+        out = out.replacingOccurrences(of: #"\s+([,.!?…])"#, with: "$1", options: .regularExpression)
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: ",;:-–—")))
         if trimmed.first?.isUppercase == true, let f = out.first { out = f.uppercased() + out.dropFirst() }

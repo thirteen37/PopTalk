@@ -123,3 +123,8 @@ func hesitationStripDropsLowercaseSounds(_ h: String) {
     #expect(Pipeline.stripHesitations("\(h), we should ship it.") == "we should ship it.")
     #expect(Pipeline.stripHesitations("we should \(h) ship it today.") == "we should ship it today.")
 }
+
+// A trailing ellipsis survives the trim (#135) and closes up like other end marks.
+@Test func hesitationStripClosesUpEllipsis() {
+    #expect(Pipeline.stripHesitations("and then um…") == "and then…")
+}
