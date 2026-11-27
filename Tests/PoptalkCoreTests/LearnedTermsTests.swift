@@ -94,6 +94,8 @@ private let day: TimeInterval = 86_400
     let d = UserDefaults(suiteName: "poptalk-test-\(UUID())")!
     #expect(!ContextSources(d).rememberScreenTerms)
     d.set(true, forKey: ContextSources.Key.rememberScreenTerms)
+    #expect(!ContextSources(d).rememberScreenTerms)  // screen vocabulary is off by default (#130)
+    d.set(true, forKey: ContextSources.Key.screenVocabulary)
     #expect(ContextSources(d).rememberScreenTerms)
     d.set(false, forKey: ContextSources.Key.screenVocabulary)
     #expect(!ContextSources(d).rememberScreenTerms)

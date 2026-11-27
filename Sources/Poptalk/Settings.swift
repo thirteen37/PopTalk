@@ -77,7 +77,7 @@ struct SettingsView: View {
     @AppStorage(ContextSources.Key.nearbyText) private var ctxNearbyText = true
     @AppStorage(ContextSources.Key.ocr) private var ctxOCR = true
     @AppStorage(ContextSources.Key.windowTitle) private var ctxWindowTitle = true
-    @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = true
+    @AppStorage(ContextSources.Key.screenVocabulary) private var ctxScreenVocabulary = false
     @AppStorage(ContextSources.Key.rememberScreenTerms) private var rememberScreenTerms = false
     @State private var confirmForget = false
     @State private var learnedTerms: [LearnedTerm] = []
