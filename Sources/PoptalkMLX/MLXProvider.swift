@@ -189,8 +189,13 @@ public enum MLXProvider {
     /// reply token over the first token of each spelling ("yes", " Yes", …). No prefix cache: the shared head is
     /// ~10 tokens and saved ~1 ms per pair in `training/term_probe.py --cache`.
     public static let termScore: Pipeline.TermScore = { model, heard, term in
+        try await yesNoScore(model, Pipeline.termCheck(heard: heard, term: term))
+    }
+
+    /// `Pipeline.YesNoScore`: the term check's scoring for any question; the fidelity probe (#75 step 2) uses it too.
+    public static let yesNoScore: Pipeline.YesNoScore = { model, messages in
         let (container, _) = try await models.container(model)
-        let input = UserInput(messages: Pipeline.termCheck(heard: heard, term: term).map { ["role": $0.role, "content": $0.content] },
+        let input = UserInput(messages: messages.map { ["role": $0.role, "content": $0.content] },
                               additionalContext: ["enable_thinking": false])
         let lm = try await container.prepare(input: input)
         let start = Date()
@@ -205,7 +210,7 @@ public enum MLXProvider {
             let yes = logits[MLXArray(ids("yes"))].logSumExp(), no = logits[MLXArray(ids("no"))].logSumExp()
             return (yes - no).item(Float.self)
         }
-        timing.info("term-score \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+        timing.info("yes-no score \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(lm.text.tokens.size) tok")
         return Double(score)
     }
 

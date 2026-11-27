@@ -44,4 +44,16 @@ a.jsonl subset 1 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 3 3 3
 b.jsonl all 2 1 0 1 0 0 0 1 1 1 0 1 0 2 1 1 3 2 4
 b.jsonl subset 1 0 0 0 0 0 0 0 0 1 0 0 0 1 0 1 4 4 4
 EOF
+
+# The fidelity table (#75 step 2): only for outputs with probe scores; timeouts (no reply) don't count.
+fo() { jq -nc --arg id $1 --argjson r $2 --arg g "${3:-}" --argjson f $4 --argjson s $5 --arg said "${6:-x}" \
+  '{id: $id, label: "Dictated", output: "", reply: $r, seconds: 1, repaired: [], rejectedBy: (if $g == "" then null else $g end),
+    user: "<screen app=\"A\" window=\"W\">\n\n</screen>\n<transcript>\($said)</transcript>",
+    fidelity: $f, fidelityRejects: (if $f == null then null else $f < 2 end), fidelitySeconds: $s}' }
+{ fo 1 '"Hello, there."' '' -3 0.1 'hello there'; fo 5 '"x"' dropsContent 5 0.3; fo 6 '"Sure, hello."' fidelityProbe -1 0.2 'hello'
+  fo 7 null '' null null; fo 8 '"x"' echoesContext 0 0.2 } > $dir/c.jsonl
+diff =(zsh ./replay.zsh counts $dir/in.jsonl $dir/c.jsonl | sed '1,/^$/d' | awk '{$1=$1; print}') - <<'EOF'
+config replies scored probe both probe-only po-same po-new guard-only acted p50ms p90ms
+c.jsonl 4 4 3 1 2 1 1 1 1 200 300
+EOF
 print "replay: ok"

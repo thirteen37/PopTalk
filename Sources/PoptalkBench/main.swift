@@ -178,6 +178,34 @@ if let path = opt("--term-shortlist") {
     exit(0)
 }
 
+// #75 step 2: adds `rejectedBy` to each line of a training/fidelity_probe.py pairs file: the deterministic
+// `Pipeline.rejects` on (reply, transcript, screen), null when none holds. `--score MODEL` adds `scores`, the fidelity
+// probe per level (`MLXProvider.yesNoScore` of `Pipeline.fidelityCheck`), and prints ms per score to stderr.
+//   PoptalkBench --fidelity-pairs training/fidelity_pairs.jsonl [--score adapters/gemma-4-e2b-poptalk-v7] > pairs.jsonl
+if let path = opt("--fidelity-pairs") {
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
+    let model = opt("--score")
+    if let model { _ = try await MLXProvider.yesNoScore(model, Pipeline.fidelityCheck(transcript: "warm up", reply: "Warm up.", level: .clean)) }
+    var seconds = 0.0, n = 0
+    for l in text.split(separator: "\n") {
+        guard var o = (try? JSONSerialization.jsonObject(with: Data(l.utf8))) as? [String: Any],
+              let said = o["transcript"] as? String, let reply = o["reply"] as? String else { fail("bad line in \(path)") }
+        o["rejectedBy"] = Pipeline.rejectedBy(reply: reply, transcript: said, screen: o["screen"] as? String ?? "") ?? NSNull()
+        if let model {
+            var scores: [String: Double] = [:]
+            for level in CleanupLevel.allCases {
+                let start = Date()
+                scores[level.rawValue] = try await MLXProvider.yesNoScore(model, Pipeline.fidelityCheck(transcript: said, reply: reply, level: level))
+                seconds += Date().timeIntervalSince(start); n += 1
+            }
+            o["scores"] = scores
+        }
+        print(String(decoding: try JSONSerialization.data(withJSONObject: o, options: .sortedKeys), as: UTF8.self))
+    }
+    if n > 0 { FileHandle.standardError.write(Data(String(format: "%.0f ms per score\n", seconds * 1000 / Double(n)).utf8)) }
+    exit(0)
+}
+
 // Skip-gate eval (#75): runs `GateEval` on every dictation in history files (local and synced, deduped by id) and
 // compares the gate's decision with what the cleanup model replied. Prints counts only.
 //   PoptalkBench --gate-eval history.jsonl [history-*.jsonl …]
@@ -253,6 +281,8 @@ for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-pro
 //   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID [--cleanup-timeout S]   (S: the base deadline, app default 4)
 //     [--dictation-prompt-file F] [--guards -name,…]   (scripts/replay.zsh: the ship check)
 //     [--skip-gate on]   (#122: the skip gate on; out also gets skippedLLM, gateStop? and gateSeconds?)
+//     [--fidelity shadow|on]   (#75 step 2: score every reply with the fidelity probe; `on` also rejects below
+//       Pipeline.fidelityProbeThreshold. Out also gets fidelity?, fidelityRejects? and fidelitySeconds?)
 // in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, rejectedBy?, repaired, seconds}
 // (`repaired`: the names of the repairs that changed the reply, #117).
 // Prints counts only: the inputs and outputs are history content and stay in the files.
@@ -261,7 +291,10 @@ if let i = args.firstIndex(of: "--replay") {
     struct Out: Encodable {
         var id, label, output: String; var reply, user, rejectedBy: String?; var repaired: [String]; var seconds: Double
         var skippedLLM: Bool?, gateStop: String?, gateSeconds: Double?
+        var fidelity: Double?, fidelityRejects: Bool?, fidelitySeconds: Double?
     }
+    let fidelity = opt("--fidelity")
+    guard [nil, "shadow", "on"].contains(fidelity) else { fail("--fidelity takes shadow or on") }
     guard i + 2 < args.count, let model = opt("--cleanup-model") else { fail("usage: PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID") }
     do {
         let lines = try String(contentsOfFile: args[i + 1], encoding: .utf8).split(separator: "\n")
@@ -281,8 +314,10 @@ if let i = args.firstIndex(of: "--replay") {
             var features = DictationFeatures()
             features.guardsOff = guardsOff
             features.skipGate = opt("--skip-gate") == "on"
-            let p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
+            (features.fidelityShadow, features.fidelityProbe) = (fidelity == "shadow", fidelity == "on")
+            var p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
                              cleanupTimeout: opt("--cleanup-timeout").flatMap(Double.init) ?? 4, features: features)
+            if fidelity != nil { p.fidelityScore = MLXProvider.yesNoScore }
             let t = Date()
             let res = await p.run(Request(transcript: r.transcript, selection: nil,
                                           context: ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)))
@@ -294,7 +329,9 @@ if let i = args.firstIndex(of: "--replay") {
             }
             let o = Out(id: r.id, label: label, output: output, reply: calls.call?.reply,
                         user: calls.call?.messages.last?.content, rejectedBy: res.rejectedBy, repaired: res.repaired, seconds: Date().timeIntervalSince(t),
-                        skippedLLM: features.skipGate ? res.skippedLLM : nil, gateStop: res.skipGateStop, gateSeconds: res.skipGateSeconds)
+                        skippedLLM: features.skipGate ? res.skippedLLM : nil, gateStop: res.skipGateStop, gateSeconds: res.skipGateSeconds,
+                        fidelity: res.fidelityScore, fidelityRejects: res.fidelityScore.map { $0 < Pipeline.fidelityProbeThreshold },
+                        fidelitySeconds: res.fidelitySeconds)
             try out.write(contentsOf: JSONEncoder().encode(o) + Data([0x0A]))
             if (n + 1) % 25 == 0 { print("\(n + 1)/\(lines.count) \(Int(Date().timeIntervalSince(start)))s footprint \(MLXProvider.footprintMB()) MB") }
         }

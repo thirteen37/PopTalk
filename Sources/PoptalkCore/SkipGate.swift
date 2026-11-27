@@ -4,6 +4,7 @@ import Foundation
 public struct DictationFeatures: Sendable, Equatable {
     public enum Key {
         public static let recaseTerms = "recaseScreenTerms", skipGate = "skipLLMGate", soundAlikeTerms = "soundAlikeTerms"
+        public static let fidelityProbe = "fidelityProbe"
     }
     /// "Fix screen-term casing before cleanup": still only for the models `Pipeline.recasesTerms` names.
     public var recaseTerms = true
@@ -14,6 +15,11 @@ public struct DictationFeatures: Sendable, Equatable {
     /// Sound-alike terms (#75 step 2, experimental, no Settings UI yet): `termShortlist` runs the cleanup model
     /// confirms (`Pipeline.termScore`) become the term before cleanup. Only where `recaseTerms` runs.
     public var soundAlikeTerms = false
+    /// The learned fidelity guard (#75 step 2, experimental, no Settings UI): a reply `Pipeline.fidelityScore` puts
+    /// below `fidelityProbeThreshold` goes in raw, after the deterministic rejects.
+    public var fidelityProbe = false
+    /// Scores the probe and records it without acting: PoptalkBench `--replay --fidelity shadow` only.
+    public var fidelityShadow = false
     /// `Pipeline.guardNames` steps turned off: PoptalkBench `--guards -name,…` only (#108).
     public var guardsOff: Set<String> = []
 
@@ -27,6 +33,7 @@ public struct DictationFeatures: Sendable, Equatable {
         screenTerms = (sources ?? ContextSources(d)).screenVocabulary
         skipGate = environment["POPTALK_SKIP_LLM"].map { $0 == "1" } ?? d.bool(forKey: Key.skipGate)
         soundAlikeTerms = d.bool(forKey: Key.soundAlikeTerms)
+        fidelityProbe = d.bool(forKey: Key.fidelityProbe)
     }
 }
 

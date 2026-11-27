@@ -45,6 +45,9 @@ public struct PipelineResult: Equatable, Sendable {
     /// own seconds (#122, replay counts).
     public var skipGateStop: String?
     public var skipGateSeconds: Double?
+    /// The fidelity probe's score of the repaired reply and its own seconds (#75 step 2), when it ran; replay counts.
+    public var fidelityScore: Double?
+    public var fidelitySeconds: Double?
 
     public init(outcome: Outcome, vocabularyOffer: VocabTerm? = nil, remembered: VocabTerm? = nil, degraded: Bool = false,
                 modelAction: String? = nil, skippedLLM: Bool = false) {
@@ -76,6 +79,8 @@ public struct Pipeline: Sendable {
     public var remembers = true
     /// The yes/no term check for `DictationFeatures.soundAlikeTerms` (#75 step 2): MLX only; nil skips it.
     public var termScore: TermScore?
+    /// The fidelity probe (#75 step 2, `DictationFeatures.fidelityProbe`): MLX only; nil skips it.
+    public var fidelityScore: YesNoScore?
     /// The cleanup model was trained on the level tag (#96): `ModelSettings.levelModels`, or PoptalkBench `--levels`.
     /// Otherwise every dictation is sent and checked as Clean.
     public var levels: Bool
@@ -163,11 +168,20 @@ public struct Pipeline: Sendable {
                 }
                 return next
             }
-            let check = ReplyCheck(limit: limit, screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context), cleanup: level)
-            let rejectedBy = Self.rejects.first { !off.contains($0.name) && $0.test(cleaned, transcript, check) }?.name
+            var rejectedBy = Self.rejectedBy(reply: cleaned, transcript: transcript,
+                                             screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context), level: level, off: off)
+            // Scored even after a deterministic reject, so the replay can count the overlap.
+            var fidelity: (score: Double?, seconds: Double)?
+            if let fidelityScore, features.fidelityProbe || features.fidelityShadow, !cleaned.isEmpty {
+                let start = Date()
+                let score = try? await fidelityScore(cleanupModel, Self.fidelityCheck(transcript: transcript, reply: cleaned, level: level))
+                fidelity = (score, Date().timeIntervalSince(start))
+                if rejectedBy == nil, features.fidelityProbe, let score, score < Self.fidelityProbeThreshold { rejectedBy = "fidelityProbe" }
+            }
             var res = result(rejectedBy == nil ? .insert(space + cleaned, label: "Dictated") : .insert(space + transcript, label: "Dictated (raw)"))
             res.rejectedBy = rejectedBy
             res.repaired = repaired
+            (res.fidelityScore, res.fidelitySeconds) = (fidelity?.score, fidelity?.seconds)
             return res
         }
 
@@ -326,6 +340,14 @@ extension Pipeline {
         ("dropsProtected", { out, said, _ in dropsProtected(out, transcript: said) }),
     ]
     public static var guardNames: [String] { prepass.map(\.name) + repairs.map(\.name) + rejects.map(\.name) }
+
+    /// The first of `rejects` not in `off` that holds for a repaired `reply` to the pre-passed `transcript`, with
+    /// `screen` what the model saw; nil: the reply is used. PoptalkBench `--fidelity-pairs` scores invented pairs with it.
+    public static func rejectedBy(reply: String, transcript: String, screen: String = "", level: CleanupLevel = .clean,
+                                  off: Set<String> = []) -> String? {
+        let check = ReplyCheck(limit: maxCleanupLength(transcript), screen: screen, cleanup: level)
+        return rejects.first { !off.contains($0.name) && $0.test(reply, transcript, check) }?.name
+    }
 
     /// The `prepass` steps not in `off`. PoptalkDatagen render uses it too, so training transcripts match production.
     public static func dictationPrepass(_ s: String, off: Set<String> = []) -> String {

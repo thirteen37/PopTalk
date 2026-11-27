@@ -2,12 +2,16 @@
 # Ship check for prompt, model and guard changes: replays real history dictations through Pipeline
 # (`PoptalkBench --replay`) for each config, back to back, and prints counts only. Run outside the sandbox.
 # Usage: scripts/replay.zsh [--model ID] [--timeout S] [--subset REGEX] [--guards -NAME,...] [--skip-gate on|off]
-#          [--history FILE]... [--words] [CONFIG ...]
+#          [--fidelity shadow|on] [--history FILE]... [--words] [CONFIG ...]
 #   CONFIG: `current` (the built prompt; the default) or a dictation system prompt file (--dictation-prompt-file).
-#   --model defaults to the shipped E2B v6 fine-tune, --timeout to the app's 4 s; --history to this Mac's file plus every Mac's synced file.
+#   --model defaults to the shipped E2B v7 fine-tune, --timeout to the app's 4 s; --history to this Mac's file plus every Mac's synced file.
 #   --subset adds rows for dictations whose transcript matches REGEX (jq regex, case-insensitive).
 #   --guards turns off the named Pipeline guards for every config (PoptalkBench --guards, #108).
 #   --skip-gate turns the skip gate on or off for every config (PoptalkBench --skip-gate, #122; default off).
+#   --fidelity scores every reply with the fidelity probe (PoptalkBench --fidelity, #75 step 2): `shadow` only counts,
+#     `on` also rejects. Adds a second table: replies the probe would reject, overlap with the deterministic rejects
+#     (guard), replies it rejected (acted), and its own ms per reply. Of the probe-only rejects: po-same have the
+#     transcript's words exactly (casing and punctuation only: likely false rejects), po-new add a word it lacks.
 #   --words adds training/word_changes.py tables per config (#126): word changes from the transcript the model saw to
 #     its reply and to the inserted text, by transcript length; "other" counts grammar and content rewrites.
 # Input: opt-in history dictations (no selection) that called a model, deduped by id; app, window, screen text and
@@ -83,6 +87,32 @@ counts() {
           ($r | raws - $firstRaw | length), ($r | map(.id) - ($r | raws) | map(select(IN($firstRaw[]))) | length),
           (if $s == [] then 0 else $s | add / length | r2 end), ($s | pct(0.5) | r2), ($s | pct(0.9) | r2)])
     | @tsv' --args $names | column -t -s $'\t'
+  fidelity $names $@
+}
+
+# The fidelity probe table (#75 step 2), for configs whose outputs carry `fidelity` (--fidelity shadow|on); over
+# replies (timeouts excluded). guard: a deterministic reject. probe: the score is below Pipeline.fidelityProbeThreshold.
+fidelity() {
+  local -a names=(${@[1,$# / 2]}) outs=(${@[$# / 2 + 1,-1]})
+  jq -se 'any(.[]; .fidelity != null)' $outs > /dev/null 2>&1 || return 0
+  integer k
+  print
+  { print "config\treplies\tscored\tprobe\tboth\tprobe-only\tpo-same\tpo-new\tguard-only\tacted\tp50ms\tp90ms"
+    for k in {1..$#outs}; do jq -sr --arg name $names[$k] '
+      def pct($p): if length == 0 then 0 else .[(length * $p | ceil) - 1] end;
+      def words: ascii_downcase | [scan("[a-z0-9]+")] | unique;
+      map(select(.reply != null)) as $r
+      | ($r | map(. + {g: (.rejectedBy != null and .rejectedBy != "fidelityProbe"), p: (.fidelityRejects == true),
+                       said: ((.user // "") | capture("<transcript>(?<t>[\\s\\S]*)</transcript>").t // "" | words),
+                       wrote: (.reply | words)})) as $x
+      | ($x | map(select(.p and (.g | not)))) as $po
+      | ($r | map(.fidelitySeconds // empty | . * 1000) | sort) as $ms
+      | [$name, ($r | length), ($r | map(select(.fidelity != null)) | length), ($x | map(select(.p)) | length),
+         ($x | map(select(.p and .g)) | length), ($po | length), ($po | map(select(.said == .wrote)) | length),
+         ($po | map(select(.wrote - .said | length > 0)) | length),
+         ($x | map(select(.g and (.p | not))) | length), ($r | map(select(.rejectedBy == "fidelityProbe")) | length),
+         ($ms | pct(0.5) | round), ($ms | pct(0.9) | round)] | @tsv' $outs[$k]; done
+  } | column -t -s $'\t'
 }
 
 subset=""
@@ -93,9 +123,10 @@ if [[ ${1:-} == counts ]]; then
   names=(${@[2,-1]:t}); counts "$@"; exit
 fi
 
-zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -guards:=guards -skip-gate:=gate -history+:=hist -words=words || exit 1
+zparseopts -D -E -F -- -model:=model -timeout:=timeout -subset:=s -guards:=guards -skip-gate:=gate -fidelity:=fid -history+:=hist -words=words || exit 1
 model=${model[-1]:-adapters/gemma-4-e2b-poptalk-v7} timeout=${timeout[-1]:-4} subset=${s[-1]:-}
 [[ ${gate[-1]:-off} == (on|off) ]] || { print -u2 -- "--skip-gate takes on or off"; exit 1 }
+[[ ${fid[-1]:-shadow} == (shadow|on) ]] || { print -u2 -- "--fidelity takes shadow or on"; exit 1 }
 files=(${^${hist:#--history}}(:A))
 (( $#files )) || files=(
   ~/Library/Application\ Support/Poptalk/history/history.jsonl(N)
@@ -123,7 +154,7 @@ for c in "${configs[@]}"; do
   scripts/wait-idle.zsh
   outs+=$dir/out-$#outs.jsonl
   print "== ${names[$#outs]}"
-  .build/release/PoptalkBench --replay $dir/in.jsonl $outs[-1] --cleanup-model $model --cleanup-timeout $timeout $guards $gate \
+  .build/release/PoptalkBench --replay $dir/in.jsonl $outs[-1] --cleanup-model $model --cleanup-timeout $timeout $guards $gate $fid \
     ${c:+--dictation-prompt-file} $c
 done
 counts $dir/in.jsonl $outs
