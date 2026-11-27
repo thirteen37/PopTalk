@@ -2200,16 +2200,19 @@ def check_sidebar():
 
 # ---------- #96: cleanup levels (build8) ----------
 # build7 plus the same dictations at Verbatim and Polished, tagged `cleanup` (render adds <style cleanup="…"/>).
-# Levels (owner, #96): Verbatim keeps every word as said (word fillers "like"/"you know"/"basically"/"I mean",
-# repeats, false starts, self-corrections with their cue); only um/uh/er/hmm go, which Pipeline.stripHesitations drops
-# at every level before the model. It still adds punctuation and casing and fixes terms and numbers like Clean.
+# Levels (owner, #96): Verbatim keeps the word fillers ("like", "you know", "basically", "I mean") and self-corrections
+# with their cue, a spoken cancel ("scratch that", whose prepass step Verbatim skips) and what it cancels included. Like
+# Clean it drops um/uh/er/hmm (Pipeline.stripHesitations, every level), stutters, repeats, cut-offs and false starts,
+# adds punctuation and casing, and fixes terms and numbers.
 # Polished is Clean plus grammar and homophones, nothing shortened. Clean rows are build7's, untouched.
 # Families, per transcript where they apply, so the same words are seen at two or three levels:
 #   l-polished-fix        d-as-said with each sentence's grammar fixed (lexicon.AS_SAID_FIXED). Rule.
 #   l-polished-homophone  d-mutated whose homophone Clean keeps as heard: Polished writes the base's word. Rule.
 #   l-verbatim-keep       Clean dropped word fillers or applied a self-correction: E4B at Verbatim (teach8) writes the
-#                         punctuation, accepted only with exactly the said words plus Clean's term fixes. Teacher.
-#   l-verbatim-same       Clean changed nothing but hesitations, punctuation, casing, terms or numbers: same target.
+#                         punctuation, accepted only with exactly verbatim_plan's words: the said words with Clean's
+#                         term fixes and Clean's debris drops, no word added or lost. Teacher.
+#   l-verbatim-same       Clean changed nothing but hesitations, debris, punctuation, casing, terms or numbers: same
+#                         target. A row where Clean also dropped a filler, a correction or anything unplaced isn't one.
 #   l-polished-same       a grammatical base: Polished is Clean (no tightening, no rewording). Rule.
 # Sizes: ~1,300 rows per level against ~15,700 Clean rows (Clean stays ~85%, so untagged prompts keep v7's
 # behaviour), about half where the level differs from Clean (what the tag does) and half where it doesn't (what it
@@ -2218,7 +2221,6 @@ def check_sidebar():
 OUT8 = OUT / "v8"
 LEVEL_N = {"keep": 600, "same": 150}  # bases drawn for l-verbatim-keep and for l-verbatim-same, each also l-polished-same
 HESITATION = re.compile(r"^(?:u+m+|u+h+|e+r+m*|h+m+)$")  # Pipeline.stripHesitations' sounds
-SCRATCH = re.compile(r"\b(?:scratch|delete) that\b", re.I)  # spokenCancel cuts these at every level, before the model
 
 
 def said_words(t):
@@ -2238,24 +2240,39 @@ def level_changes(it, target):
     return old, new, ops, kinds
 
 
-def verbatim_words(it):
-    """A Verbatim target's words: as said, with Clean's term fixes; None if Clean changed more than fillers,
-    self-corrections and terms."""
+def has_filler(ws):
+    """`ws` holds a word filler ("like", or "you know" together): debris spans mustn't take one with them."""
+    return any(w in W.FILLERS for w in ws) or any(tuple(ws[k:k + 2]) in W.FILLER_PAIRS for k in range(len(ws)))
+
+
+def verbatim_plan(it):
+    """(a Verbatim target's words, whether they differ from Clean's), or None if a change Clean made can't be placed.
+    Kept as said: word fillers, and self-corrections with their cue (a cue near, or a later value moved in), cancels
+    ("scratch that") included. Taken from Clean: terms, numbers, formatting, and the debris Verbatim drops too
+    (stutters, repeats, cut-offs, and d-mutated's false start). Anything else, a cue-less restatement (false start or
+    correction?) among them, is None: no Verbatim row."""
     old, new, ops, kinds = level_changes(it, it["target"])
-    if not set(kinds) <= {"filler", "cue", "term"}:
-        return None
-    out, i = [], 0
+    out, i, differs, starts = [], 0, False, it.get("mutators", []).count("false_start")
     for (_, i1, i2, j1, j2), k in zip(ops, kinds):
-        out += old[i:i1] + (new[j1:j2] if k == "term" else old[i1:i2])
-        i = i2
-    return out + old[i:]
+        a, b = old[i1:i2], new[j1:j2]
+        if k == "filler" and W.only_fillers(a) or k == "cue" and (W.cue_near(old, i1, i2) or b):
+            keep = True
+        elif k in ("term", "number", "format") or k == "filler" and not has_filler(a):
+            keep = False
+        elif k in ("function", "content") and not b and starts:  # the false start's abandoned words
+            keep, starts = False, starts - 1
+        else:
+            return None
+        out += old[i:i1] + (a if keep else b)
+        differs, i = differs or keep, i2
+    return out + old[i:], differs
 
 
-def keeps_all(b):
-    """A base whose Verbatim target the teacher writes: Clean dropped fillers or applied a self-correction, and
-    nothing a deterministic step rewrites (numbers, "scratch that") is said."""
-    return (bool({"filler", "cue"} & set(level_changes(b, b["target"])[3])) and verbatim_words(b) is not None
-            and not SCRATCH.search(b["transcript"]) and not any(map(W.is_number, W.words(b["transcript"]))))
+def teachable(b, plan):
+    """A base whose Verbatim target the teacher writes: it differs from Clean, and no number is said (the prepass
+    writes digits the word check can't line up) or formatted."""
+    return bool(plan and plan[1]) and not set(level_changes(b, b["target"])[3]) & {"number", "format"} \
+        and not any(map(W.is_number, W.words(b["transcript"])))
 
 
 def level_item(b, level, fam, **kw):
@@ -2271,10 +2288,11 @@ def level_items(bases):
     rule, teach, used = [], [], set()
 
     def verbatim(b):  # l-verbatim-same, l-verbatim-keep (teacher) or neither
-        if set(level_changes(b, b["target"])[3]) <= {"term", "number", "format"}:
+        plan = verbatim_plan(b)
+        if plan and not plan[1]:
             rule.append(level_item(b, "verbatim", "l-verbatim-same", target=b["target"]))
-        elif keeps_all(b):
-            teach.append(level_item(b, "verbatim", "l-verbatim-keep", rule=" ".join(verbatim_words(b))))
+        elif teachable(b, plan):
+            teach.append(level_item(b, "verbatim", "l-verbatim-keep", rule=" ".join(plan[0])))
 
     for b in bases:
         if b["cat"] == "d-as-said" and b["id"] in fixed:
@@ -2290,8 +2308,9 @@ def level_items(bases):
         verbatim(b)
     r = R("levels")
     rest = [b for b in bases if b["id"] not in used and b["cat"] != "d-as-said" and "homophone" not in b.get("mutators", ())]
-    keep = [b for b in rest if keeps_all(b)]
-    same = [b for b in rest if set(level_changes(b, b["target"])[3]) <= {"term", "number", "format"}]
+    plans = {b["id"]: verbatim_plan(b) for b in rest}
+    keep = [b for b in rest if teachable(b, plans[b["id"]])]
+    same = [b for b in rest if plans[b["id"]] and not plans[b["id"]][1]]
     for b in r.sample(keep, min(LEVEL_N["keep"], len(keep))) + r.sample(same, min(LEVEL_N["same"], len(same))):
         verbatim(b)
         rule.append(level_item(b, "polished", "l-polished-same", target=b["target"]))
@@ -2300,7 +2319,7 @@ def level_items(bases):
 
 def level_teacher(it, res):
     """An l-verbatim-keep teacher result as a target, or None: what Pipeline inserted, only when no guard rejected it
-    and its words are exactly the said words plus Clean's term fixes (`rule`)."""
+    and its words are exactly verbatim_plan's (`rule`): fillers and corrections kept, debris dropped, terms fixed."""
     y = (res.get("output") or "").strip()
     if res.get("rejectedBy") or res.get("label") != "Dictated" or not y or "\n" in y:
         return None
@@ -2352,8 +2371,24 @@ def check_levels():
     assert level_teacher(t, ok | {"output": " So we need, like, three more chairs, no, four"}) is None
     assert level_teacher(t, ok | {"rejectedBy": "dropsContent", "label": "Dictated (raw)"}) is None
     assert said_words("Um, so uh we need it") == ["so", "we", "need", "it"]
+    # verbatim_plan (owner, #96): fillers, corrections and cancels stay; stutters, repeats and false starts go.
+    vp = lambda t, y, **kw: verbatim_plan({"transcript": t, "target": y, **kw})
+    assert vp("so i i think we should like move it", "So I think we should move it.") \
+        == ("so i think we should like move it".split(), True)
+    assert vp("the the van is um ready", "The van is ready.") == ("the van is ready".split(), False)
+    assert vp("Send it Monday. Scratch that. Send it Friday.", "Send it Friday.") \
+        == ("send it monday scratch that send it friday".split(), True)
+    assert vp("ship it on tuesday no thursday", "Ship it on Thursday.") == ("ship it on tuesday no thursday".split(), True)
+    assert vp("book it for two book it for three", "Book it for three.") is None  # restated, no cue: unsure
+    assert vp("We should, let's just go.", "Let's just go.", mutators=["false_start"]) == ("let's just go".split(), False)
+    assert vp("We should, let's just go.", "Let's just go.") is None
+    same = [it for it in rule if it["cat"] == "l-verbatim-same"]
+    debris = sum(len(said_words(it["transcript"])) > len(W.words(it["target"])) for it in same)
+    cancels = sum(bool(re.search(r"\b(?:scratch|delete) that\b", it["transcript"], re.I)) for it in teach)
+    assert cancels >= 20, cancels
     print("levels check ok: " + ", ".join(f"{n} {c}" for c, n in sorted(cats.items())) + f" ({len(teach)} teacher inputs); "
-          f"{both}/{len(multi)} transcripts at both levels; {len(L.AS_SAID_FIXED)} AS_SAID fixes; 0 contaminated")
+          f"{both}/{len(multi)} transcripts at both levels; {debris} l-verbatim-same drop debris, {cancels} teacher inputs "
+          f"keep a scratch that; {len(L.AS_SAID_FIXED)} AS_SAID fixes; 0 contaminated")
 
 
 SCRIPTS ={"ja": r"[぀-ヿ一-鿿]", "zh": r"[一-鿿]", "ko": r"[가-힯]"}

@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # Builds training/out/v8/data/{train,valid}.jsonl for the E2B v8 adapter (#96, cleanup levels): v7's data plus the same
 # dictations at Verbatim and Polished (gen.py cleanup-level section). Reuses v6's speech and E4B teacher outputs; the
-# one GPU step is the E4B teacher at Verbatim on l-verbatim-keep (~720 items, ~15 min), skipped when
+# one GPU step is the E4B teacher at Verbatim on l-verbatim-keep (~690 items, ~15 min), skipped when
 # training/out/v8/teach_out.jsonl exists. SKIP_TEACH=1 builds without it; DG=.build/debug/PoptalkDatagen for a dry run.
 # Run from the repo root, outside the sandbox, after training/make_data_v6.zsh's slow steps and `swift build -c release`
 # (the teacher needs this branch's PoptalkDatagen: `pipeline` takes `cleanup`). Syncs lora-v8.yaml's iters to 40% of

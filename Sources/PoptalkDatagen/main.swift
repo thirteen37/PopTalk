@@ -10,6 +10,7 @@ import PoptalkSpeech
 //       The exact production chat (Prompts.dictation / Prompts.edit after Pipeline.stripHesitations; dictation
 //       also after Pipeline.dictationPrepass, through Pipeline.dictationMessages: short ones get no screen text, #124).
 //       `cleanup` (verbatim|clean|polished, #96) adds the level tag a level-trained model sees; clean or absent adds none.
+//       Verbatim's prepass keeps a spoken cancel ("scratch that"), as the app's does.
 //       Dictation targets get Pipeline.spokenNumbers too, so they keep the digits the model sees (#59).
 //   teach --model ID          {id, messages} → {id, output}   (in-process MLX, greedy, like the app)
 //   pipeline --model ID       {id, transcript, selection?, context?, vocabulary?, cleanup?} → {id, label, output, reply?, rejectedBy?}
@@ -67,7 +68,7 @@ case "render":
         var m = if isEdit {
             Prompts.edit(instruction: said, selection: it.selection!, context: ctx, vocabulary: it.vocabulary ?? [])
         } else {
-            Pipeline.dictationMessages(model: ModelSettings.e2b, transcript: Pipeline.dictationPrepass(said), context: ctx,
+            Pipeline.dictationMessages(model: ModelSettings.e2b, transcript: Pipeline.dictationPrepass(said, cleanup: it.cleanup ?? .clean), context: ctx,
                                        vocabulary: it.vocabulary ?? [], cleanup: it.cleanup ?? .clean)
         }
         if let t = it.target { m.append(ChatMessage(role: "assistant", content: isEdit ? t : Pipeline.spokenNumbers(t))) }

@@ -116,6 +116,28 @@ private func level(_ bundleID: String?, _ domain: String?, _ profiles: [AppProfi
     #expect(try BenchCase.load(jsonl: #"{"id":"d-y","kind":"dictation","transcript":"hi"}"#)[0].request.cleanup == .clean)
 }
 
+// #96 (owner): Verbatim keeps a spoken cancel ("scratch that") and what it cancels, like a self-correction, so the
+// prepass skips spokenCancel at Verbatim only; render and the app share it, so training prompts match production.
+@Test func verbatimPrepassKeepsASpokenCancel() async {
+    let said = "Tell them the price is fixed. Scratch that. Ask them what budget they have."
+    #expect(Pipeline.dictationPrepass(said) == "Ask them what budget they have.")
+    #expect(Pipeline.dictationPrepass(said, cleanup: .verbatim) == said)
+    for level in [CleanupLevel.clean, .polished] { #expect(Pipeline.dictationPrepass(said, cleanup: level) == Pipeline.dictationPrepass(said)) }
+    #expect(Pipeline.dictationPrepass("Lunch is on me. Scratch that.", cleanup: .verbatim) == "Lunch is on me. Scratch that.")
+    // The rest of the prepass runs at every level.
+    let n = "about seventy five thousand users"
+    #expect(Pipeline.dictationPrepass(n, cleanup: .verbatim) == Pipeline.dictationPrepass(n) && Pipeline.dictationPrepass(n) != n)
+    // A level model at Verbatim is sent the cue; any model without levels, or another level, still gets it cancelled.
+    let verbatim = Request(transcript: said, selection: nil, context: ScreenSnapshot(), cleanup: .verbatim)
+    #expect(await prompts(model: "adapters/candidate", levels: true, [verbatim]).allSatisfy { $0.contains("Scratch that.") })
+    #expect(await prompts(model: "adapters/candidate", [verbatim]).allSatisfy { !$0.contains("Scratch that") })
+    let polished = Request(transcript: said, selection: nil, context: ScreenSnapshot(), cleanup: .polished)
+    #expect(await prompts(model: "adapters/candidate", levels: true, [polished]).allSatisfy { !$0.contains("Scratch that") })
+    // Everything cancelled is nothing at Clean, but the model's at Verbatim.
+    let all = Request(transcript: "Lunch is on me. Scratch that.", selection: nil, context: ScreenSnapshot(), cleanup: .verbatim)
+    #expect(await prompts(model: "adapters/candidate", levels: true, [all]).count == 1)
+}
+
 // #96 step 2: the E4B teacher (PoptalkDatagen pipeline, `levels` on) gets the tag plus a rule saying what it means;
 // at Clean its prompt is unchanged, so v6/v7's teacher outputs still hold.
 @Test func e4bGetsALevelRuleOnlyAtNonDefaultLevels() async {
