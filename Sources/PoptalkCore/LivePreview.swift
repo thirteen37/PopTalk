@@ -20,6 +20,15 @@ public enum LivePreview {
         return "\(cue) · \(note)"
     }
 
+    /// What the recording footer says about raw (#131): the cue once Shift is seen; otherwise a "⇧ hold for raw" hint
+    /// until `rawHintLimit` raw dictations (`rawHintKey`), and never while degraded, which is raw already.
+    public enum RawCue: Equatable { case none, hint, cue }
+    public static let rawHintKey = "rawHintUses"
+    public static let rawHintLimit = 3
+    public static func rawCue(shifted: Bool, uses: Int, degraded: Bool) -> RawCue {
+        shifted ? .cue : !degraded && uses < rawHintLimit ? .hint : .none
+    }
+
     /// Edits preview only from this many words: shorter ones ("make this", "translate") are mostly unfinished and
     /// plan the wrong action, while short complete ones ("make it formal", "fix the typo") have three.
     public static let minEditWords = 3

@@ -83,24 +83,28 @@ final class Overlay {
     /// The last live transcript, kept on screen while working after release.
     private var preview: String?
 
-    /// `raw`: Shift is already down (#131).
-    func showRecording(note: String? = nil, raw: Bool = false) {
-        self.note = raw ? LivePreview.rawNote(note) : note
+    /// The "⇧ hold for raw" keycap in the recording footer (#131).
+    private var rawHint = false
+
+    /// `raw` (#131): the Shift hint or cue, if any.
+    func showRecording(note: String? = nil, raw: LivePreview.RawCue = .none) {
+        self.note = raw == .cue ? LivePreview.rawNote(note) : note
+        rawHint = raw == .hint
         preview = nil
         fieldRead = false  // a new press
         sparkles = .init()
-        show(Self.recordingHUD(preview: nil, note: self.note, strip: statusStrip()), for: nil)
+        show(Self.recordingHUD(preview: nil, note: self.note, hint: rawHint, strip: statusStrip()), for: nil)
     }
-    /// Shift seen mid-hold (#131): the footer says raw from now on, redrawn now rather than at the next partial.
+    /// Shift seen mid-hold (#131): the cue replaces the hint from now on, redrawn now rather than at the next partial.
     func showRaw() {
-        note = LivePreview.rawNote(note)
+        (note, rawHint) = (LivePreview.rawNote(note), false)
         if let preview { showPreview(preview) } else { show(Self.recordingHUD(preview: nil, note: note, strip: statusStrip()), for: nil) }
     }
     /// Provisional live transcript; long text keeps its tail so the latest words stay visible. `cleaned` (#43): the
     /// latest speculative result, run on `input`; stale (greyed) once the transcript has moved on from it.
     func showPreview(_ text: String, cleaned: LivePreview.Shown? = nil, input: String? = nil) {
         preview = text
-        var h = Self.recordingHUD(preview: text, cleaned: cleaned, input: input, note: note, strip: statusStrip())
+        var h = Self.recordingHUD(preview: text, cleaned: cleaned, input: input, note: note, hint: rawHint, strip: statusStrip())
         h.sparkles = sparkles.sweeping(h.mainMarks, in: h.main, now: CACurrentMediaTime())
         show(h, for: nil)
     }
@@ -202,8 +206,9 @@ final class Overlay {
     /// With a cleaned preview (#43): the raw transcript small on top, words the cleanup dropped struck through; the
     /// cleaned text below, the words it changed underlined in the accent colour (an edit: "Correct →" Todoist).
     static func recordingHUD(preview: String?, cleaned: LivePreview.Shown? = nil, input: String? = nil, note: String?,
-                             strip: [StatusBadge]) -> HUD {
+                             hint: Bool = false, strip: [StatusBadge]) -> HUD {
         var h = HUD(glyph: .levels, tint: .systemRed, note: note, strip: strip)
+        if hint { h.keys = [("⇧", "hold for raw")] }
         if let preview, let cleaned {
             let stale = input != preview
             // Marks index `input`, which is `preview` when not stale.

@@ -257,7 +257,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             selectionTask = if let text = editTarget?.text.trimmingCharacters(in: .whitespacesAndNewlines) { Task { text } }
                 else { Task { await TextIO.selectedText() } }
             overlay.showRecording(note: editTarget != nil ? "Editing the last insert"
-                                  : { if case .raw(let note) = mode { note } else { nil } }(), raw: hotkey.shifted)
+                                  : { if case .raw(let note) = mode { note } else { nil } }(),
+                                  raw: LivePreview.rawCue(shifted: hotkey.shifted,
+                                                          uses: UserDefaults.standard.integer(forKey: LivePreview.rawHintKey),
+                                                          degraded: { if case .raw = mode { true } else { false } }()))
             // Live cleanup (#43) only with the model ready: degraded mode (#39) previews the raw transcript alone.
             startPreview(live: mode == .full && LivePreview.enabled(.standard))
         }
@@ -318,6 +321,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             overlay.showError(transcriberError.map { "Speech model failed to load (retrying): \($0)" } ?? "Speech model still loading…")
             return
         }
+        // Counts raw dictations for the recording hint (#131), which stops at `LivePreview.rawHintLimit`.
+        if asHeard { UserDefaults.standard.set(UserDefaults.standard.integer(forKey: LivePreview.rawHintKey) + 1, forKey: LivePreview.rawHintKey) }
         busy = true
         overlay.showWorking()
         let store = store

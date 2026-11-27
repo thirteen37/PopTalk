@@ -11,6 +11,15 @@ import Testing
     #expect(LivePreview.rawNote(LivePreview.rawNote(nil)) == "Raw — no cleanup")
 }
 
+// The "⇧ hold for raw" hint until three raw dictations; Shift swaps it for the cue, even past the limit.
+@Test func rawHintUntilThreeUsesThenOnlyTheCue() {
+    let cue = { LivePreview.rawCue(shifted: $0, uses: $1, degraded: $2) }
+    #expect([0, 2, 3, 9].map { cue(false, $0, false) } == [.hint, .hint, .none, .none])
+    #expect([0, 3].map { cue(true, $0, false) } == [.cue, .cue])
+    #expect(cue(false, 0, true) == .none)  // degraded: raw already
+    #expect(cue(true, 0, true) == .cue)
+}
+
 // #43: speculative cleanup while the key is held.
 
 private func words(_ s: String, _ ranges: [Range<String.Index>]) -> [String] { ranges.map { String(s[$0]) } }
