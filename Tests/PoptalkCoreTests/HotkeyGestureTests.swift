@@ -186,7 +186,9 @@ private func run(_ events: [Event], _ gesture: HotkeyGesture = HotkeyGesture()) 
     g.modifiers(shift: true)  // before the press: not this hold's
     g.press(at: t0)
     #expect(!g.shifted)
-    g.modifiers(shift: true)
+    // Newly raw once per press: the overlay redraws then.
+    let changes = [g.modifiers(shift: false), g.modifiers(shift: true), g.modifiers(shift: true)]
+    #expect(changes == [false, true, false])
     g.modifiers(shift: false)  // let go again: still raw
     #expect(g.release(at: t0 + 2) == .hold)
     #expect(g.shifted)

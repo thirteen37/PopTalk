@@ -12,6 +12,23 @@ public enum LivePreview {
     public static let key = "liveCleanupPreview"
     public static func enabled(_ d: UserDefaults) -> Bool { d.object(forKey: key) as? Bool ?? true }
 
+    /// The recording footer once Shift is seen (#131): the raw cue, then any other note ("Editing the last insert").
+    /// The degraded mode's "raw — model loading" says the same thing, so the cue replaces it (as it does itself).
+    public static func rawNote(_ note: String?) -> String {
+        let cue = "Raw — no cleanup"
+        guard let note, !note.lowercased().hasPrefix("raw") else { return cue }
+        return "\(cue) · \(note)"
+    }
+
+    /// What the recording footer says about raw (#131): the cue once Shift is seen; otherwise a "⇧ hold for raw" hint
+    /// until `rawHintLimit` raw dictations (`rawHintKey`), and never while degraded, which is raw already.
+    public enum RawCue: Equatable { case none, hint, cue }
+    public static let rawHintKey = "rawHintUses"
+    public static let rawHintLimit = 3
+    public static func rawCue(shifted: Bool, uses: Int, degraded: Bool) -> RawCue {
+        shifted ? .cue : !degraded && uses < rawHintLimit ? .hint : .none
+    }
+
     /// Edits preview only from this many words: shorter ones ("make this", "translate") are mostly unfinished and
     /// plan the wrong action, while short complete ones ("make it formal", "fix the typo") have three.
     public static let minEditWords = 3
