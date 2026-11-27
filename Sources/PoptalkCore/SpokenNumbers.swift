@@ -185,7 +185,8 @@ extension Pipeline {
         let unit = "one|two|three|four|five|six|seven|eight|nine"
         let minutes = "oh[\\s-]+(?:\(unit))|(?:ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)"
             + "|(?:twenty|thirty|forty|fifty)(?:[\\s-]+(?:\(unit)))?"
-        return try! Regex("(?i)\\b(\(unit)|ten|eleven|twelve)(?:[\\s-]+(\(minutes)))?\\s+([ap])(?:\\.m\\.|m\\b)",
+        // Without minutes, "am I" is the verb: "which one am I" (#136).
+        return try! Regex("(?i)\\b(\(unit)|ten|eleven|twelve)(?:[\\s-]+(\(minutes))|(?!\\s+am\\s+I\\b))\\s+([ap])(?:\\.m\\.|m\\b)",
                          as: (Substring, Substring, Substring?, Substring).self)
     }()
 
