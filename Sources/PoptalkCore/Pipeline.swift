@@ -315,8 +315,10 @@ extension Pipeline {
 
     private static let think = try! NSRegularExpression(pattern: #"<think>[\s\S]*?</think>|</?transcript>"#)
 
+    /// Not all caps ("ER", "UM" are acronyms) nor "err" (a verb); "er", "errr", "erm" are sounds (#135).
     private static let hesitation = try! NSRegularExpression(
-        pattern: #"(?<![\w-])(?:u+m+|u+h+|e+r+m*|h+m+)(?![\w-])[,.!?]?"#, options: .caseInsensitive)
+        pattern: #"(?<![\w-])(?-i:(?![A-Z]{2,}(?![\w-])))(?:u+m+|u+h+|e+(?:r|rrr+|r+m+)|h+m+)(?![\w-])[,.!?]?"#,
+        options: .caseInsensitive)
 
     /// The dictation guards (#108), in order. `prepass`: what the cleanup model sees of a dictation after
     /// `stripHesitations` and the casing fix. `repairs`: applied to its reply. `rejects`: the first that holds makes
@@ -377,7 +379,7 @@ extension Pipeline {
             in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length), withTemplate: "")
         out = out.replacingOccurrences(of: #"\s+([,.!?])"#, with: "$1", options: .regularExpression)
             .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet.whitespaces.union(.punctuationCharacters).subtracting(CharacterSet(charactersIn: ".!?\"')")))
+            .trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: ",;:-–—")))
         if trimmed.first?.isUppercase == true, let f = out.first { out = f.uppercased() + out.dropFirst() }
         return out
     }

@@ -105,3 +105,21 @@ private func dictate(_ reply: String, transcript: String = "send me the report",
     #expect(Pipeline.stripHesitations("I like the umbrella and the Uhuru park") == "I like the umbrella and the Uhuru park")
     #expect(Pipeline.stripHesitations("uh") == "")
 }
+
+// #135: all-caps acronyms and "err" are words; a trailing % or # is content.
+@Test(arguments: [
+    "We took him to the ER last night.",
+    "I'd rather err on the side of caution.",
+    "She studied at UM for two years.",
+    "Revenue is up 25%",
+    "I wrote it in C#",
+])
+func hesitationStripKeepsWordsAndMarks(_ said: String) {
+    #expect(Pipeline.stripHesitations(said) == said)
+}
+
+@Test(arguments: ["er", "erm", "errr", "um", "umm", "uh"])
+func hesitationStripDropsLowercaseSounds(_ h: String) {
+    #expect(Pipeline.stripHesitations("\(h), we should ship it.") == "we should ship it.")
+    #expect(Pipeline.stripHesitations("we should \(h) ship it today.") == "we should ship it today.")
+}
