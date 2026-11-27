@@ -272,7 +272,8 @@ extension Pipeline {
     /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
     /// `fromScreen` false (#40): saved and learned terms only. A single dictionary word ("Install", "Setup") from the
     /// screen or the learned list is left out, as `recaseCandidates` leaves it: boosted, it swapped real words ("installed"
-    /// → "Install", #130). Saved terms always stay.
+    /// → "Install", #130), and with them in the list the rescorer missed names next to them (#132: "todo as" stayed, not
+    /// "Todoist"). Saved terms always stay; `applyBoosts` keeps any dictionary-word term from swapping real words.
     public static func boostTerms(saved: [VocabTerm], learned: [VocabTerm] = [], context: ScreenSnapshot,
                                   fromScreen: Bool = true) -> [VocabTerm] {
         var known = Set<String>()

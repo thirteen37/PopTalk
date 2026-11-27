@@ -105,8 +105,9 @@ private func fix(_ t: String, _ terms: [String], screen: String = "") -> String 
     }
     let said = "ship poptalk to meal prep."
     #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Meal Prep.</transcript>"))
-    // #130: screen terms still recase with screen boosting off (the default); not with the screen unread.
-    #expect(!ContextSources(d).screenVocabulary)
+    // #130: screen terms still recase with screen boosting off; not with the screen unread.
+    d.set(false, forKey: ContextSources.Key.screenVocabulary)
+    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Meal Prep.</transcript>"))
     for k in [ContextSources.Key.focusedText, ContextSources.Key.nearbyText, ContextSources.Key.ocr, ContextSources.Key.windowTitle] {
         d.set(false, forKey: k)
     }
