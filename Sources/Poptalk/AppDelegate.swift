@@ -444,9 +444,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var now = LastInsert(target: field, text: s, requestID: history.isEnabled ? id : nil,
                              prefix: raw.prefix, terminal: terminal, axUndo: axUndo, rawTranscript: raw.rawTranscript)
         if terminal == nil { now.fieldValue = TextIO.value(of: field) }  // for a tap-then-hold edit (#110)
+        now.written = written(raw, result, inserted: s)
         lastInsert = now
-        watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID,
-                    written: written(raw, result, inserted: s))
+        watchTyping(field, pasted: raw.prefix + s, transcript: raw.request.transcript, id: now.requestID, written: now.written)
         overlay.showOutcome("Cleaned up", undo: undoable(now) ? { [weak self] in
             await self?.undo(now, previous: raw.prefix + last.text, id: id) ?? false
         } : nil, vocabularyOffer: nil) {}
@@ -470,9 +470,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let text = lead + edited + trail
         let (terminal, axUndo) = (terminalStamp(), axUndoStamp())
         guard await replaceLast(last, with: last.prefix + text) else { overlay.showError(Self.editFailed); return Self.editFailed }
+        let gone = last.unlearned(by: text)
+        if !gone.isEmpty { Timing.log.info("edit: forgot \(self.learned.forget(gone)) learned terms") }
         let field = TextIO.focusedElement() ?? last.target
         var now = LastInsert(target: field, text: text, requestID: history.isEnabled ? id : nil, prefix: last.prefix,
                              terminal: terminal, axUndo: axUndo)
+        now.written = last.written  // for a further edit
         if terminal == nil { now.fieldValue = TextIO.value(of: field) }
         lastInsert = now
         let undo: (() async -> Bool)? = undoable(now) ? { [weak self] in
@@ -792,14 +795,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             reprocess?.prefix = space
             reprocess?.fieldValue = TextIO.value(of: field)  // after the paste: the text a cleanup must find unchanged
         }
+        let wrote: [String] = if case .insert = result.outcome { written(raw, result, inserted: text) } else { [] }
         lastInsert = pasted ? field.map {
             var last = LastInsert(target: $0, text: text, requestID: history.isEnabled ? id : nil, reprocess: reprocess,
                                   prefix: space, terminal: terminal, axUndo: axUndo, rawTranscript: raw.rawTranscript)
+            last.written = wrote
             // After the paste: the text a tap-then-hold edit (#110) must find unchanged.
             if terminal == nil, !ScreenContext.isSensitive() { last.fieldValue = TextIO.value(of: $0) }
             return last
         } : nil
-        let wrote: [String] = if case .insert = result.outcome { written(raw, result, inserted: text) } else { [] }
         if case .insert = result.outcome, let field, let last = lastInsert {
             watchTyping(field, pasted: space + text, transcript: raw.request.transcript, id: last.requestID, written: wrote)
         }

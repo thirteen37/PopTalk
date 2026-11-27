@@ -32,3 +32,13 @@ private let t0 = Date(timeIntervalSince1970: 1000)
     #expect(!last.isUntouched(focused: "slack", value: "Hi hello!"))
     #expect(!last.isUntouched(focused: "slack", value: nil))
 }
+
+// #130: a tap-then-hold edit that takes out a term the dictation's boost or casing fix wrote unlearns it.
+@Test func unlearnedAreTheWrittenTermsAnEditTookOut() {
+    var last = LastInsert(target: "notes", text: "I Install Quillmate on Yarrowly.")
+    last.written = ["Install", "Quillmate", "Yarrowly"]
+    #expect(last.unlearned(by: "I installed Quillmate on Yarrowly.") == ["Install"])
+    #expect(last.unlearned(by: "I install Quillman on Yarrowly!") == ["Install", "Quillmate"])
+    #expect(last.unlearned(by: "I Install Quillmate on Yarrowly today.").isEmpty)  // kept: nothing forgotten
+    #expect(LastInsert(target: "notes", text: "I Install it.").unlearned(by: "I installed it.").isEmpty)  // wrote nothing
+}
