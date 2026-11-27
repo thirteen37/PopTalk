@@ -2632,7 +2632,7 @@ def build(out, items, skipped, manifest):
          "contaminationRejected": rejected} | ({"skipped": skipped} if skipped else {}), indent=2) + "\n")
 
 
-def split(out, samples, as_said=False):
+def split(out, samples, as_said=False, level_copies=1):
     """out/data/{train,valid}.jsonl from out/rendered.jsonl, dropping rows the pre-pass doesn't match; with `as_said`
     (split7, #126), names with nothing in the prompt to fix them toward stay as heard (keep_heard_row)."""
     items = {i["id"]: i for i in jl(out / "items.jsonl")}
@@ -2652,7 +2652,12 @@ def split(out, samples, as_said=False):
     R("split").shuffle(rows)
     n = max(100, len(rows) // 25)
     write(out / "data" / "valid.jsonl", [{"messages": r["messages"]} for r in rows[:n]])
-    write(out / "data" / "train.jsonl", [{"messages": r["messages"]} for r in rows[n:]])
+    train = rows[n:]
+    if level_copies > 1:  # #96 try 2: Verbatim/Polished rows repeated so the level tag is ~1/3 of train; valid unchanged
+        train += [r for r in train if items[r["id"]].get("cleanup")] * (level_copies - 1)
+        R("split").shuffle(train)
+        print(f"split: train by level {dict(Counter(items[r['id']].get('cleanup', 'clean') for r in train))}", file=sys.stderr)
+    write(out / "data" / "train.jsonl", [{"messages": r["messages"]} for r in train])
     samples.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows[:40]))
 
 
@@ -2697,7 +2702,8 @@ def main(cmd):
         build({"build6": OUT6, "build7": OUT7, "build8": OUT8}[cmd], items, skipped, Path("training") / f"manifest-v{cmd[-1]}.json")
     elif cmd in ("split", "split6", "split7", "split8"):
         v = cmd[5:]
-        split({"": OUT, "6": OUT6, "7": OUT7, "8": OUT8}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl", v in ("7", "8"))
+        split({"": OUT, "6": OUT6, "7": OUT7, "8": OUT8}[v], Path("training") / f"samples{'-v' + v if v else ''}.jsonl", v in ("7", "8"),
+              3 if v == "8" else 1)
     elif cmd == "heldout":
         keys = {(i["transcript"], i.get("selection")) for i in jl(OUT / "items.jsonl")}
         write(Path("training/heldout.jsonl"), heldout(keys))
