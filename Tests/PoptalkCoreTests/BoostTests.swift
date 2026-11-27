@@ -49,6 +49,17 @@ import Testing
     #expect(terms.first { $0.text == "Kubernetes" }?.aliases == [])
 }
 
+// #130: a learned or screen "Install" turned a heard "installed" into "Install". A single dictionary word from the
+// screen or the learned list isn't boosted (the casing fix skips them too); saved terms and phrases still are.
+@Test func boostTermsSkipDictionaryWordsFromScreenAndLearned() {
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "Inbox")],
+                                    learned: [VocabTerm(text: "Install"), VocabTerm(text: "Quillmate")],
+                                    context: ScreenSnapshot(text: "## Setup\nthen Yarrowly builds Meal Prep.")).map(\.text)
+    #expect(terms.contains("Inbox"))  // saved: the user's choice
+    #expect(!terms.contains("Install") && !terms.contains("Setup"))
+    #expect(terms.contains("Quillmate") && terms.contains("Yarrowly") && terms.contains("Meal Prep"))
+}
+
 // #30: "Q3" is too short to boost alone (FluidAudio skips terms under 3 characters), so
 // "Q3OKRs" was rescored to the only nearby term, "OKRs". Short numbers join their neighbour.
 @Test func shortNumbersJoinAdjacentTerms() {

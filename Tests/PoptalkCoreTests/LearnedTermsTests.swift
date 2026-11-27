@@ -46,37 +46,44 @@ private let day: TimeInterval = 86_400
 @Test func learnedTermsCountPersistAndMergeCaseInsensitively() {
     let url = tempURL(), t0 = Date(timeIntervalSince1970: 1_000_000)
     let learned = LearnedTerms(url: url)
-    #expect(learned.record(["Priya", "PopTalk"], request: UUID(), at: t0) == 2)  // the list's size after
-    #expect(learned.record(["priya", "Priya"], request: UUID(), at: t0 + 60) == 2)  // once per request
-    #expect(learned.record([], request: UUID(), at: t0 + 60) == 2)
+    #expect(learned.record(["Priya", "PopTalk"], at: t0) == 2)  // the list's size after
+    #expect(learned.record(["priya", "Priya"], at: t0 + 60) == 2)  // once per call
+    #expect(learned.record([], at: t0 + 60) == 2)
     #expect(LearnedTerms(url: url).terms(at: t0 + 120) == [LearnedTerm(text: "priya", lastUsed: t0 + 60, count: 2),
                                                            LearnedTerm(text: "PopTalk", lastUsed: t0, count: 1)])
-    learned.forget("PRIYA")
+    learned.forget(["PRIYA"])
     #expect(LearnedTerms(url: url).terms(at: t0 + 120).map(\.text) == ["PopTalk"])
     learned.forgetAll()
     #expect(LearnedTerms(url: url).terms(at: t0 + 120).isEmpty)
 }
 
-@Test func forgettingARequestPutsBackWhatItChanged() {
+// #130: undoing a dictation, or typing over a term it wrote, forgets the term outright, learned before or not.
+@Test func forgettingTermsRemovesThemCaseInsensitively() {
     let t0 = Date(timeIntervalSince1970: 1_000_000)
     let learned = LearnedTerms(url: tempURL())
-    let first = UUID(), second = UUID()
-    learned.record(["Priya"], request: first, at: t0)
-    learned.record(["Priya", "PopTalk"], request: second, at: t0 + 60)
-    #expect(learned.forget(request: first) == 0)  // not the latest: nothing to undo
-    #expect(learned.forget(request: second) == 2)  // the terms it put back or dropped
-    #expect(learned.terms(at: t0 + 120) == [LearnedTerm(text: "Priya", lastUsed: t0, count: 1)])
-    #expect(learned.forget(request: second) == 0)  // once only
-    #expect(learned.terms(at: t0 + 120).count == 1)
+    learned.record(["Priya", "PopTalk", "Quillmate"], at: t0)
+    #expect(learned.forget(["priya", "Yarrowly", "QUILLMATE"]) == 2)  // how many it removed
+    #expect(learned.terms(at: t0 + 60).map(\.text) == ["PopTalk"])
+    #expect(learned.forget([]) == 0)
+}
+
+// #130: what a dictation's boost and casing fix wrote, learning on or off, so undo and typed fixes can unlearn it.
+@Test func screenTermsWrittenIgnoresTheLearningSetting() {
+    let raw = RawInsert(request: Request(transcript: "ask Zorblat and PopTalk", selection: nil, context: ScreenSnapshot()),
+                        rawTranscript: "ask sorblat and pop talk", boost: ["Zorblat", "PopTalk"], sources: ContextSources())
+    let w = Pipeline.screenTermsWritten(raw, recased: ["Quix", "Gone"], inserted: "Ask Zorblat and PopTalk about Quix.",
+                                        saved: ["poptalk"])
+    #expect(w.boost == ["Zorblat"] && w.casing == ["Quix"])
+    #expect(Pipeline.termsToLearn(raw, recased: ["Quix"], inserted: "Ask Zorblat about Quix.", saved: []) == nil)
 }
 
 @Test func learnedTermsExpireAfter30DaysAndKeepTheNewest200() {
     let t0 = Date(timeIntervalSince1970: 1_000_000)
     let learned = LearnedTerms(url: tempURL())
-    learned.record(["Old"], request: UUID(), at: t0)
+    learned.record(["Old"], at: t0)
     #expect(learned.terms(at: t0 + 29 * day).map(\.text) == ["Old"])
     #expect(learned.terms(at: t0 + 31 * day).isEmpty)
-    for i in 0..<210 { learned.record(["term\(i)"], request: UUID(), at: t0 + Double(i)) }
+    for i in 0..<210 { learned.record(["term\(i)"], at: t0 + Double(i)) }
     let kept = learned.terms(at: t0 + 300)
     #expect(kept.count == LearnedTerms.cap)
     #expect(kept.first?.text == "term209" && kept.last?.text == "term10")

@@ -373,7 +373,7 @@ struct SettingsView: View {
                     Spacer()
                     Button { promote(t) } label: { Image(systemName: "plus.circle") }.buttonStyle(.borderless)
                         .help("Move to Vocabulary")
-                    Button { learned.forget(t.text); learnedTerms = learned.terms() } label: { Image(systemName: "trash") }
+                    Button { learned.forget([t.text]); learnedTerms = learned.terms() } label: { Image(systemName: "trash") }
                         .buttonStyle(.borderless).help("Delete")
                 }
             }
@@ -387,7 +387,7 @@ struct SettingsView: View {
 
     private func promote(_ t: LearnedTerm) {
         save(TermDraft(text: t.text))
-        if store.terms.contains(where: { $0.text.lowercased() == t.text.lowercased() }) { learned.forget(t.text) }
+        if store.terms.contains(where: { $0.text.lowercased() == t.text.lowercased() }) { learned.forget([t.text]) }
         learnedTerms = learned.terms()
     }
 
