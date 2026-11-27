@@ -70,12 +70,23 @@ private func dictate(_ said: String, reply: String, score: Double?, probe: Bool 
     }
 }
 
-@Test func fidelityProbeIsOffUnlessTheDefaultIsSet() {
+// On by default since the owner's review of real history (#75 step 2); an explicit false turns it off.
+@Test func fidelityProbeIsOnUnlessTurnedOff() {
     let d = UserDefaults(suiteName: "fidelity-\(UUID())")!
-    #expect(!DictationFeatures(d, sources: ContextSources()).fidelityProbe)
-    d.set(true, forKey: DictationFeatures.Key.fidelityProbe)
+    #expect(DictationFeatures().fidelityProbe)
     #expect(DictationFeatures(d, sources: ContextSources()).fidelityProbe)
     #expect(!DictationFeatures(d, sources: ContextSources()).fidelityShadow)
+    d.set(false, forKey: DictationFeatures.Key.fidelityProbe)
+    #expect(!DictationFeatures(d, sources: ContextSources()).fidelityProbe)
+}
+
+// Providers with no yes/no score (Apple's on-device model, raw) leave `fidelityScore` nil: the default-on probe is skipped.
+@Test func fidelityProbeSkippedWithoutAScore() async {
+    let p = Pipeline(complete: { _, _, _, _ in "Sure." },
+                     vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
+                     cleanupModel: "s", editModel: "s")
+    let r = await p.run(Request(transcript: "can you send me the agenda by noon", selection: nil, context: ScreenSnapshot()))
+    #expect(r.outcome == .insert("Sure.", label: "Dictated") && r.rejectedBy == nil && r.fidelityScore == nil)
 }
 
 // What PoptalkBench --fidelity-pairs scores the deterministic rejects with: the same first reject as `run`.
