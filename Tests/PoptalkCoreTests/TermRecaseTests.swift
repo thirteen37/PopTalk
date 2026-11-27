@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import PoptalkCore
 
@@ -165,4 +165,18 @@ private func fix(_ t: String, _ terms: [String], screen: String = "") -> String 
     #expect(no.prompt.contains("<transcript>ask toy vonen about the core vell build.</transcript>"))
     let off = await dictate(false, score: 0)
     #expect(off.asked.isEmpty && off.prompt.contains("toy vonen"))
+}
+
+// #146: a word taught to macOS with "Learn Spelling" is a name to the user, not a dictionary word. Invented words,
+// unlearned after, as typed and lowercased.
+@Test func learnedSpellingsAreNotDictionaryWords() {
+    let checker = NSSpellChecker.shared
+    for word in ["Wexquarlotine", "zqxvorplentine"] {
+        checker.learnWord(word)
+        defer { checker.unlearnWord(word) }
+        #expect(checker.hasLearnedWord(word))
+        #expect(checker.checkSpelling(of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0,
+                                      wordCount: nil).location == NSNotFound, "spelled right once learned")
+        #expect(!Pipeline.isCommonWord(word), "\(word)")
+    }
 }

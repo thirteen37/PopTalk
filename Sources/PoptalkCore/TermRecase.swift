@@ -104,17 +104,20 @@ extension Pipeline {
     nonisolated(unsafe) private static var common: [String: Bool] = [:]
     private static let commonLock = NSLock()
 
-    /// No digits, and every run of letters is spelled right in English, lowercased ("inbox", "follow-up").
-    /// NSSpellChecker isn't documented as thread-safe: calls are serialized and cached.
+    /// No digits, and every run of letters is spelled right in English, lowercased ("inbox", "follow-up"), and not one
+    /// the user taught macOS with "Learn Spelling" (#146: a name to them; `hasLearnedWord` ignores case).
+    /// NSSpellChecker isn't documented as thread-safe: calls are serialized and cached, so a word learned while
+    /// PopTalk runs counts from its next launch.
     static func isCommonWord(_ word: String) -> Bool {
         guard !word.contains(where: \.isNumber) else { return false }
         let runs = word.lowercased().split { !$0.isLetter }.map(String.init)
         return !runs.isEmpty && commonLock.withLock {
             runs.allSatisfy { run in
                 if let known = common[run] { return known }
-                let miss = NSSpellChecker.shared.checkSpelling(of: run, startingAt: 0, language: "en", wrap: false,
-                                                               inSpellDocumentWithTag: 0, wordCount: nil)
-                common[run] = miss.location == NSNotFound
+                let checker = NSSpellChecker.shared
+                let miss = checker.checkSpelling(of: run, startingAt: 0, language: "en", wrap: false,
+                                                 inSpellDocumentWithTag: 0, wordCount: nil)
+                common[run] = miss.location == NSNotFound && !checker.hasLearnedWord(run)
                 return common[run]!
             }
         }
