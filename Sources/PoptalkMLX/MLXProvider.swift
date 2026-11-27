@@ -13,11 +13,13 @@ import Tokenizers
 /// standard HF cache on first use) or a local directory, loaded once and kept resident.
 public enum MLXProvider {
     private actor Models {
-        /// Each load gets its own prefix cache (#42), so a reload starts empty and a request still running on an
-        /// unloaded model only fills a cache nothing reads.
-        var loaded: [String: (task: Task<ModelContainer, Error>, prefixes: PrefixCache)] = [:]
+        typealias Load = (task: Task<ModelContainer, Error>, prefixes: PrefixCache, scores: PrefixCache)
+        /// Each load gets its own prefix caches (#42), so a reload starts empty and a request still running on an
+        /// unloaded model only fills a cache nothing reads. `scores`: the yes/no checks' (`yesNoScore`), apart so their
+        /// prompts never push a dictation's out of the recent ones its snapshots are found from.
+        var loaded: [String: Load] = [:]
         /// `download` (fraction done) only reaches the first caller for `id`; later callers share its load.
-        func get(_ id: String, download: (@Sendable (Double) -> Void)? = nil) -> (task: Task<ModelContainer, Error>, prefixes: PrefixCache) {
+        func get(_ id: String, download: (@Sendable (Double) -> Void)? = nil) -> Load {
             if let l = loaded[id] { return l }
             var progress = LoadProgressHandlers()
             if let download { progress.download = { @Sendable (p: Progress) in download(p.fractionCompleted) } }
@@ -40,13 +42,13 @@ public enum MLXProvider {
                 }
                 return container
             }
-            loaded[id] = (t, PrefixCache())
+            loaded[id] = (t, PrefixCache(), PrefixCache(minReuse: 64, minGain: 8))
             return loaded[id]!
         }
         /// A failed load is forgotten so the next request retries it.
-        func container(_ id: String, download: (@Sendable (Double) -> Void)? = nil) async throws -> (ModelContainer, PrefixCache) {
+        func container(_ id: String, download: (@Sendable (Double) -> Void)? = nil) async throws -> (ModelContainer, PrefixCache, scores: PrefixCache) {
             let l = get(id, download: download)
-            do { return (try await l.task.value, l.prefixes) } catch { loaded[id] = nil; throw error }
+            do { return (try await l.task.value, l.prefixes, l.scores) } catch { loaded[id] = nil; throw error }
         }
         func keepOnly(_ ids: Set<String>) {
             for (id, l) in loaded where !ids.contains(id) { l.task.cancel(); loaded[id] = nil }
@@ -134,7 +136,7 @@ public enum MLXProvider {
     }
 
     static let complete: Pipeline.Complete = { model, messages, _, timeout in
-        let (container, prefixes) = try await models.container(model)
+        let (container, prefixes, _) = try await models.container(model)
         let name = (model as NSString).lastPathComponent
         return try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
@@ -186,31 +188,36 @@ public enum MLXProvider {
     }
 
     /// `Pipeline.TermScore` (#75 step 2): one prefill of `Pipeline.termCheck`, log P(yes) − log P(no) at the first
-    /// reply token over the first token of each spelling ("yes", " Yes", …). No prefix cache: the shared head is
-    /// ~10 tokens and saved ~1 ms per pair in `training/term_probe.py --cache`.
+    /// reply token over the first token of each spelling ("yes", " Yes", …). Never prefix-cached: the shared head is
+    /// ~10 tokens, under the `scores` cache's 64 (it saved ~1 ms per pair in `training/term_probe.py --cache`).
     public static let termScore: Pipeline.TermScore = { model, heard, term in
         try await yesNoScore(model, Pipeline.termCheck(heard: heard, term: term))
     }
 
     /// `Pipeline.YesNoScore`: the term check's scoring for any question; the fidelity probe (#75 step 2) uses it too.
+    /// Its shared head (system message and level text, ~100 tokens) comes from the load's `scores` prefix cache (#42),
+    /// stored once a second check repeats it; the term check's is too short to store.
     public static let yesNoScore: Pipeline.YesNoScore = { model, messages in
-        let (container, _) = try await models.container(model)
+        let (container, _, scores) = try await models.container(model)
+        let name = (model as NSString).lastPathComponent
         let input = UserInput(messages: messages.map { ["role": $0.role, "content": $0.content] },
                               additionalContext: ["enable_thinking": false])
         let lm = try await container.prepare(input: input)
         let start = Date()
+        let tokens = lm.text.tokens.asArray(Int.self)
+        let (plan, entry, _) = scores.plan(tokens, enabled: PrefixCache.enabled)
         let score = try await container.perform(nonSendable: lm) { context, lm in
             func ids(_ w: String) -> [Int32] {
                 Array(Set(["", " "].flatMap { p in [w, w.capitalized, w.uppercased()].compactMap {
                     context.tokenizer.encode(text: p + $0, addSpecialTokens: false).first.map(Int32.init)
                 } }))
             }
-            let logits = context.model(lm.text[.newAxis], cache: try context.model.newCache(parameters: nil), state: nil)
-                .logits[0, -1].asType(.float32)
+            let (cache, from) = try prefilled(lm, tokens, plan, entry, scores, nil, context, name)
+            let logits = context.model(lm.text[.newAxis, from...], cache: cache, state: nil).logits[0, -1].asType(.float32)
             let yes = logits[MLXArray(ids("yes"))].logSumExp(), no = logits[MLXArray(ids("no"))].logSumExp()
             return (yes - no).item(Float.self)
         }
-        timing.info("yes-no score \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(lm.text.tokens.size) tok")
+        timing.info("yes-no score \(Int(Date().timeIntervalSince(start) * 1000)) ms, \(tokens.count) tok, \(plan.keep) reused")
         return Double(score)
     }
 
@@ -221,6 +228,22 @@ public enum MLXProvider {
     private static func generate(_ lm: LMInput, _ tokens: [Int], _ plan: PrefixPlan, _ entry: PrefixCache.Entry?, _ prefixes: PrefixCache,
                                  _ parameters: GenerateParameters, _ context: ModelContext, _ name: String) throws
         -> (AsyncStream<Generation>, Task<Void, Never>) {
+        let (cache, start) = try prefilled(lm, tokens, plan, entry, prefixes, parameters, context, name)
+        timing.info("llm \(name, privacy: .public) prefix-reused \(plan.keep)/\(tokens.count) tok")
+        // As `MLXLMCommon.generate(input:cache:parameters:context:)`, which drops the task. Whether the prompt ends
+        // inside a reasoning block is read from the whole prompt, not the part left to prefill.
+        let iterator = try TokenIterator(input: LMInput(text: lm.text[start...]), model: context.model, cache: cache, parameters: parameters)
+        let primed = context.configuration.reasoningConfig.map {
+            ReasoningEventEmitter.promptEndsInsideReasoning(promptTokens: tokens, config: $0, tokenizer: context.tokenizer)
+        } ?? false
+        return generateTask(promptTokenCount: tokens.count - start, modelConfiguration: context.configuration, tokenizer: context.tokenizer,
+                            iterator: iterator, toolCallPolicy: parameters.toolCallPolicy, reasoningPrimedInside: primed)
+    }
+
+    /// `plan`'s cache (#42): a copy of `entry`'s cut back to the shared prefix (else a new one), prefilled up to
+    /// `plan.snapshot` and stored in `prefixes` there. Returns it with where the rest of the prompt starts.
+    private static func prefilled(_ lm: LMInput, _ tokens: [Int], _ plan: PrefixPlan, _ entry: PrefixCache.Entry?, _ prefixes: PrefixCache,
+                                  _ parameters: GenerateParameters?, _ context: ModelContext, _ name: String) throws -> ([KVCache], Int) {
         let cache = try entry?.cache.map { $0.copy() } ?? context.model.newCache(parameters: parameters)
         if let entry { for c in cache { c.trim(entry.tokens.count - plan.keep) } }
         var start = plan.keep
@@ -239,15 +262,7 @@ public enum MLXProvider {
             timing.info("llm \(name, privacy: .public) prefix-cache stored \(end) tok \(bytes >> 20) MB, total \(total) MB")
             start = end
         }
-        timing.info("llm \(name, privacy: .public) prefix-reused \(plan.keep)/\(tokens.count) tok")
-        // As `MLXLMCommon.generate(input:cache:parameters:context:)`, which drops the task. Whether the prompt ends
-        // inside a reasoning block is read from the whole prompt, not the part left to prefill.
-        let iterator = try TokenIterator(input: LMInput(text: lm.text[start...]), model: context.model, cache: cache, parameters: parameters)
-        let primed = context.configuration.reasoningConfig.map {
-            ReasoningEventEmitter.promptEndsInsideReasoning(promptTokens: tokens, config: $0, tokenizer: context.tokenizer)
-        } ?? false
-        return generateTask(promptTokenCount: tokens.count - start, modelConfiguration: context.configuration, tokenizer: context.tokenizer,
-                            iterator: iterator, toolCallPolicy: parameters.toolCallPolicy, reasoningPrimedInside: primed)
+        return (cache, start)
     }
 
     /// Physical memory footprint of this process (what Activity Monitor shows), including MLX's Metal buffers.
@@ -283,6 +298,10 @@ final class PrefixCache: @unchecked Sendable {
     /// Prompts the next one is compared with for a snapshot point: both kinds, a few presses back.
     static let maxRecent = 8
 
+    /// This cache's floors for `prefixPlan`: the dictation's by default.
+    let minReuse: Int, minGain: Int
+    init(minReuse: Int = PrefixCache.minReuse, minGain: Int = 32) { (self.minReuse, self.minGain) = (minReuse, minGain) }
+
     private let lock = NSLock()
     private var entries: [(item: Entry, bytes: Int)] = []  // most recently used first
     private var recent: [[Int]] = []  // prompts, newest first
@@ -297,7 +316,7 @@ final class PrefixCache: @unchecked Sendable {
         lock.withLock {
             if !enabled { entries = [] }
             var plan = enabled ? prefixPlan(tokens, entries: entries.map { ($0.item.tokens, $0.item.maxTrim) }, recent: recent,
-                                            minReuse: Self.minReuse) : PrefixPlan(entry: nil, keep: 0)
+                                            minReuse: minReuse, minGain: minGain) : PrefixPlan(entry: nil, keep: 0)
             if speculative { plan.snapshot = nil }
             let entry = plan.entry.map { entries.remove(at: $0) }
             if let entry { entries.insert(entry, at: 0) }

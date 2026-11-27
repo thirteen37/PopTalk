@@ -180,13 +180,13 @@ if let path = opt("--term-shortlist") {
 
 // #75 step 2: adds `rejectedBy` to each line of a training/fidelity_probe.py pairs file: the deterministic
 // `Pipeline.rejects` on (reply, transcript, screen), null when none holds. `--score MODEL` adds `scores`, the fidelity
-// probe per level (`MLXProvider.yesNoScore` of `Pipeline.fidelityCheck`), and prints ms per score to stderr.
+// probe per level (`MLXProvider.yesNoScore` of `Pipeline.fidelityCheck`), and prints ms per score (mean, p50, p90) to stderr.
 //   PoptalkBench --fidelity-pairs training/fidelity_pairs.jsonl [--score adapters/gemma-4-e2b-poptalk-v7] > pairs.jsonl
 if let path = opt("--fidelity-pairs") {
     guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { fail("can't read \(path)") }
     let model = opt("--score")
     if let model { _ = try await MLXProvider.yesNoScore(model, Pipeline.fidelityCheck(transcript: "warm up", reply: "Warm up.", level: .clean)) }
-    var seconds = 0.0, n = 0
+    var ms: [Double] = []
     for l in text.split(separator: "\n") {
         guard var o = (try? JSONSerialization.jsonObject(with: Data(l.utf8))) as? [String: Any],
               let said = o["transcript"] as? String, let reply = o["reply"] as? String else { fail("bad line in \(path)") }
@@ -196,13 +196,18 @@ if let path = opt("--fidelity-pairs") {
             for level in CleanupLevel.allCases {
                 let start = Date()
                 scores[level.rawValue] = try await MLXProvider.yesNoScore(model, Pipeline.fidelityCheck(transcript: said, reply: reply, level: level))
-                seconds += Date().timeIntervalSince(start); n += 1
+                ms.append(Date().timeIntervalSince(start) * 1000)
             }
             o["scores"] = scores
         }
         print(String(decoding: try JSONSerialization.data(withJSONObject: o, options: .sortedKeys), as: UTF8.self))
     }
-    if n > 0 { FileHandle.standardError.write(Data(String(format: "%.0f ms per score\n", seconds * 1000 / Double(n)).utf8)) }
+    ms.sort()
+    if !ms.isEmpty {
+        let pct = { (p: Double) in ms[Int((Double(ms.count) * p).rounded(.up)) - 1] }
+        FileHandle.standardError.write(Data(String(format: "%.0f ms per score, p50 %.0f, p90 %.0f\n",
+                                                   ms.reduce(0, +) / Double(ms.count), pct(0.5), pct(0.9)).utf8))
+    }
     exit(0)
 }
 

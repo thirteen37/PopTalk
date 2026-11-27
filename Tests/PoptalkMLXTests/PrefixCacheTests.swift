@@ -1,4 +1,5 @@
 import Testing
+import PoptalkCore
 @testable import PoptalkMLX
 
 // #43: speculative prompts (the transcript so far, growing by a few words) reuse stored prefixes but never store
@@ -19,4 +20,16 @@ import Testing
     let f = c.plan(final, enabled: true)
     #expect(f.shared == first.count)
     #expect(f.plan.snapshot == first.count)
+}
+
+// #75 step 2: the yes/no scores' cache plans with its own floors, so the fidelity probe's shared head (system message
+// and level text, ~100 tokens, under the dictation's 256) is stored once a second check repeats it, then reused.
+@Test func scoresCacheStoresAndReusesAShortHead() {
+    let head = Array(0 ..< 100)
+    #expect(PrefixCache().plan(head + [1], enabled: true).plan == PrefixPlan(entry: nil, keep: 0))
+    let c = PrefixCache(minReuse: 64, minGain: 8)
+    #expect(c.plan(head + [500, 501], enabled: true).plan.snapshot == nil)
+    #expect(c.plan(head + [600, 601], enabled: true).plan.snapshot == 100)
+    _ = c.insert(.init(tokens: head, cache: [], maxTrim: 0), bytes: 1)
+    #expect(c.plan(head + [700], enabled: true).plan == PrefixPlan(entry: 0, keep: 100))
 }
