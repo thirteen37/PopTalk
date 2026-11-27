@@ -88,7 +88,7 @@ extension Pipeline {
             // spelled words ("installed", "the requests") unless they spell the term or a "heard as" form ("in box" → "Inbox").
             let run = words[best.run]
             if !forms.contains(squash(run.joined(separator: " "))), run.allSatisfy({ isCommonWord(squash($0)) }),
-               r.term.split(separator: " ").allSatisfy({ isCommonWord(String($0)) }) { return text }
+               isDictionaryPhrase(r.term) { return text }
             func edge(_ w: Substring, _ end: Bool) -> String {
                 let p = { (c: Character) in !c.isLetter && !c.isNumber }
                 return end ? String(w.reversed().prefix(while: p).reversed()) : String(w.prefix(while: p))

@@ -74,7 +74,15 @@ import Testing
                                     context: ScreenSnapshot(text: "## Setup\nthen Yarrowly builds Meal Prep.")).map(\.text)
     #expect(terms.contains("Inbox"))  // saved: the user's choice
     #expect(!terms.contains("Install") && !terms.contains("Setup"))
-    #expect(terms.contains("Quillmate") && terms.contains("Yarrowly") && terms.contains("Meal Prep"))
+    #expect(terms.contains("Quillmate") && terms.contains("Yarrowly"))
+}
+
+// #138: nor is a phrase of only dictionary words ("Meal Prep", "New Message"): the boost would only recase it.
+@Test func boostTermsSkipDictionaryPhrasesFromScreenAndLearned() {
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "Pull Requests")], learned: [VocabTerm(text: "Recent Files")],
+                                    context: ScreenSnapshot(text: "New Message\nTo: Zorvex Quintara\nMeal Prep")).map(\.text)
+    #expect(terms.contains("Pull Requests") && terms.contains("Zorvex Quintara"))
+    #expect(!terms.contains("Recent Files") && !terms.contains("New Message") && !terms.contains("Meal Prep"))
 }
 
 // #30: "Q3" is too short to boost alone (FluidAudio skips terms under 3 characters), so

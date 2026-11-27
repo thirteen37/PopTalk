@@ -154,10 +154,10 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
 
 // The rule changes only the prompt: the casing fix and echoesContext still see the whole screen.
 @Test func shortDictationKeepsScreenForCasingAndEchoCheck() async {
-    let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Meal Prep." }, vocabulary: VocabularyStore(url: tmp()),
+    let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Priya." }, vocabulary: VocabularyStore(url: tmp()),
                            cleanupModel: "adapters/gemma-4-e2b-poptalk-v7", editModel: "big")
-        .run(Request(transcript: "ship it to meal prep", selection: nil, context: ScreenSnapshot(text: todoist)))
-    #expect(r.recased == ["Meal Prep"])
+        .run(Request(transcript: "ship it to priya", selection: nil, context: ScreenSnapshot(text: todoist)))
+    #expect(r.recased == ["Priya"])
     let echo = await pipeline(reply: todoist).run(Request(transcript: "fix it", selection: nil, context: ScreenSnapshot(text: todoist)))
     #expect(echo.rejectedBy == "echoesContext")
 }

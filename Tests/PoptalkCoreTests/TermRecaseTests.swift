@@ -14,7 +14,8 @@ private func recase(_ t: String, screen: String, saved: [String] = []) -> String
 private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy oat milk, Call Priya re: Q3 OKRs"
 
 @Test func recasesScreenTermsUpToCaseAndSpacing() {
-    #expect(recase("refer to my meal prep project on todoist", screen: todoist) == "refer to my Meal Prep project on Todoist")
+    #expect(recase("refer to my meal prep project on todoist", screen: todoist, saved: ["Meal Prep"])
+        == "refer to my Meal Prep project on Todoist")
     #expect(recase("I will ping Marcus about the fluid audio release.", screen: "Priya Raman: can someone review the PR for FluidAudio?")
         == "I will ping Marcus about the FluidAudio release.")
     #expect(recase("I uploaded the build to test flight.", screen: "App Store Connect — TestFlight: build 42") == "I uploaded the build to TestFlight.")
@@ -35,6 +36,11 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
 @Test func recaseLeavesCommonWordsAndPartialWords() {
     // Title Case UI labels that are plain words.
     #expect(recase("today I work from my inbox", screen: todoist) == "today I work from my inbox")
+    // #138: a phrase of only dictionary words, from the screen or learned, isn't recased; saved, it is.
+    #expect(recase("send a new message to zorvex", screen: "New Message — To: Zorvex") == "send a new message to Zorvex")
+    #expect(recase("refer to my meal prep project", screen: todoist) == "refer to my meal prep project")
+    #expect(fix("open the recent files", Pipeline.boostTerms(saved: [], learned: [VocabTerm(text: "Recent Files")],
+                                                           context: ScreenSnapshot()).map(\.text)) == "open the recent files")
     // Whole words only.
     #expect(recase("the poptalks and priyanka", screen: "PopTalk, Priya") == "the poptalks and priyanka")
     // A phrase of a common word and a name: only the name.
@@ -47,7 +53,7 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
 
 @Test func recaseSkipsTermsShownInSeveralCasings() {
     #expect(recase("ship poptalk today", screen: "PopTalk release notes. Poptalk 1.2") == "ship poptalk today")
-    #expect(recase("start the meal prep", screen: "Meal Prep. I need to meal prep tonight") == "start the meal prep")
+    #expect(recase("start the meal prep", screen: "Meal Prep. I need to meal prep tonight", saved: ["Meal Prep"]) == "start the meal prep")
 }
 
 // #121: the matching itself, with the terms given (invented names): up to case and whitespace, whole words.
@@ -94,7 +100,7 @@ private func fix(_ t: String, _ terms: [String], screen: String = "") -> String 
     let d = UserDefaults(suiteName: "poptalk-test-\(UUID())")!
     let store = VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
     try? store.add(VocabTerm(text: "PopTalk"))
-    let screen = ScreenSnapshot(text: "Todoist — Projects: Inbox, Meal Prep, Work.")
+    let screen = ScreenSnapshot(text: "Todoist — Projects: Inbox, Yarrowly Freight, Work.")
     func dictate(_ t: String) async -> (prompt: String, calls: Int) {
         let seen = Seen()
         let p = Pipeline(complete: { _, m, _, _ in seen.calls += 1; seen.prompt = m.last!.content; return "Ok." },
@@ -103,17 +109,17 @@ private func fix(_ t: String, _ terms: [String], screen: String = "") -> String 
         _ = await p.run(Request(transcript: t, selection: nil, context: screen))
         return (seen.prompt, seen.calls)
     }
-    let said = "ship poptalk to meal prep."
-    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Meal Prep.</transcript>"))
+    let said = "ship poptalk to yarrowly freight."
+    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Yarrowly Freight.</transcript>"))
     // #130: screen terms still recase with screen boosting off; not with the screen unread.
     d.set(false, forKey: ContextSources.Key.screenVocabulary)
-    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Meal Prep.</transcript>"))
+    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to Yarrowly Freight.</transcript>"))
     for k in [ContextSources.Key.focusedText, ContextSources.Key.nearbyText, ContextSources.Key.ocr, ContextSources.Key.windowTitle] {
         d.set(false, forKey: k)
     }
-    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to meal prep.</transcript>"))
+    #expect(await dictate(said).prompt.contains("<transcript>ship PopTalk to yarrowly freight.</transcript>"))
     d.set(false, forKey: DictationFeatures.Key.recaseTerms)  // recasing off: untouched
-    #expect(await dictate(said).prompt.contains("<transcript>ship poptalk to meal prep.</transcript>"))
+    #expect(await dictate(said).prompt.contains("<transcript>ship poptalk to yarrowly freight.</transcript>"))
     // Gate off by default: the model is always called; on, a clean dictation skips it.
     #expect(await dictate("Can you send me the report by Friday?").calls == 1)
     d.set(true, forKey: DictationFeatures.Key.skipGate)
@@ -131,8 +137,8 @@ private func fix(_ t: String, _ terms: [String], screen: String = "") -> String 
         let p = Pipeline(complete: { _, m, _, _ in seen.prompt = m.last!.content; return "ok" },
                          vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
                          cleanupModel: model, editModel: model)
-        _ = await p.run(Request(transcript: "refer to my meal prep project", selection: nil, context: ScreenSnapshot(text: todoist)))
-        #expect(seen.prompt.contains("<transcript>refer to my Meal Prep project</transcript>") == recased, "\(model)")
+        _ = await p.run(Request(transcript: "refer to my todoist project", selection: nil, context: ScreenSnapshot(text: todoist)))
+        #expect(seen.prompt.contains("<transcript>refer to my Todoist project</transcript>") == recased, "\(model)")
     }
 }
 
