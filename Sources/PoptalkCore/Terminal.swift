@@ -6,7 +6,7 @@ public enum Terminal {
     public static let bundleIDs: Set<String> = [
         "com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2", "net.kovidgoyal.kitty",
         "com.github.wez.wezterm", "org.alacritty", "io.alacritty", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
-        "co.zeit.hyper", "org.tabby",
+        "co.zeit.hyper", "org.tabby", "com.superlogical.rex",
     ]
 
     public static func contains(_ bundleID: String?) -> Bool { bundleID.map(bundleIDs.contains) ?? false }
