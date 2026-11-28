@@ -197,3 +197,28 @@ func groupedNumbersBackOff(_ said: String) {
 func numberListsThatAllConvertStay(_ said: String, _ written: String) {
     #expect(n(said) == written)
 }
+
+// #136: "am" before "I" is the verb, not a time, when no minutes say otherwise.
+@Test(arguments: [
+    "Which one am I supposed to use?",
+    "one am I",
+    "two am I right",
+    "what time am I",
+    "we land at 1 am",
+])
+func amBeforeIStaysAVerb(_ said: String) {
+    #expect(n(said) == said)
+}
+
+@Test(arguments: [
+    ("meet at one am", "meet at 1 AM"),
+    ("ten am tomorrow", "10 AM tomorrow"),
+    ("seven thirty am", "7:30 AM"),
+    ("one a.m.", "1 AM"),
+    ("the alarm went off at one am.", "the alarm went off at 1 AM."),
+    ("seven thirty am I think", "7:30 AM I think"),
+    ("one a.m. I think", "1 AM I think"),
+])
+func spokenTimesStillBecomeDigits(_ said: String, _ written: String) {
+    #expect(n(said) == written)
+}
