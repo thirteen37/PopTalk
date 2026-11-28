@@ -140,10 +140,7 @@ public enum MLXProvider {
         let name = (model as NSString).lastPathComponent
         return try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
-                // Thinking off for templates that support the flag; Pipeline strips any <think> that slips through.
-                let input = UserInput(messages: messages.map { ["role": $0.role, "content": $0.content] },
-                                      additionalContext: ["enable_thinking": false])
-                let lm = try await container.prepare(input: input)
+                let lm = try await container.prepare(input: input(messages))
                 let tokens = lm.text.tokens.asArray(Int.self)
                 let enabled = PrefixCache.enabled
                 let (plan, entry, shared) = prefixes.plan(tokens, enabled: enabled, speculative: LivePreview.speculative)
@@ -187,6 +184,30 @@ public enum MLXProvider {
         }
     }
 
+    /// The hold's prefill (#139): prefills and stores the prefix the chats `a` and `b` share (`Pipeline.dictationPrefix`:
+    /// system prompt and screen) while the key is held, so release prefills only the transcript and the tail. Generates
+    /// nothing. Wasted on a press whose prompt turns out different (a short dictation, an edit). Call only with
+    /// `model` loaded, or it loads it; await it before the request it is for, which plans before it can see the entry.
+    public static func prefill(_ model: String, _ a: [ChatMessage], _ b: [ChatMessage]) async throws {
+        let (container, prefixes, _) = try await models.container(model)
+        let name = (model as NSString).lastPathComponent
+        let start = Date()
+        let la = try await container.prepare(input: input(a)), lb = try await container.prepare(input: input(b))
+        let tokens = la.text.tokens.asArray(Int.self)
+        guard let (plan, entry) = prefixes.prefillPlan(tokens, lb.text.tokens.asArray(Int.self), enabled: PrefixCache.enabled) else { return }
+        try Task.checkCancellation()
+        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: 0)
+        try await container.perform(nonSendable: la) { context, lm in
+            _ = try prefilled(lm, tokens, plan, entry, prefixes, parameters, context, name)
+        }
+        timing.info("llm \(name, privacy: .public) hold prefill \(plan.keep)→\(plan.snapshot ?? 0) tok \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+    }
+
+    /// Thinking off for templates that support the flag; Pipeline strips any <think> that slips through.
+    private static func input(_ messages: [ChatMessage]) -> UserInput {
+        UserInput(messages: messages.map { ["role": $0.role, "content": $0.content] }, additionalContext: ["enable_thinking": false])
+    }
+
     /// `Pipeline.TermScore` (#75 step 2): one prefill of `Pipeline.termCheck`, log P(yes) − log P(no) at the first
     /// reply token over the first token of each spelling ("yes", " Yes", …). Never prefix-cached: the shared head is
     /// ~10 tokens, under the `scores` cache's 64 (it saved ~1 ms per pair in `training/term_probe.py --cache`).
@@ -200,9 +221,7 @@ public enum MLXProvider {
     public static let yesNoScore: Pipeline.YesNoScore = { model, messages in
         let (container, _, scores) = try await models.container(model)
         let name = (model as NSString).lastPathComponent
-        let input = UserInput(messages: messages.map { ["role": $0.role, "content": $0.content] },
-                              additionalContext: ["enable_thinking": false])
-        let lm = try await container.prepare(input: input)
+        let lm = try await container.prepare(input: input(messages))
         let start = Date()
         let tokens = lm.text.tokens.asArray(Int.self)
         let (plan, entry, _) = scores.plan(tokens, enabled: PrefixCache.enabled)
@@ -309,21 +328,39 @@ final class PrefixCache: @unchecked Sendable {
     /// Plans `tokens` against the entries (marking the one it uses as most recent) and records it as the newest
     /// prompt. `shared`: tokens shared with the previous prompt, for history. Disabled: drops the entries, plans none.
     /// `speculative` (#43, a live preview's growing transcript): reuses entries only, with no snapshot and no recent
-    /// prompt, so the cache ends as if it never ran. It still starts from the stored system prompt (and screen, when a
-    /// press in the same window stored it). ponytail: an unstored screen is prefilled per run; store one snapshot per
-    /// press at the prompt's fixed part if previews in new windows get slow.
+    /// prompt, so the cache ends as if it never ran. It still starts from the stored system prompt and screen, which
+    /// the hold's prefill stores (#139).
     func plan(_ tokens: [Int], enabled: Bool, speculative: Bool = false) -> (plan: PrefixPlan, entry: Entry?, shared: Int) {
         lock.withLock {
             if !enabled { entries = [] }
             var plan = enabled ? prefixPlan(tokens, entries: entries.map { ($0.item.tokens, $0.item.maxTrim) }, recent: recent,
                                             minReuse: minReuse, minGain: minGain) : PrefixPlan(entry: nil, keep: 0)
             if speculative { plan.snapshot = nil }
-            let entry = plan.entry.map { entries.remove(at: $0) }
-            if let entry { entries.insert(entry, at: 0) }
+            let entry = use(plan)
             let shared = recent.first.map { sharedPrefix($0, tokens) } ?? 0
             if !speculative { recent = Array(([tokens] + recent).prefix(Self.maxRecent)) }
-            return (plan, entry?.item, shared)
+            return (plan, entry, shared)
         }
+    }
+
+    /// The hold's prefill (#139): `a` planned with `b` as its only recent prompt, so it snapshots at what they share
+    /// (system prompt and screen, for two prompts differing only in the transcript). Nil when there's nothing to store
+    /// (an entry covers it, or the cache is off). Neither counts as a recent prompt.
+    func prefillPlan(_ a: [Int], _ b: [Int], enabled: Bool) -> (plan: PrefixPlan, entry: Entry?)? {
+        guard enabled else { return nil }
+        return lock.withLock {
+            let plan = prefixPlan(a, entries: entries.map { ($0.item.tokens, $0.item.maxTrim) }, recent: [b],
+                                  minReuse: minReuse, minGain: minGain)
+            return plan.snapshot == nil ? nil : (plan, use(plan))
+        }
+    }
+
+    /// `plan`'s entry, moved to most recently used. Call with the lock held.
+    private func use(_ plan: PrefixPlan) -> Entry? {
+        guard let i = plan.entry else { return nil }
+        let e = entries.remove(at: i)
+        entries.insert(e, at: 0)
+        return e.item
     }
 
     /// Stores `entry` unless it alone exceeds the budget, evicting the least recently used to fit. Returns the total MB.

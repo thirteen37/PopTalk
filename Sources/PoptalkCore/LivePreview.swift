@@ -55,14 +55,15 @@ public enum LivePreview {
             && ran.cleanup == final.cleanup
     }
 
-    /// A finished speculative result fit to insert as is; nil (cancelled), raw inserts, errors and "remember" edits
-    /// (only the final run saves vocabulary) run again.
+    /// A finished speculative result fit to insert as is; nil (cancelled), errors, "remember" edits (only the final run
+    /// saves vocabulary) and raw inserts without a reject run again.
     public static func reusable(_ r: PipelineResult?) -> PipelineResult? {
         guard let r, !r.degraded, r.remembered == nil else { return nil }
         switch r.outcome {
         case .error: return nil
-        // A failed or timed-out cleanup (e.g. while the GPU was busy) may succeed on a second try.
-        case .insert(_, "Dictated (raw)"): return nil
+        // A failed or timed-out cleanup (e.g. while the GPU was busy) may succeed on a second try. A guard's reject
+        // (#147) would only reject again at temperature 0, `length`'s the slowest, so it is reused.
+        case .insert(_, "Dictated (raw)") where r.rejectedBy == nil: return nil
         default: return r
         }
     }

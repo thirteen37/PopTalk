@@ -268,6 +268,17 @@ extension Pipeline {
                                  vocabulary: vocabulary, cleanup: cleanup)
     }
 
+    /// Two cleanup chats for `context` that differ only in the transcript (#139): what they share, up to `<transcript>`,
+    /// starts every prompt of a dictation over `shortDictationWords` words on this screen, so the hold can prefill it.
+    public func dictationPrefix(context: ScreenSnapshot, cleanup: CleanupLevel) -> ([ChatMessage], [ChatMessage]) {
+        let rest = " the quick brown fox jumps over"
+        func chat(_ first: String) -> [ChatMessage] {
+            Self.dictationMessages(model: cleanupModel, transcript: first + rest, context: context, vocabulary: vocabulary.terms,
+                                   cleanup: levels ? cleanup : .clean)
+        }
+        return (chat("Hello"), chat("Thanks"))
+    }
+
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
     /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
     /// `fromScreen` false (#40): saved and learned terms only. A single dictionary word ("Install", "Setup") from the

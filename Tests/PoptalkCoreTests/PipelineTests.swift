@@ -324,3 +324,23 @@ func replaceEditsStillReachModel(utterance: String) async {
             == .replaceSelection(said, label: "Raw"))
     #expect(Pipeline.asHeard(Request(transcript: " ", selection: nil, context: ctx)).outcome == .nothing)
 }
+
+// #139: the hold prefills the prompt two long dictations on this screen share, up to the transcript; a real long
+// dictation's prompt starts with exactly that part, at the press's level too.
+@Test func dictationPrefixIsTheLongDictationPromptUpToTheTranscript() async {
+    final class Seen: @unchecked Sendable { var messages: [[ChatMessage]] = [] }
+    let seen = Seen(), store = VocabularyStore(url: tmp())
+    try? store.add(VocabTerm(text: "Quillmate"))
+    var p = Pipeline(complete: { _, m, _, _ in seen.messages.append(m); return "Ok." },
+                     vocabulary: store, cleanupModel: ModelSettings.e2b, editModel: "big")
+    let ctx = ScreenSnapshot(appName: "Ghostty", windowTitle: "build", text: todoist, cursorOffset: 3, ocrText: "Inbox zero")
+    for (levels, level) in [(false, CleanupLevel.clean), (true, .polished)] {
+        p.levels = levels
+        let (a, b) = p.dictationPrefix(context: ctx, cleanup: level)
+        #expect(a.count == b.count && a.dropLast() == b.dropLast() && a.last != b.last)
+        let head = String(zip(a.last!.content, b.last!.content).prefix { $0 == $1 }.map(\.0))
+        #expect(head.hasSuffix("<transcript>") && head.contains(todoist))
+        _ = await p.run(Request(transcript: "send the draft to the team tonight", selection: nil, context: ctx, cleanup: level))
+        #expect(seen.messages.last!.dropLast() == a.dropLast() && seen.messages.last!.last!.content.hasPrefix(head))
+    }
+}
