@@ -6,7 +6,7 @@ private let t0 = Date(timeIntervalSince1970: 1000)
 
 @Test func detectsTerminalsByBundleID() {
     for id in ["com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2", "net.kovidgoyal.kitty",
-               "com.github.wez.wezterm", "org.alacritty", "dev.warp.Warp-Stable"] {
+               "com.github.wez.wezterm", "org.alacritty", "dev.warp.Warp-Stable", "com.superlogical.rex"] {
         #expect(Terminal.contains(id), "\(id)")
     }
     #expect(!Terminal.contains("com.apple.TextEdit"))
