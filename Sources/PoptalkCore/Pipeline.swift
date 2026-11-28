@@ -41,8 +41,8 @@ public struct PipelineResult: Equatable, Sendable {
     public var recased: [String] = []
     /// Shift was held (#131, `Pipeline.asHeard`): inserted as heard, so nothing is learned from it.
     public var asHeard = false
-    /// The guard that turned a dictation reply into a raw fallback: empty, echoesContext, length, dropsContent
-    /// or dropsProtected (replay counts); nil when there was no reply or it was used.
+    /// The guard that turned a dictation reply into a raw fallback: empty, echoesContext, length, dropsContent,
+    /// dropsProtected or fidelityProbe (replay counts); nil when there was no reply or it was used.
     public var rejectedBy: String?
     /// The `Pipeline.repairs` that changed a dictation reply beyond surrounding whitespace, in order (replay counts).
     public var repaired: [String] = []
