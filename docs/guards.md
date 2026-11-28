@@ -26,26 +26,39 @@ Pipeline keeps three named, ordered lists. Each step has a name, so the bench an
 
 | Step | Catches | Does | From |
 | --- | --- | --- | --- |
-| `stripChatter` | `<think>…</think>` blocks and echoed `<transcript>` tags | Removes them and trims the reply. | chatter guard, 42dfd60 (no issue) |
+| `stripChatter` | `<think>…</think>` blocks, echoed `<transcript>` tags, and `&amp;`, `&lt;`, `&gt;`, `&quot;` copied from the escaped prompt ("R&amp;D") | Removes the blocks and tags, trims the reply, and unescapes the entities, `&amp;` last so "&amp;lt;" stays "&lt;" (#145). | chatter guard, 42dfd60 (no issue); #145 |
 | `restoreMarks` | Marks the prepass made that the model changed or added | Curly quotes the model straightened go back, with a `,` or `.` it moved inside put back outside. A line break the model flattened goes back between the same two words, if the reply has them next to each other. A list marker the model put on a lone item goes, unless the transcript is a list. | #75, #77 |
-| `openingCue` | An opening "no", "sorry", "wait" or "actually" the model dropped (E2B v6 reads it as a self-correction with nothing before it) | Puts the cue back as "No, " and lowercases the next word, unless that word is "I", an acronym or a name. Not after a spoken cancel. | #105 |
+| `openingCue` | An opening "no", "sorry", "wait" or "actually" the model dropped (E2B v6 reads it as a self-correction with nothing before it) | Puts the cue back as "No, " and lowercases the next word, unless that word is "I", an acronym or a name. Not after a spoken cancel (the `dropsContent` cues). | #105 |
 
 ### Rejects
 
 | Step | Holds when | From |
 | --- | --- | --- |
 | `empty` | Nothing is left after the repairs. | the first pipeline, abf4563 (no issue) |
-| `echoesContext` | At least 3 of the reply's words, and more than half of them, weren't said but are on the screen: the model copied `<screen>`. | #29; before `length` since #116 |
+| `echoesContext` | At least 3 of the reply's words, and more than half of them, weren't said but are on the screen the model saw: it copied `<screen>`. A word at least 0.7 `similarity` to a run of 1–3 said words, joined, doesn't count: it is a misheard term the model fixed ("core vanta" → "Korvanta"). For a short dictation the screen is only the window title and domain, all its prompt had (#143). | #29; before `length` since #116; #143 |
 | `length` | The reply is longer than `maxCleanupLength`: 1.5 × the transcript's characters + 40. A reply that long is the model answering, not cleaning. | chatter guard, 42dfd60 (no issue); early stop #100 |
-| `dropsContent` | The reply lost more than 3 content words and more than 40% of them: the model kept only part of the dictation. After a spoken cancel ("scratch that", "never mind", "forget that"), only the words after the last cue count. | #47, #102 |
+| `dropsContent` | The reply lost at least 3 content words and more than 40% of them: the model kept only part of the dictation. A self-correction loses 1–3, so 2 never count, and a 3-word one needs 8 content words in all to pass. Number words count as kept when the reply has a digit (the model writes "nineteen ninety nine" as 1999), and correction markers ("actually", "instead", "rather", "sorry", "wait") don't count. After a spoken cancel ("scratch that", "never mind", "forget that"), only the words after the last cue count. "Forget that/it/the" is a cue only as its own unit: at the start, after a mark, or after "actually", "wait" or "no" ("Actually, forget the umbrella"); "I always forget the door code" is dictation (#148). | #47, #102, #137, #148 |
 | `dropsProtected` | A ( … ), “ … ” or " … " span from the transcript isn't in the reply in order, or the reply has fewer line breaks than the transcript. | #61 |
+
+**`dropsContent`'s thresholds (#137)** were fitted on the invented pairs below (`training/fidelity_pairs.jsonl`), each pair checked once with `PoptalkBench --fidelity-pairs` (no model, deterministic rejects only), and checked on `fidelity_pairs_heldout.jsonl`. Drops and answers caught by `dropsContent`, and acceptable rows (any level) rejected by any reject:
+
+| Rule | Fit: drops | answers | false rejects | Held out: drops | answers | false rejects |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before (> 3 lost, > 40%) | 6/16 | 6/15 | 0/32 | 4/11 | 5/13 | 0/29 |
+| **≥ 3 lost, > 40%** | **8/16** | **9/15** | **0/32** | **4/11** | **7/13** | **0/29** |
+| ≥ 3 lost, > 35% | 10/16 | 10/15 | 0/32 | 6/11 | 7/13 | 0/29 |
+| ≥ 2 lost, > 35% | 14/16 | 11/15 | 0/32 | 7/11 | 9/13 | 1/29 |
+
+The pairs' acceptable rows lose at most 3 words, so they barely constrain the share; real self-corrections set it. At 35%, "meet at the downtown coffee shop, no wait, the library on Main Street at noon" (3 of 8 lost) would go in raw, and a 2-word floor rejects "Monday morning, no, Tuesday afternoon" (and a held-out self-correction, 2 of 5). The pick is the conservative one; the replay decides whether 35% is safe. The other rows come from a Python copy of the rule on the same pairs.
+
+The first version of the floor over-fired on the bench (E2B v7, guards on: `d` 270 → 252 runs, `h` 150 → 147; replay raw fallbacks 2 → 9, all `dropsContent`). Seven cases went raw: five where the model wrote number words as digits ("twelve dollars fifty" → $12.50, "nineteen ninety nine" → 1999), each losing 3 number words, and two "X no Y instead" corrections, whose "instead" was a third lost word. Digits now keep number words, and "instead" and "rather" are droppable like "actually". The fixed rule was re-checked on the saved replies of the recent bench results (E2B v7 and v8, E4B; `d` and `h`, guards on and model only), with no model: it rejects no reply that passes, and on model-only replies it rejects the same failing runs as main's rule (3 of v7's 24 failing `d` runs). The pairs' numbers above don't change.
 
 The order matters for the `rejectedBy` count, not for what is inserted: any reject means a raw fallback. `echoesContext` runs before `length` (#116), so a long screen echo is counted as an echo. Before #116 it ran last, and most real `length` hits were screen echoes over long terminal screens. It now also runs before `dropsContent` and `dropsProtected`, so an echo that also drops content is counted as an echo. No reject assumes an earlier one passed. The `replyLimit` early stop still cuts a long reply at the limit, and the cut reply is still counted as an echo when most of its words are screen words that weren't said. The move costs `echoesContext` (0.25 ms or less, see What they cost) only on replies `length` used to stop first; every used reply ran it already.
 
 ### Other mechanisms
 
-- **`ReplyCheck`.** What a reject sees besides the reply and the transcript: the `maxCleanupLength` limit, and the screen (window title and domain, then the trimmed screen text). It is the whole trimmed screen, also for a short dictation whose prompt left the screen text out (below). It also carries the cleanup level the model was sent (#96): Clean unless the model was trained for levels. No guard reads it yet. Polished fixes grammar, so `dropsContent` and the fidelity checks will need to allow for that rewording once a level-trained model is benched.
-- **Short dictations get no screen text (#116).** A dictation of at most `Pipeline.shortDictationWords` (5) words after the prepass gets an empty `<screen>` in its prompt (`Pipeline.cleanupContext`): the app, window title, domain and `<vocabulary>` stay, the screen text doesn't. Over long terminal screens, E2B v6 copied the screen instead of cleaning so short a dictation. Only the prompt changes: the casing fix, boost terms, learned terms and `echoesContext` still use the whole screen. The tag structure the fine-tune was trained on is unchanged, since a dictation with no screen context already gets an empty `<screen>`. Edits keep the screen. `PoptalkDatagen render` builds training prompts with the same `Pipeline.dictationMessages`, so fine-tune data for short dictations has no screen text either (#124).
+- **`ReplyCheck`.** What a reject sees besides the reply and the transcript: the `maxCleanupLength` limit, and the screen the model saw (window title and domain, then the trimmed screen text). For a short dictation, whose prompt left the screen text out (below), it is the title and domain only (#143); before #143 it was the whole trimmed screen, so `echoesContext` could reject a short reply for words its prompt never had. It also carries the cleanup level the model was sent (#96): Clean unless the model was trained for levels. No guard reads it yet. Polished fixes grammar, so `dropsContent` and the fidelity checks will need to allow for that rewording once a level-trained model is benched.
+- **Short dictations get no screen text (#116).** A dictation of at most `Pipeline.shortDictationWords` (5) words after the prepass gets an empty `<screen>` in its prompt (`Pipeline.cleanupContext`): the app, window title, domain and `<vocabulary>` stay, the screen text doesn't. Over long terminal screens, E2B v6 copied the screen instead of cleaning so short a dictation. The casing fix, boost terms and learned terms still use the whole screen; since #143 `echoesContext` checks only what the prompt had. The tag structure the fine-tune was trained on is unchanged, since a dictation with no screen context already gets an empty `<screen>`. Edits keep the screen. `PoptalkDatagen render` builds training prompts with the same `Pipeline.dictationMessages`, so fine-tune data for short dictations has no screen text either (#124).
 
   Picked on the replay (492 dictations, 157 of them 5 words or fewer, E2B v6), counts only. Each candidate against main, which had 3 raw fallbacks (2 `echoesContext` at 4 and 8 words, 1 `dropsContent`):
 
@@ -70,9 +83,10 @@ The order matters for the `rejectedBy` count, not for what is inserted: any reje
 
   | Rejects | Precision | Recall | Answers | Echoes | Invented | Wrong numbers | Kept a correction | Dropped parts | Reworded below polished | False rejects |
   | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-  | Deterministic (`Pipeline.rejects`) | 1.00 | 0.22 | 15/39 | 9/9 | 0/18 | 0/30 | 0/15 | 12/33 | 0/12 | 0/70 |
+  | Deterministic (`Pipeline.rejects`), since #137 | 1.00 | 0.26 | 21/39 | 9/9 | 0/18 | 0/30 | 0/15 | 12/33 | 0/12 | 0/70 |
+  | Deterministic, before #137 | 1.00 | 0.22 | 15/39 | 9/9 | 0/18 | 0/30 | 0/15 | 12/33 | 0/12 | 0/70 |
   | Probe | 1.00 | 0.58 | 30/39 | 9/9 | 17/18 | 26/30 | 7/15 | 1/33 | 3/12 | 0/70 |
-  | Either | 1.00 | 0.68 | 34/39 | 9/9 | 17/18 | 26/30 | 7/15 | 12/33 | 3/12 | 0/70 |
+  | Either, before #137 | 1.00 | 0.68 | 34/39 | 9/9 | 17/18 | 26/30 | 7/15 | 12/33 | 3/12 | 0/70 |
 
   Per level the probe's recall is 0.63 verbatim, 0.57 clean, 0.54 polished. It catches what the thresholds can't see (a changed number or day, an added clause, a reply that answers in the dictation's own words) and misses most dropped clauses, which `dropsContent` catches only when the drop is large. On the fit split it rejected 3 of 78 acceptable rows (1 clean, 2 polished).
 
@@ -98,7 +112,7 @@ Turning `length` off also turns off the `replyLimit` early stop (#118), so a `-l
 
 ### Edits
 
-Edits (a selection, or tap-then-hold on the last insert) don't go through the repairs or the rejects. They have their own checks in `Pipeline.run`: "literally", a trailing spelling and "replace this with" are handled in code; the model's reply must parse as an edit; an insert the instruction didn't ask for becomes a replace; a blank replacement does nothing; and an insert that repeats the selection has it removed. A failed or timed-out edit leaves the selection unchanged and says so.
+Edits (a selection, or tap-then-hold on the last insert) don't go through the repairs or the rejects. They have their own checks in `Pipeline.run`: "literally", a trailing spelling and "replace this with" are handled in code; the model's reply must parse as an edit, and its text is unescaped as in `stripChatter` (#145); an insert the instruction didn't ask for becomes a replace; a blank replacement does nothing; and an insert that repeats the selection has it removed. A failed or timed-out edit leaves the selection unchanged and says so.
 
 ## Sequence
 
@@ -200,6 +214,7 @@ The prepass, repairs and rejects are string code. Per call, median of 200, Popta
 | `dropsContent` | 0.05 ms | 0.25 ms |
 | `dropsProtected` | 0.07 ms | 0.23 ms |
 | `echoesContext` | 0.17 ms | 0.25 ms |
+| `echoesContext` on a near-echo, where #143's term-fix check runs (190 words; the rows above stop before it) | | 1.2 ms on a 1,600-character English screen echo; 24 ms on random letters, the worst case |
 | Skip gate (`skipsLLM`, off), on a clean dictation of the same length (median of 9) | 4.8 ms (170 ms before #120) | 0.4 ms: over 40 words, stops at `length` (870 ms) |
 | Its term shortlist alone (`termShortlist`), past the cap | 4.7 ms | 19.7 ms |
 

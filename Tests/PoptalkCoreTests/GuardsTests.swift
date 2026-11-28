@@ -32,7 +32,7 @@ private func dictate(_ transcript: String, reply: String, off: Set<String> = [])
 }
 
 @Test func turnedOffGuardIsSkipped() async {
-    let said = "Send the report by Friday.", long = String(repeating: "lorem ipsum dolor ", count: 6)
+    let said = "Send the report by Friday.", long = said + String(repeating: " lorem ipsum dolor", count: 6)
     #expect(await dictate(said, reply: long).rejectedBy == "length")
     let r = await dictate(said, reply: long, off: ["length"])
     #expect(r.rejectedBy == nil)
@@ -44,7 +44,7 @@ private func dictate(_ transcript: String, reply: String, off: Set<String> = [])
 // #118: with `length` off there is no reply limit, so a provider that stops at it (as MLX and LM Studio do, #100)
 // returns the whole reply and that is what's scored.
 @Test func lengthOffLetsTheReplyRunPastTheLimit() async {
-    let said = "Send the report by Friday.", long = String(repeating: "lorem ipsum dolor ", count: 20)
+    let said = "Send the report by Friday.", long = said + String(repeating: " lorem ipsum dolor", count: 20)
     var features = DictationFeatures()
     features.guardsOff = ["length"]
     let p = Pipeline(complete: { _, _, _, _ in

@@ -109,6 +109,20 @@ private func run(_ transcript: String, selection: String? = nil, reply: String) 
                                   transcript: "don't forget the passports the tickets the chargers and the snacks for the long drive"))
 }
 
+// #148: "forget the/it/that" cancels only as its own unit (after the start, a mark, or a lead-in "actually"/"wait"/"no").
+@Test func forgetCancelsOnlyAsItsOwnUnit() {
+    let ok = [
+        ("Bring the camping chairs, the cooler and the big umbrella. Forget the umbrella.", "Bring the camping chairs and the cooler."),
+        ("We could paint the garden fence this weekend, forget it, it's going to rain.", "It's going to rain."),
+        ("Pack the tent, sleeping bags and lanterns. No, forget that. We're staying at the lodge.", "We're staying at the lodge."),
+    ]
+    for (said, clean) in ok { #expect(!Pipeline.dropsContent(clean, transcript: said), "\(said)") }
+    // Mid-sentence it is dictation: the whole transcript counts.
+    #expect(Pipeline.dropsContent("I always forget the door code.",
+                                  transcript: "The lock box by the shed is broken again and I always forget the door code."))
+    #expect(Pipeline.dropsContent("Then I forget it.", transcript: "I read the whole manual twice last winter and then I forget it."))
+}
+
 // Hyphenated interjections are words: kept whole, never half-stripped.
 @Test func hesitationStripKeepsHyphenatedInterjections() {
     #expect(Pipeline.stripHesitations("Mm-hmm.") == "Mm-hmm.")
@@ -117,4 +131,23 @@ private func run(_ transcript: String, selection: String? = nil, reply: String) 
     #expect(Pipeline.stripHesitations("hmm") == "")
     #expect(Pipeline.stripHesitations("um") == "")
     #expect(Pipeline.stripHesitations("hmm, let me think. um ok") == "let me think. ok")
+}
+
+// #137: 3 lost content words over 40% is a drop, so half of a short dictation can't vanish; 2 never are (a
+// self-correction), and 3 at 40% or less of it aren't either.
+@Test func dropsContentThresholds() {
+    #expect(Pipeline.dropsContent("Send the invoice tomorrow.", transcript: "send the invoice tomorrow and call the bank first"))
+    #expect(!Pipeline.dropsContent("Tuesday afternoon.", transcript: "monday morning no tuesday afternoon"))
+    #expect(!Pipeline.dropsContent("Meet at the library on Main Street at noon.",
+                                   transcript: "meet at the downtown coffee shop no wait the library on main street at noon"))
+}
+
+// #137 follow-up: number words the reply wrote as digits ("nineteen eighty four" → 1984) aren't lost, and "instead"
+// is a self-correction marker like "actually", so "X no Y instead" loses only X.
+@Test func digitsAndInsteadAreNotLostContent() {
+    #expect(!Pipeline.dropsContent("The bakery opened in the summer of 1984.", transcript: "the bakery opened in the summer of nineteen eighty four"))
+    #expect(!Pipeline.dropsContent("My seat on the train is 7 3 2.", transcript: "my seat on the train is seven three two"))
+    #expect(!Pipeline.dropsContent("Bring the red mugs.", transcript: "bring the blue mugs no the red ones instead"))
+    // Without a digit in the reply, number words still count.
+    #expect(Pipeline.dropsContent("The bakery opened in the summer.", transcript: "the bakery opened in the summer of nineteen eighty four"))
 }

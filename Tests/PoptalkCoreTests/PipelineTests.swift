@@ -101,9 +101,9 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
 }
 
 // #116: echoesContext runs before length, so a long screen echo is named an echo, also when the
-// replyLimit early stop (#100) cut it.
+// replyLimit early stop (#100) cut it. Over `shortDictationWords`, so the model saw the screen (#143).
 @Test func longScreenEchoIsNamedEcho() async {
-    let said = "fix it", screen = String(repeating: todoist + "\n", count: 5)
+    let said = "fix the flaky build on main today", screen = String(repeating: todoist + "\n", count: 5)
     let limit = Pipeline.maxCleanupLength(said)
     let cut = (1...screen.count).lazy.map { String(screen.prefix($0)) }.first { Pipeline.pastReplyLimit($0, limit: limit) }!
     for reply in [screen, cut] {
@@ -152,14 +152,14 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
     #expect(rendered[1][1].content.contains(todoist))
 }
 
-// The rule changes only the prompt: the casing fix and echoesContext still see the whole screen.
-@Test func shortDictationKeepsScreenForCasingAndEchoCheck() async {
+// The rule changes the prompt, and since #143 what echoesContext checks: the casing fix still sees the whole screen.
+@Test func shortDictationKeepsScreenForCasingNotEchoCheck() async {
     let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Meal Prep." }, vocabulary: VocabularyStore(url: tmp()),
                            cleanupModel: "adapters/gemma-4-e2b-poptalk-v7", editModel: "big")
         .run(Request(transcript: "ship it to meal prep", selection: nil, context: ScreenSnapshot(text: todoist)))
     #expect(r.recased == ["Meal Prep"])
     let echo = await pipeline(reply: todoist).run(Request(transcript: "fix it", selection: nil, context: ScreenSnapshot(text: todoist)))
-    #expect(echo.rejectedBy == "echoesContext")
+    #expect(echo.rejectedBy == "length")
 }
 
 @Test func literallyBypassesLLM() async {
@@ -343,4 +343,32 @@ func replaceEditsStillReachModel(utterance: String) async {
         _ = await p.run(Request(transcript: "send the draft to the team tonight", selection: nil, context: ctx, cleanup: level))
         #expect(seen.messages.last!.dropLast() == a.dropLast() && seen.messages.last!.last!.content.hasPrefix(head))
     }
+}
+
+// #145: the prompt escapes &, <, > (and " in attributes), so a reply that copies a term from it is unescaped.
+// &amp; goes last: "&amp;lt;" was a literal "&lt;".
+@Test func repliesAreUnescaped() async {
+    #expect(Pipeline.stripChatter("<think>x</think>R&amp;D sent &lt;b&gt; and &quot;ok&quot;, not &amp;lt;") == #"R&D sent <b> and "ok", not &lt;"#)
+    #expect(Pipeline.stripChatter(Prompts.attr("&lt; R&D <tag> \"q\"")) == "&lt; R&D <tag> \"q\"")
+    let r = await pipeline(reply: "Ask R&amp;D for the Q&amp;A notes.").run(req("ask r and d for the q and a notes"))
+    #expect(r.outcome == .insert("Ask R&D for the Q&A notes.", label: "Dictated"))
+    let edit = await pipeline(reply: #"{"action":"edit","text":"Fish &amp; chips &lt;3","vocabulary":null,"remember":false}"#)
+        .run(req("make it fancier", selection: "fish and chips"))
+    #expect(edit.outcome == .replaceSelection("Fish & chips <3", label: "Edited"))
+}
+
+// #143: a word close (`similarity` ≥ 0.7) to a run of 1–3 said words is a misheard term the model fixed, not an echo.
+@Test func misheardTermFixesAreNotEcho() {
+    let team = "Team: Korvanta, Gravlynx, Toivonen. Standup at ten in the north room."
+    #expect(!Pipeline.echoesContext("Add Korvanta, Gravlynx and Toivonen.", transcript: "add core vanta, grav links and toy vonen", context: team))
+    #expect(Pipeline.echoesContext("Standup at ten in the north room.", transcript: "add core vanta, grav links and toy vonen", context: team))
+}
+
+// #143: a short dictation's prompt has no screen text (#116), so only what it had (title and domain) can be echoed.
+@Test func shortDictationEchoChecksOnlyWhatTheModelSaw() async {
+    let ctx = ScreenSnapshot(windowTitle: "Quarterly planning notes draft", text: todoist)
+    let unseen = await pipeline(reply: "Buy oat milk, call Priya.").run(Request(transcript: "ship the oat milk", selection: nil, context: ctx))
+    #expect(unseen.rejectedBy == nil)
+    let title = await pipeline(reply: "Quarterly planning notes draft").run(Request(transcript: "okay", selection: nil, context: ctx))
+    #expect(title.rejectedBy == "echoesContext")
 }

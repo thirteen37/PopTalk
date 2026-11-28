@@ -170,8 +170,10 @@ public struct Pipeline: Sendable {
                 }
                 return next
             }
+            // What the model saw (#143): a short dictation's prompt has no screen text.
+            let seen = Self.cleanupContext(r.context, words: words)
             var rejectedBy = Self.rejectedBy(reply: cleaned, transcript: transcript,
-                                             screen: r.context.titleAndDomain + " " + Prompts.trimmedContext(r.context), level: level, off: off)
+                                             screen: seen.titleAndDomain + " " + Prompts.trimmedContext(seen), level: level, off: off)
             // Scored even after a deterministic reject, so the replay can count the overlap.
             var fidelity: (score: Double?, seconds: Double)?
             if let fidelityScore, features.fidelityProbe || features.fidelityShadow, !cleaned.isEmpty {
@@ -213,9 +215,10 @@ public struct Pipeline: Sendable {
             let timedOut = (error as? URLError)?.code == .timedOut
             return PipelineResult(outcome: .error(timedOut ? "Model took too long" : "Couldn't reach the language model"))
         }
-        guard let edit = try? LLMClient.parseEditResult(raw) else {
+        guard var edit = try? LLMClient.parseEditResult(raw) else {
             return PipelineResult(outcome: .error("Didn't understand the model's reply"))
         }
+        edit.text = Self.unescape(edit.text)  // #145: the selection went in escaped
 
         // A bare phrase over a selection replaces it; models sometimes pick insert anyway.
         var action = edit.action
@@ -251,7 +254,7 @@ extension Pipeline {
 
     /// The screen the cleanup model sees for a dictation of `words` words. Up to `shortDictationWords`, no screen
     /// text: over long screens E2B v6 copied the screen instead of cleaning so short a dictation (#116). App, title,
-    /// domain and vocabulary stay. Only the prompt: the casing fix, boost terms and `echoesContext` see it all.
+    /// domain and vocabulary stay. `echoesContext` checks this too (#143); the casing fix and boost terms see it all.
     static func cleanupContext(_ c: ScreenSnapshot, words: Int) -> ScreenSnapshot {
         guard words <= shortDictationWords else { return c }
         var c = c
@@ -412,12 +415,29 @@ extension Pipeline {
     }
 
     /// True when most of `output`'s words (and at least 3) weren't said but are on screen:
-    /// the model echoed `<screen>` instead of cleaning the transcript (#29).
+    /// the model echoed `<screen>` instead of cleaning the transcript (#29). A word at least 0.7 `similarity` to a run
+    /// of 1–3 said words, joined, is a misheard term the model fixed ("core vanta" → "Korvanta", #143), not an echo.
     static func echoesContext(_ output: String, transcript: String, context: String) -> Bool {
         func words(_ s: String) -> [Substring] { s.lowercased().split { !$0.isLetter && !$0.isNumber } }
-        let said = Set(words(transcript)), shown = Set(words(context)), out = words(output)
-        let echoed = out.filter { !said.contains($0) && shown.contains($0) }.count
-        return echoed >= 3 && echoed * 2 > out.count
+        func echo(_ n: Int) -> Bool { n >= 3 && n * 2 > out.count }
+        let heard = words(transcript), said = Set(heard), shown = Set(words(context)), out = words(output)
+        let unsaid = out.filter { !said.contains($0) && shown.contains($0) }
+        guard echo(unsaid.count) else { return false }
+        // `similarity` ≥ 0.7 unrolled, as in `termShortlist`: the raw strings or their skeletons within 30% edits,
+        // each run's computed once. Edit distance is at least the length difference, so a pair whose lengths are
+        // further apart than 7 : 10 is skipped.
+        func key(_ s: String) -> [[Character]] { [Array(s), Array(skeleton(s))] }
+        let runs = Set(heard.indices.flatMap { i in (i + 1...min(i + 3, heard.count)).map { heard[i..<$0].joined() } }).map(key)
+        let fixes = Set(unsaid).filter { w in
+            let k = key(String(w))
+            return runs.contains { r in
+                zip(k, r).contains { a, b in
+                    let n = max(a.count, b.count)
+                    return n > 0 && 10 * min(a.count, b.count) >= 7 * n && 10 * levenshtein(a, b) <= 3 * n
+                }
+            }
+        }
+        return echo(unsaid.count { !fixes.contains($0) })
     }
 
     /// Words a faithful cleanup may drop: function words, fillers and self-correction markers.
@@ -425,15 +445,23 @@ extension Pipeline {
         "the", "and", "but", "for", "that", "this", "those", "these", "was", "were", "are", "had", "have", "has",
         "with", "from", "our", "your", "you", "they", "them", "she", "his", "her", "its", "can", "will", "would",
         "should", "could", "about", "into", "than", "then", "there", "what", "also", "just", "like", "basically",
-        "know", "mean", "really", "okay", "well", "sorry", "actually", "scratch", "wait", "thing", "kind", "sort"]
+        "know", "mean", "really", "okay", "well", "sorry", "actually", "instead", "rather", "scratch", "wait", "thing", "kind", "sort"]
 
-    /// Cancellation cues the e4b prompt names; "don't forget the …" is a reminder, not one.
+    /// Cancellation cues the e4b prompt names. "forget that/it/the" only opens its own unit (#148): after the start, a
+    /// . ! ? , ; : or newline, or a lead-in "actually"/"wait"/"no", like `spokenCancel`'s command. "I always forget the
+    /// door code" and "don't forget the …" are dictation.
     private static let cancelCue = try! NSRegularExpression(
-        pattern: #"\b(?:scratch that|never ?mind|(?<!n't )(?<!not )forget (?:that|it|the))\b"#, options: .caseInsensitive)
+        pattern: #"\b(?:scratch that|never ?mind)\b|(?:^|[.!?,;:\n]|\b(?:actually|wait|no))[ \t]*[,;:]?[ \t]*forget (?:that|it|the)\b"#,
+        options: .caseInsensitive)
 
-    /// True when the cleanup lost more than 3 content words and over 40% of them (#47): the model kept
-    /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3.
-    /// A word counts as kept if it appears anywhere in the output, so "fluid audio" → "FluidAudio" survives.
+    /// True when the cleanup lost at least 3 content words and over 40% of them (#47, #137): the model kept
+    /// only part of the dictation, e.g. its last sentence. Self-corrections and fillers lose 1–3: 2 never count, and 3
+    /// count only past 40%, so "X no Y" with a 3-word X needs 8 content words to pass. Fitted on the invented
+    /// training/fidelity_pairs.jsonl (#137); 35% catches more there but rejects that 3-of-8 self-correction.
+    /// A word counts as kept if it appears anywhere in the output, so "fluid audio" → "FluidAudio" survives, and a
+    /// number word counts as kept if the output has a digit ("nineteen ninety nine" → 1999). The correction markers
+    /// ("actually", "instead", …) are `droppable`, so "X no Y instead" loses only X.
+    /// ponytail: any digit keeps every number word; a reply that drops one number and keeps another passes on them.
     /// ponytail: a dropped sentence under 40% of a long dictation passes; tighten if that shows up in history.
     /// #102: a spoken cancellation drops what it cancels, so only what follows the last cue must stay.
     static func dropsContent(_ output: String, transcript: String) -> Bool {
@@ -443,8 +471,10 @@ extension Pipeline {
             .map { ns.substring(from: NSMaxRange($0.range)) } ?? transcript
         let content = said.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }
             .filter { $0.count >= 3 && !droppable.contains(String($0)) }
-        let lost = content.filter { !out.contains($0) }.count
-        return lost > 3 && Double(lost) > 0.4 * Double(content.count)
+        // Number words the model wrote as digits ("nineteen ninety nine" → 1999) are kept.
+        let digits = out.contains(where: \.isNumber)
+        let lost = content.filter { !out.contains($0) && !(digits && isNumberWord($0)) }.count
+        return lost >= 3 && Double(lost) > 0.4 * Double(content.count)
     }
 
     /// True when the cleanup lost a protected span (#61): the words of each ( … ), “ … ” or " … " in the
@@ -536,10 +566,17 @@ extension Pipeline {
     /// can also start the next break).
     private static let lineBreak = try! NSRegularExpression(pattern: #"([\p{L}\p{N}]+)[^\p{L}\p{N}\n]*(\n+)[^\p{L}\p{N}\n]*(?=([\p{L}\p{N}]+))"#)
 
-    /// Removes reasoning blocks and echoed tags from a model reply.
+    /// Removes reasoning blocks and echoed tags from a model reply, then undoes `Prompts.attr`'s escaping (#145).
     static func stripChatter(_ s: String) -> String {
-        think.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        unescape(think.stringByReplacingMatches(in: s, range: NSRange(location: 0, length: (s as NSString).length), withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// The inverse of `Prompts.attr` (#145): the prompt shows "R&D" as "R&amp;D", and the model can copy that.
+    /// &amp; goes last, so "&amp;lt;" stays a literal "&lt;".
+    static func unescape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&amp;", with: "&")
     }
 
     /// A space before inserted text when the cursor follows a non-space, non-opening character.

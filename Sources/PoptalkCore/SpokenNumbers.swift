@@ -149,6 +149,9 @@ extension Pipeline {
     nonisolated(unsafe) private static let correctedSmall =
         /(?i)\b(zero|one|two|three|four|five|six|seven|eight|nine)(?=[,;]?\s+(?:(?:actually|no|wait|sorry|i mean|make (?:that|it))[,;]?\s+)+[-$]?\d)/
 
+    /// A number word `spokenNumbers` reads ("twelve", "ninety", "thousand", "third"), lowercased.
+    static func isNumberWord(_ w: some StringProtocol) -> Bool { number[String(w)] != nil }
+
     private enum NumberKind { case unit, teen, tens, hundred, scale }
 
     private static let number: [String: (value: Int, kind: NumberKind, ordinal: Bool)] = {

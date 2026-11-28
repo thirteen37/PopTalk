@@ -35,13 +35,13 @@ private func dictate(_ said: String, reply: String, score: Double?, probe: Bool 
 }
 
 @Test func fidelityShadowScoresWithoutActing() async {
-    let (r, asked) = await dictate("can you send me the agenda by noon", reply: "Sure.", score: -20, shadow: true)
-    #expect(r.outcome == .insert("Sure.", label: "Dictated") && r.rejectedBy == nil && r.fidelityScore == -20)
+    let (r, asked) = await dictate("can you send me the agenda by noon", reply: "Sure, I'll send the agenda by noon.", score: -20, shadow: true)
+    #expect(r.outcome == .insert("Sure, I'll send the agenda by noon.", label: "Dictated") && r.rejectedBy == nil && r.fidelityScore == -20)
     #expect(asked.messages.count == 1)
 }
 
 @Test func fidelityProbeOffNeverAsks() async {
-    let (r, asked) = await dictate("can you send me the agenda by noon", reply: "Sure.", score: -20)
+    let (r, asked) = await dictate("can you send me the agenda by noon", reply: "Sure, I'll send the agenda by noon.", score: -20)
     #expect(r.rejectedBy == nil && r.fidelityScore == nil && asked.messages.isEmpty)
 }
 
