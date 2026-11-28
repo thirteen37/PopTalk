@@ -154,12 +154,21 @@ private let todoist = "Todoist — Projects: Inbox, Meal Prep, Work. Today: Buy 
 
 // The rule changes the prompt, and since #143 what echoesContext checks: the casing fix still sees the whole screen.
 @Test func shortDictationKeepsScreenForCasingNotEchoCheck() async {
-    let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Meal Prep." }, vocabulary: VocabularyStore(url: tmp()),
+    let r = await Pipeline(complete: { _, _, _, _ in "Ship it to Priya." }, vocabulary: VocabularyStore(url: tmp()),
                            cleanupModel: "adapters/gemma-4-e2b-poptalk-v7", editModel: "big")
-        .run(Request(transcript: "ship it to meal prep", selection: nil, context: ScreenSnapshot(text: todoist)))
-    #expect(r.recased == ["Meal Prep"])
+        .run(Request(transcript: "ship it to priya", selection: nil, context: ScreenSnapshot(text: todoist)))
+    #expect(r.recased == ["Priya"])
     let echo = await pipeline(reply: todoist).run(Request(transcript: "fix it", selection: nil, context: ScreenSnapshot(text: todoist)))
     #expect(echo.rejectedBy == "length")
+}
+
+// #149: the app works out a press's terms once and passes them in; `run` recases with them, not its own scan.
+@Test func runUsesTheRequestsTerms() async {
+    var request = Request(transcript: "ship it to zorvex", selection: nil, context: ScreenSnapshot())
+    request.terms = [VocabTerm(text: "Zorvex")]
+    let r = await Pipeline(complete: { _, _, _, _ in "Ok." }, vocabulary: VocabularyStore(url: tmp()),
+                           cleanupModel: "adapters/gemma-4-e2b-poptalk-v7", editModel: "big").run(request)
+    #expect(r.recased == ["Zorvex"])
 }
 
 @Test func literallyBypassesLLM() async {

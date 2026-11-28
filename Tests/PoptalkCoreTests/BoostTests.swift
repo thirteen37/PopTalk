@@ -41,10 +41,10 @@ import Testing
 }
 
 @Test func boostTermsGetSpokenAliases() {
-    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]), VocabTerm(text: "TestFlight", weight: 7)],
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]), VocabTerm(text: "TestFlight")],
                                     context: ScreenSnapshot(text: "the Kubernetes PR for FluidAudio"))
     #expect(terms[0] == VocabTerm(text: "FluidVoice", aliases: ["fluid voice"]))  // no duplicate alias
-    #expect(terms[1] == VocabTerm(text: "TestFlight", aliases: ["test flight"], weight: 7))
+    #expect(terms[1] == VocabTerm(text: "TestFlight", aliases: ["test flight"]))
     #expect(terms.first { $0.text == "FluidAudio" }?.aliases == ["fluid audio"])
     #expect(terms.first { $0.text == "Kubernetes" }?.aliases == [])
 }
@@ -74,7 +74,15 @@ import Testing
                                     context: ScreenSnapshot(text: "## Setup\nthen Yarrowly builds Meal Prep.")).map(\.text)
     #expect(terms.contains("Inbox"))  // saved: the user's choice
     #expect(!terms.contains("Install") && !terms.contains("Setup"))
-    #expect(terms.contains("Quillmate") && terms.contains("Yarrowly") && terms.contains("Meal Prep"))
+    #expect(terms.contains("Quillmate") && terms.contains("Yarrowly"))
+}
+
+// #138: nor is a phrase of only dictionary words ("Meal Prep", "New Message"): the boost would only recase it.
+@Test func boostTermsSkipDictionaryPhrasesFromScreenAndLearned() {
+    let terms = Pipeline.boostTerms(saved: [VocabTerm(text: "Pull Requests")], learned: [VocabTerm(text: "Recent Files")],
+                                    context: ScreenSnapshot(text: "New Message\nTo: Zorvex Quintara\nMeal Prep")).map(\.text)
+    #expect(terms.contains("Pull Requests") && terms.contains("Zorvex Quintara"))
+    #expect(!terms.contains("Recent Files") && !terms.contains("New Message") && !terms.contains("Meal Prep"))
 }
 
 // #30: "Q3" is too short to boost alone (FluidAudio skips terms under 3 characters), so
@@ -169,4 +177,37 @@ import Testing
     #expect(c.fixed == 1 && c.broken == 2)  // fixed poptalk; broke build and the time
     let ok = SpeechMetrics.boostChanges(reference: ref, raw: raw, boosted: "Send the PopTalk build to Uzai at 3.30pm")
     #expect(ok.fixed == 1 && ok.broken == 0)
+}
+
+// #142: single dictionary words ("Send", "Cancel") are dropped before the 60-term cap, so a label-heavy window
+// still keeps a name further up.
+@Test func boostTermsDropDictionaryWordsBeforeTheCap() {
+    let labels = """
+        Send Cancel Reply Forward Archive Delete Move Flag Print Share Edit View Window Help File Format Insert Tools Table
+        Search Filter Sort Today Tomorrow Drafts Sent Junk Trash Notes Reminders Calendar Contacts Photos Music Settings
+        Profile Account Billing Support Feedback Upload Download Refresh Close Open Save Export Import Copy Paste Undo
+        Select Zoom Rotate Crop Resize Rename Duplicate Lock Pin Mute Hide Show Merge Split Group Label Theme Color
+        """.split(whereSeparator: \.isWhitespace)
+    #expect(labels.count > 60)
+    let text = "Zorvex Quintara wrote this." + String(repeating: " and then", count: 60) + "\n" + labels.joined(separator: "\n")
+    let terms = Pipeline.boostTerms(saved: [], context: ScreenSnapshot(text: text)).map(\.text)
+    #expect(terms.contains("Zorvex Quintara"))
+    #expect(!terms.contains("Send"))
+}
+
+// #144: the rescorer's replacements carry no position. With the span heard twice, the term goes where the rescorer's
+// own text has it, not onto the first match; without that text, or when it doesn't tell them apart, the first.
+@Test func applyBoostsPutsATermOnTheOccurrenceTheRescorerChanged() {
+    let datta = [VocabTerm(text: "Datta")]
+    let raw = "the data is ready, so ask data about it"
+    #expect(Pipeline.applyBoosts(raw, [(span: "data", term: "Datta")], terms: datta,
+                                 rescored: "the data is ready, so ask Datta about it") == "the data is ready, so ask Datta about it")
+    #expect(Pipeline.applyBoosts(raw, [(span: "data", term: "Datta")], terms: datta) == "the Datta is ready, so ask data about it")
+    // Both changed: one replacement each, in order.
+    #expect(Pipeline.applyBoosts("ask data, then data", [(span: "data", term: "Datta"), (span: "data", term: "Datta")], terms: datta,
+                                 rescored: "ask Datta, then Datta") == "ask Datta, then Datta")
+    // Punctuation on the span, and an earlier replacement before it.
+    #expect(Pipeline.applyBoosts("call pria about data, then data.", [(span: "pria", term: "Priya"), (span: "data.", term: "Datta")],
+                                 terms: datta + [VocabTerm(text: "Priya")], rescored: "call Priya about data, then Datta.")
+        == "call Priya about data, then Datta.")
 }

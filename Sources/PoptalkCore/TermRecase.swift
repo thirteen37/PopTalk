@@ -8,9 +8,10 @@ extension Pipeline {
     /// PoptalkBench `--recase-terms on|off`, over the setting and the model check; the app never sets it.
     public nonisolated(unsafe) static var recaseOverride: Bool?
 
-    /// Rewrites each span of `transcript` that equals one of `terms` (saved vocabulary and screen terms, as
-    /// `boostTerms` lists them) up to case and whitespace to the term's spelling: "meal prep" → "Meal Prep",
-    /// "fluid audio" → "FluidAudio". There are no labels, so it holds back:
+    /// Rewrites each span of `transcript` that equals one of `terms` (saved vocabulary, learned and screen terms, as
+    /// `boostTerms` lists them: a phrase of only dictionary words comes from saved vocabulary alone, #138) up to case
+    /// and whitespace to the term's spelling: "meal prep" → "Meal Prep", "fluid audio" → "FluidAudio". There are no
+    /// labels, so it holds back:
     /// - whole words only; a term under 5 characters joins only pieces of 3+ characters or single letters
     ///   ("d b t" → "DBT", but not "an a" → "Ana");
     /// - a single-word term made of dictionary words ("Inbox", "Work", "follow-up") is skipped, and a phrase
@@ -20,8 +21,6 @@ extension Pipeline {
         let onScreen = Folded(screen)
         var text = Folded(transcript)
         for term in recaseCandidates(terms) {
-            // ponytail: a Title Case UI label made of common words ("Recent Files") is recased like "Meal Prep";
-            // drop all-dictionary phrases too if history shows wrong ones.
             let key = Folded.fold(term), hits = text.spans(key)
             guard !hits.isEmpty else { continue }
             let shown = Set(onScreen.spans(key).map { screen[$0].split(whereSeparator: \.isWhitespace).joined(separator: " ") })
@@ -40,8 +39,8 @@ extension Pipeline {
         return text.source
     }
 
-    /// The terms worth recasing, longest first: no single dictionary words; a phrase of only dictionary words
-    /// ("Meal Prep") as is; any other phrase without its leading dictionary words ("Call Priya" → "Priya",
+    /// The terms worth recasing, longest first: no single dictionary words; a phrase of only dictionary words (saved
+    /// vocabulary, #138: "Meal Prep") as is; any other phrase without its leading dictionary words ("Call Priya" → "Priya",
     /// "Yarrowly Freight" stays) and each of its other words alone.
     static func recaseCandidates(_ terms: [String]) -> [String] {
         var seen = Set<String>()
@@ -99,20 +98,26 @@ extension Pipeline {
         }
     }
 
+    /// Every word of `term` is a dictionary word (`isCommonWord`): "Inbox", "Meal Prep", "Pull Requests".
+    static func isDictionaryPhrase(_ term: String) -> Bool { term.split(separator: " ").allSatisfy { isCommonWord(String($0)) } }
+
     nonisolated(unsafe) private static var common: [String: Bool] = [:]
     private static let commonLock = NSLock()
 
-    /// No digits, and every run of letters is spelled right in English, lowercased ("inbox", "follow-up").
-    /// NSSpellChecker isn't documented as thread-safe: calls are serialized and cached.
+    /// No digits, and every run of letters is spelled right in English, lowercased ("inbox", "follow-up"), and not one
+    /// the user taught macOS with "Learn Spelling" (#146: a name to them; `hasLearnedWord` ignores case).
+    /// NSSpellChecker isn't documented as thread-safe: calls are serialized and cached, so a word learned while
+    /// PopTalk runs counts from its next launch.
     static func isCommonWord(_ word: String) -> Bool {
         guard !word.contains(where: \.isNumber) else { return false }
         let runs = word.lowercased().split { !$0.isLetter }.map(String.init)
         return !runs.isEmpty && commonLock.withLock {
             runs.allSatisfy { run in
                 if let known = common[run] { return known }
-                let miss = NSSpellChecker.shared.checkSpelling(of: run, startingAt: 0, language: "en", wrap: false,
-                                                               inSpellDocumentWithTag: 0, wordCount: nil)
-                common[run] = miss.location == NSNotFound
+                let checker = NSSpellChecker.shared
+                let miss = checker.checkSpelling(of: run, startingAt: 0, language: "en", wrap: false,
+                                                 inSpellDocumentWithTag: 0, wordCount: nil)
+                common[run] = miss.location == NSNotFound && !checker.hasLearnedWord(run)
                 return common[run]!
             }
         }

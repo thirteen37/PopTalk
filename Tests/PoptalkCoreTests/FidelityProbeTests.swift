@@ -82,11 +82,11 @@ private func dictate(_ said: String, reply: String, score: Double?, probe: Bool 
 
 // Providers with no yes/no score (Apple's on-device model, raw) leave `fidelityScore` nil: the default-on probe is skipped.
 @Test func fidelityProbeSkippedWithoutAScore() async {
-    let p = Pipeline(complete: { _, _, _, _ in "Sure." },
+    let p = Pipeline(complete: { _, _, _, _ in "Sure, I'll send the agenda by noon." },
                      vocabulary: VocabularyStore(url: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)),
                      cleanupModel: "s", editModel: "s")
     let r = await p.run(Request(transcript: "can you send me the agenda by noon", selection: nil, context: ScreenSnapshot()))
-    #expect(r.outcome == .insert("Sure.", label: "Dictated") && r.rejectedBy == nil && r.fidelityScore == nil)
+    #expect(r.outcome == .insert("Sure, I'll send the agenda by noon.", label: "Dictated") && r.rejectedBy == nil && r.fidelityScore == nil)
 }
 
 // What PoptalkBench --fidelity-pairs scores the deterministic rejects with: the same first reject as `run`.

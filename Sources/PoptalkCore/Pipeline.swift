@@ -6,6 +6,9 @@ public struct Request: Sendable {
     public var context: ScreenSnapshot
     /// The press's resolved cleanup level (#96); dictations only, and only for `Pipeline.levels` models.
     public var cleanup: CleanupLevel
+    /// The press's `boostTerms` over `context` (with screen terms), worked out once by the app (#149); nil: `run`
+    /// works them out.
+    public var terms: [VocabTerm]?
 
     public init(transcript: String, selection: String?, context: ScreenSnapshot, cleanup: CleanupLevel = .clean) {
         self.transcript = transcript
@@ -115,9 +118,9 @@ public struct Pipeline: Sendable {
         guard let selection = r.selection, !selection.isEmpty else {
             let screen = r.context.titleAndDomain + "\n" + Prompts.trimmedContext(r.context)
             let saved = vocabulary.terms.map(\.text)
-            let terms = Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context).map(\.text)
+            let terms = (r.terms ?? Self.boostTerms(saved: vocabulary.terms, learned: learned, context: r.context)).map(\.text)
             let recase = Self.recaseOverride ?? (features.recaseTerms && Self.recasesTerms(cleanupModel))
-            let recaseWith = features.screenTerms ? terms : saved + learned.map(\.text)
+            let recaseWith = features.screenTerms ? terms : saved + learned.map(\.text).filter { !Self.isDictionaryPhrase($0) }
             var recased = !recase ? transcript : Self.recaseTerms(transcript, terms: recaseWith, screen: screen)
             if recase, features.soundAlikeTerms, let termScore {
                 recased = await Self.soundAlikeTerms(recased, terms: Self.recaseCandidates(recaseWith)) {
@@ -284,16 +287,21 @@ extension Pipeline {
 
     /// Saved vocabulary, then learned screen terms (#87), then up to 60 screen terms ranked by closeness to the cursor
     /// in the window the LLM sees, for speech-recognition boosting. Each gets its `boostAliases`.
-    /// `fromScreen` false (#40): saved and learned terms only. A single dictionary word ("Install", "Setup") from the
-    /// screen or the learned list is left out, as `recaseCandidates` leaves it: boosted, it swapped real words ("installed"
-    /// → "Install", #130), and with them in the list the rescorer missed names next to them (#132: "todo as" stayed, not
-    /// "Todoist"). Saved terms always stay; `applyBoosts` keeps any dictionary-word term from swapping real words.
+    /// `fromScreen` false (#40): saved and learned terms only. A term of only dictionary words from the screen or the
+    /// learned list is left out, before the cap (#142). A single word ("Install", "Setup"), boosted, swapped real words
+    /// ("installed" → "Install", #130), and with them in the list the rescorer missed names next to them (#132: "todo as"
+    /// stayed, not "Todoist"). A phrase ("New Message", "Recent Files") would only be recased, an ordinary "new message"
+    /// capitalised after a window title (#138), and learned. Saved terms always stay; `applyBoosts` keeps any
+    /// dictionary-word term from swapping real words.
     public static func boostTerms(saved: [VocabTerm], learned: [VocabTerm] = [], context: ScreenSnapshot,
                                   fromScreen: Bool = true) -> [VocabTerm] {
         var known = Set<String>()
         let w = Prompts.window(context)
-        let screen = fromScreen ? TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.titleAndDomain) : []
-        let guessed = (learned + screen).filter { $0.text.contains(" ") || !isCommonWord($0.text) }
+        let guess = { (t: VocabTerm) in !isDictionaryPhrase(t.text) }
+        // #142: filtered before the cap, so labels ("Send", "Cancel") don't push names off it.
+        let screen = !fromScreen ? [] : TermExtractor.terms(from: w.text, cursor: w.cursor, title: context.titleAndDomain, limit: .max)
+            .filter(guess).prefix(60)
+        let guessed = learned.filter(guess) + screen
         return (saved + guessed).filter { known.insert($0.text.lowercased()).inserted }
             .map { t in
                 var t = t

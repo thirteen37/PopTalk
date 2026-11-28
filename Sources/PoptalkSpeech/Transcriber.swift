@@ -84,7 +84,7 @@ public actor Transcriber {
 
         let start = Date()
         let vocab = CustomVocabularyContext(terms: boost.map {
-            CustomVocabularyTerm(text: $0.text, weight: $0.weight, aliases: $0.aliases.isEmpty ? nil : $0.aliases)
+            CustomVocabularyTerm(text: $0.text, aliases: $0.aliases.isEmpty ? nil : $0.aliases)
         })
         let session = try await VocabularyBoostingSession(
             vocabulary: vocab, ctcModels: ctcModels,
@@ -96,7 +96,7 @@ public actor Transcriber {
         let replaced = (output?.replacements ?? []).compactMap { r in
             r.shouldReplace ? r.replacementWord.map { (span: r.originalWord, term: $0) } : nil
         }
-        let text = Pipeline.applyBoosts(result.text, replaced, terms: boost, minSimilarity: Double(minSimilarity))
+        let text = Pipeline.applyBoosts(result.text, replaced, terms: boost, rescored: output?.text, minSimilarity: Double(minSimilarity))
         return Transcription(raw: result.text, text: Pipeline.splitFused(text, terms: boost), asrSeconds: asrSeconds, rescoreSeconds: lastRescoreSeconds)
     }
 }

@@ -27,9 +27,12 @@ private let day: TimeInterval = 86_400
                        cleanupModel: "adapters/gemma-4-e2b-poptalk-v4", editModel: "adapters/gemma-4-e2b-poptalk-v4")
             .run(Request(transcript: t, selection: nil, context: ScreenSnapshot(text: screen)))
     }
-    #expect(await run("ship poptalk to meal prep.", screen: "Projects: Inbox, Meal Prep, Work.").recased == ["Meal Prep"])
-    #expect(await run("ship it to meal prep.", screen: "").recased.isEmpty)
-    #expect(await run("ship it to meal prep.", screen: "", learned: [VocabTerm(text: "Meal Prep")]).recased == ["Meal Prep"])
+    #expect(await run("ship poptalk to quillmate.", screen: "Projects: Inbox, Quillmate, Work.").recased == ["Quillmate"])
+    #expect(await run("ship it to quillmate.", screen: "").recased.isEmpty)
+    #expect(await run("ship it to quillmate.", screen: "", learned: [VocabTerm(text: "Quillmate")]).recased == ["Quillmate"])
+    // #138: a phrase of only dictionary words isn't recased from the screen or the learned list, so it isn't learned.
+    #expect(await run("ship it to meal prep.", screen: "Projects: Inbox, Meal Prep, Work.").recased.isEmpty)
+    #expect(await run("ship it to meal prep.", screen: "", learned: [VocabTerm(text: "Meal Prep")]).recased.isEmpty)
     // Saved vocabulary wins over a learned duplicate, and a learned term boosts like saved ones.
     let boost = Pipeline.boostTerms(saved: store.terms, learned: [VocabTerm(text: "poptalk"), VocabTerm(text: "Quillmate")],
                                     context: ScreenSnapshot(), fromScreen: false).map(\.text)
