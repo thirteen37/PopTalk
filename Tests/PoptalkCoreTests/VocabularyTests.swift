@@ -105,3 +105,94 @@ private func tempURL() -> URL {
     try store.add(VocabTerm(text: " Todoist", aliases: ["todo list ", "todo list", "todoist"]))
     #expect(store.terms == [VocabTerm(text: "Todoist", aliases: ["todo list"])])
 }
+
+// MARK: iCloud sync (#129). A temp directory stands in for iCloud Drive.
+
+/// A Mac with its own vocabulary.json and defaults, syncing via `root` while its defaults' "sync" is true.
+private func mac(_ root: URL, sync on: Bool = true) -> (VocabularyStore, UserDefaults) {
+    let name = "poptalk-test-\(UUID())"
+    let d = UserDefaults(suiteName: name)!
+    d.set(on, forKey: "sync")
+    let sync = VocabularyStore.Sync(root: root, defaults: d) { UserDefaults(suiteName: name)!.bool(forKey: "sync") }
+    return (VocabularyStore(url: tempURL(), sync: sync), d)
+}
+
+private func syncRoot() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
+
+private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+@Test func addOnOneMacShowsUpOnAnother() throws {
+    let root = syncRoot()
+    let (a, _) = mac(root), (b, _) = mac(root)
+    try b.add(VocabTerm(text: "Poptalk"))
+    try a.add(VocabTerm(text: "Todoist", aliases: ["todo list"]))
+    a.sync(now: t0)
+    b.sync(now: t0 + 1)
+    a.sync(now: t0 + 2)
+    #expect(b.terms == [VocabTerm(text: "Poptalk"), VocabTerm(text: "Todoist", aliases: ["todo list"])])
+    #expect(a.terms == [VocabTerm(text: "Todoist", aliases: ["todo list"]), VocabTerm(text: "Poptalk")])
+    #expect(a.sync?.file.lastPathComponent == "vocabulary-\(a.sync!.deviceID).json")
+}
+
+@Test func deleteBeatsAnOlderUpsertFromAnotherMac() throws {
+    let root = syncRoot()
+    let (a, _) = mac(root), (b, _) = mac(root)
+    try a.add(VocabTerm(text: "Todoist"))
+    a.sync(now: t0)
+    b.sync(now: t0 + 1)
+    #expect(b.terms == [VocabTerm(text: "Todoist")])
+    try b.update("Todoist", to: VocabTerm(text: "Todoist", aliases: ["todo list"]))
+    b.sync(now: t0 + 2)  // B's edit is older than A's delete, which A makes before seeing it
+    try a.remove("todoist")
+    a.sync(now: t0 + 3)
+    b.sync(now: t0 + 4)
+    a.sync(now: t0 + 5)
+    #expect(a.terms.isEmpty && b.terms.isEmpty)
+    // Re-adding later wins over the delete.
+    try b.add(VocabTerm(text: "Todoist"))
+    b.sync(now: t0 + 6)
+    a.sync(now: t0 + 7)
+    #expect(a.terms == [VocabTerm(text: "Todoist")])
+}
+
+@Test func renameSyncsAsDeleteAndUpsert() throws {
+    let root = syncRoot()
+    let (a, _) = mac(root), (b, _) = mac(root)
+    try a.add(VocabTerm(text: "Todo", aliases: ["to do"]))
+    try a.add(VocabTerm(text: "Poptalk"))
+    a.sync(now: t0)
+    b.sync(now: t0 + 1)
+    try a.update("todo", to: VocabTerm(text: "Todoist", aliases: ["to do"]))
+    a.sync(now: t0 + 2)
+    b.sync(now: t0 + 3)
+    #expect(b.terms == [VocabTerm(text: "Poptalk"), VocabTerm(text: "Todoist", aliases: ["to do"])])
+}
+
+@Test func vocabularySyncOffWritesNothingAndDeleteRemovesOnlyThisMacsFile() throws {
+    let root = syncRoot()
+    let (a, d) = mac(root, sync: false)
+    try a.add(VocabTerm(text: "Todoist"))
+    a.sync(now: t0)
+    #expect(!FileManager.default.fileExists(atPath: root.path))
+    d.set(true, forKey: "sync")  // read per sync: takes effect at once
+    a.sync(now: t0 + 1)
+    let (b, _) = mac(root)
+    b.sync(now: t0 + 2)
+    #expect(b.terms == [VocabTerm(text: "Todoist")])
+    d.set(false, forKey: "sync")
+    try a.remove("Todoist")
+    a.sync(now: t0 + 3)
+    b.sync(now: t0 + 4)
+    #expect(b.terms == [VocabTerm(text: "Todoist")])  // off: A's delete isn't written
+    a.deleteSyncedCopy()
+    #expect(try FileManager.default.contentsOfDirectory(atPath: root.path) == [b.sync!.file.lastPathComponent])
+}
+
+@Test func mergeKeepsTheNewestChangePerKeyAndDeletesWinTies() {
+    let up = VocabChange(VocabTerm(text: "Todoist"), at: t0)
+    let del = VocabChange(deleted: "todoist", at: t0)
+    #expect(VocabularyStore.merge([["todoist": up], ["todoist": del]])["todoist"] == del)
+    #expect(VocabularyStore.merge([["todoist": del], ["todoist": up]])["todoist"] == del)
+    let newer = VocabChange(VocabTerm(text: "todoist"), at: t0 + 1)
+    #expect(VocabularyStore.merge([["todoist": newer], ["todoist": del]])["todoist"] == newer)
+}

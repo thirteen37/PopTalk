@@ -9,7 +9,13 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
-    let store = VocabularyStore()
+    /// Synced with history sync and its "Also sync vocabulary" on (#129); `syncVocabulary` merges the other Macs'.
+    let store = VocabularyStore(sync: .init(defaults: .standard) {
+        let d = UserDefaults.standard
+        return d.bool(forKey: "historyEnabled") && d.bool(forKey: "historySync") && d.bool(forKey: Settings.vocabularySyncKey)
+    })
+    /// Off the main thread: reads the iCloud folder. At launch and on each press; Settings does it while open.
+    private func syncVocabulary() { let s = store; Task.detached(priority: .utility) { s.sync() } }
     /// Screen terms that fixed a dictation (#87); recorded and used only with the setting on.
     let learned = LearnedTerms()
     private func learnedTerms(_ s: ContextSources) -> [VocabTerm] { s.rememberScreenTerms ? learned.vocabTerms() : [] }
@@ -49,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.25)
         if ContextSources(.standard).ocr { ScreenContext.prewarmOCR() }
         history.checkSync()  // honors another Mac's "wipe all Macs"
+        syncVocabulary()
         if !AXIsProcessTrusted() {
             AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
         }
@@ -228,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `afterTap`: a double tap or a tap-then-hold (#110), which the delayed start tells apart.
     private func pressed(afterTap: Bool) {
         guard !busy else { return }  // one request at a time
+        syncVocabulary()
         loadTranscriber()  // retries after a failed load
         prepareModels()  // likewise for the MLX models
         let mode = runMode
