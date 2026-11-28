@@ -8,9 +8,13 @@ import SwiftUI
 enum Settings {
     static func register() {
         UserDefaults.standard.register(defaults: ModelSettings.defaults)
-        UserDefaults.standard.register(defaults: [OutcomeKeys.undoWindowKey: OutcomeKeys.undoWindowDefault])
+        UserDefaults.standard.register(defaults: [OutcomeKeys.undoWindowKey: OutcomeKeys.undoWindowDefault,
+                                                  vocabularySyncKey: true])
         ModelSettings.migrate(.standard)
     }
+
+    /// #129: "Also sync vocabulary", under history sync; on by default.
+    static let vocabularySyncKey = "vocabularySync"
 
     /// #113: off hides tuning details and experimental features; hidden settings keep their values and still apply.
     static let showAdvancedKey = "showAdvancedSettings"
@@ -115,6 +119,7 @@ struct SettingsView: View {
         .task {  // runs while this tab is showing
             while !Task.isCancelled {
                 status.refreshPermissions()
+                if tab == .vocabulary { let s = store; await Task.detached { s.sync() }.value }  // other Macs' edits (#129)
                 let t = store.terms  // the overlay can save terms too
                 if t != terms { terms = t }
                 let l = learned.terms()
@@ -196,7 +201,7 @@ struct SettingsView: View {
                 Text("What PopTalk reads on each press to understand what you're writing. Selected text is always used (edits need it), saved vocabulary always boosts recognition, and password fields are never read. Screen text needs Screen Recording. Apps turns sources off for one app or website.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            HistorySection(history: history)
+            HistorySection(history: history, vocabulary: store)
         }
         .formStyle(.grouped)
         .fitted()
@@ -703,13 +708,16 @@ private struct MLXModelPicker: View {
 /// Opt-in usage history (#38): toggles, what's stored, iCloud sync (#76), and a wipe.
 private struct HistorySection: View {
     let history: HistoryStore
+    let vocabulary: VocabularyStore
     @AppStorage("historyEnabled") private var enabled = false
     @AppStorage("historyAudio") private var audio = false
     @AppStorage("historySync") private var sync = false
+    @AppStorage(Settings.vocabularySyncKey) private var vocabularySync = true
     @State private var stats: HistoryStore.Stats?
     @State private var confirmWipe = false
     @State private var confirmSync = false
     @State private var confirmUnsync = false
+    @State private var confirmVocabularyUnsync = false
 
     var body: some View {
         Section {
@@ -720,6 +728,11 @@ private struct HistorySection: View {
                 if on { confirmSync = true } else { sync = false; confirmUnsync = true }
             })).disabled(!enabled)
             if sync && enabled {
+                // Off offers to delete this Mac's synced vocabulary, like history.
+                Toggle("Also sync vocabulary", isOn: Binding(get: { vocabularySync }, set: { on in
+                    vocabularySync = on
+                    if on { Task.detached { [vocabulary] in vocabulary.sync() } } else { confirmVocabularyUnsync = true }
+                }))
                 LabeledContent("Synced", value: stats.map(syncStatus) ?? "…")
             }
             LabeledContent("Stored") {
@@ -731,7 +744,7 @@ private struct HistorySection: View {
         } header: {
             Text("Recording")
         } footer: {
-            Text("Keeps transcripts, the context sent to the model, its replies, and your undos and corrections on this Mac, to train a better model. Nothing leaves the Mac unless you sync it.\n\nSync copies the history, but not audio, to PopTalk/history in your iCloud Drive and merges in your other Macs' history. With standard iCloud data protection it's encrypted, but Apple holds the keys. With Advanced Data Protection it's end-to-end encrypted.")
+            Text("Keeps transcripts, the context sent to the model, its replies, and your undos and corrections on this Mac, to train a better model. Nothing leaves the Mac unless you sync it.\n\nSync copies the history, but not audio, to PopTalk/history in your iCloud Drive and merges in your other Macs' history. Saved vocabulary syncs to PopTalk/vocabulary, unless you turn that off; terms learned from screen stay on this Mac. With standard iCloud data protection it's encrypted, but Apple holds the keys. With Advanced Data Protection it's end-to-end encrypted.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .task { await refresh() }
@@ -741,14 +754,23 @@ private struct HistorySection: View {
         } message: {
             Text("From now on this Mac also writes its history to iCloud Drive. Copy the history already on this Mac there too?")
         }
-        .confirmationDialog("Delete this Mac's synced history from iCloud Drive?", isPresented: $confirmUnsync, titleVisibility: .visible) {
+        .confirmationDialog(vocabularySync ? "Delete this Mac's synced history and vocabulary from iCloud Drive?"
+                            : "Delete this Mac's synced history from iCloud Drive?", isPresented: $confirmUnsync, titleVisibility: .visible) {
             Button("Delete from iCloud", role: .destructive) {
                 history.deleteSyncedCopy()
+                if vocabularySync { vocabulary.deleteSyncedCopy() }
                 Task { await refresh() }
             }
             Button("Keep", role: .cancel) {}
         } message: {
-            Text("Syncing has stopped. The history on this Mac and your other Macs' synced history stay.")
+            Text("Syncing has stopped. What's on this Mac and your other Macs' synced copies stay.")
+        }
+        .confirmationDialog("Delete this Mac's synced vocabulary from iCloud Drive?", isPresented: $confirmVocabularyUnsync,
+                            titleVisibility: .visible) {
+            Button("Delete from iCloud", role: .destructive) { vocabulary.deleteSyncedCopy() }
+            Button("Keep", role: .cancel) {}
+        } message: {
+            Text("Vocabulary syncing has stopped. The vocabulary on this Mac and your other Macs' synced vocabulary stay.")
         }
         .confirmationDialog("Delete all usage history and saved audio?", isPresented: $confirmWipe, titleVisibility: .visible) {
             if sync && enabled {
@@ -772,6 +794,7 @@ private struct HistorySection: View {
     private func startSync(copy: Bool) {
         sync = true
         history.startSync(copyExisting: copy)
+        Task.detached { [vocabulary] in vocabulary.sync() }
         Task { await refresh() }
     }
 

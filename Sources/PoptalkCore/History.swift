@@ -295,14 +295,22 @@ public final class HistoryStore: Sendable {
     /// Mac's own, whose lines repeat local ones), and how many Macs have one. Evicted files are asked to
     /// download and skipped until they have.
     private func sources() -> (files: [URL], devices: Int) {
-        guard let syncing, let names = try? FileManager.default.contentsOfDirectory(atPath: syncing.root.path) else { return ([file], 0) }
-        var files = [file], devices = 0
-        for name in names where name.hasSuffix(".jsonl") || name.hasSuffix(".jsonl.icloud") {
+        guard let syncing else { return ([file], 0) }
+        let synced = Self.syncedFiles(in: syncing.root, prefix: "history-", ext: ".jsonl")
+        return ([file] + synced.files, synced.devices)
+    }
+
+    /// The downloaded `<prefix>…<ext>` files in a synced folder, and how many Macs have one. Evicted files are
+    /// asked to download and skipped until they have.
+    static func syncedFiles(in root: URL, prefix: String, ext: String) -> (files: [URL], devices: Int) {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: root.path) else { return ([], 0) }
+        var files: [URL] = [], devices = 0
+        for name in names where name.hasSuffix(ext) || name.hasSuffix(ext + ".icloud") {
             // An evicted file shows as ".history-<id>.jsonl.icloud" (or dataless, with its own name, on newer macOS).
             let real = name.hasPrefix(".") && name.hasSuffix(".icloud") ? String(name.dropFirst().dropLast(7)) : name
-            guard real.hasPrefix("history-"), real.hasSuffix(".jsonl") else { continue }
+            guard real.hasPrefix(prefix), real.hasSuffix(ext) else { continue }
             devices += 1
-            let url = syncing.root.appendingPathComponent(real)
+            let url = root.appendingPathComponent(real)
             let status = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus
             if real != name || status == .notDownloaded {
                 try? FileManager.default.startDownloadingUbiquitousItem(at: url)
