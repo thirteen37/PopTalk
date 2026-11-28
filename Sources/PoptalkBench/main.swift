@@ -286,8 +286,9 @@ for (flag, key) in [("--dictation-prompt-file", "dictationPrompt"), ("--edit-pro
 //   PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID [--cleanup-timeout S]   (S: the base deadline, app default 4)
 //     [--dictation-prompt-file F] [--guards -name,…]   (scripts/replay.zsh: the ship check)
 //     [--skip-gate on]   (#122: the skip gate on; out also gets skippedLLM, gateStop? and gateSeconds?)
-//     [--fidelity shadow|on]   (#75 step 2: score every reply with the fidelity probe; `on` also rejects below
-//       Pipeline.fidelityProbeThreshold. Out also gets fidelity?, fidelityRejects? and fidelitySeconds?)
+//     [--fidelity on|shadow|off]   (#75 step 2: the fidelity probe, `on` by default like the app: rejects below
+//       Pipeline.fidelityProbeThreshold; `shadow` scores without acting; `off` skips it. Out also gets fidelity?,
+//       fidelityRejects? and fidelitySeconds?)
 // in: {id, transcript, app, window, ax, ocr, vocabulary: [String]} per line; out: {id, label, output, reply?, user?, rejectedBy?, repaired, seconds}
 // (`repaired`: the names of the repairs that changed the reply, #117).
 // Prints counts only: the inputs and outputs are history content and stay in the files.
@@ -298,8 +299,8 @@ if let i = args.firstIndex(of: "--replay") {
         var skippedLLM: Bool?, gateStop: String?, gateSeconds: Double?
         var fidelity: Double?, fidelityRejects: Bool?, fidelitySeconds: Double?
     }
-    let fidelity = opt("--fidelity")
-    guard [nil, "shadow", "on"].contains(fidelity) else { fail("--fidelity takes shadow or on") }
+    let fidelity = opt("--fidelity") ?? "on"
+    guard ["on", "shadow", "off"].contains(fidelity) else { fail("--fidelity takes on, shadow or off") }
     guard i + 2 < args.count, let model = opt("--cleanup-model") else { fail("usage: PoptalkBench --replay in.jsonl out.jsonl --cleanup-model ID") }
     do {
         let lines = try String(contentsOfFile: args[i + 1], encoding: .utf8).split(separator: "\n")
@@ -322,7 +323,7 @@ if let i = args.firstIndex(of: "--replay") {
             (features.fidelityShadow, features.fidelityProbe) = (fidelity == "shadow", fidelity == "on")
             var p = Pipeline(complete: calls.wrap(complete), vocabulary: store, cleanupModel: model, editModel: model,
                              cleanupTimeout: opt("--cleanup-timeout").flatMap(Double.init) ?? 4, features: features)
-            if fidelity != nil { p.fidelityScore = MLXProvider.yesNoScore }
+            if fidelity != "off" { p.fidelityScore = MLXProvider.yesNoScore }
             let context = ScreenSnapshot(appName: r.app, windowTitle: r.window, text: r.ax, ocrText: r.ocr)
             // #139: the hold's prefill, as the app runs it once capture is done; untimed, like the hold itself.
             let (a, b) = p.dictationPrefix(context: context, cleanup: .clean)

@@ -16,9 +16,10 @@ public struct DictationFeatures: Sendable, Equatable {
     /// Sound-alike terms (#75 step 2, experimental, no Settings UI yet): `termShortlist` runs the cleanup model
     /// confirms (`Pipeline.termScore`) become the term before cleanup. Only where `recaseTerms` runs.
     public var soundAlikeTerms = false
-    /// The learned fidelity guard (#75 step 2, experimental, no Settings UI): a reply `Pipeline.fidelityScore` puts
-    /// below `fidelityProbeThreshold` goes in raw, after the deterministic rejects.
-    public var fidelityProbe = false
+    /// The learned fidelity guard (#75 step 2, no Settings UI): a reply `Pipeline.fidelityScore` puts below
+    /// `fidelityProbeThreshold` goes in raw, after the deterministic rejects. On by default since the owner's review
+    /// of real history; only where `fidelityScore` is set (MLX).
+    public var fidelityProbe = true
     /// Scores the probe and records it without acting: PoptalkBench `--replay --fidelity shadow` only.
     public var fidelityShadow = false
     /// `Pipeline.guardNames` steps turned off: PoptalkBench `--guards -name,…` only (#108).
@@ -35,7 +36,7 @@ public struct DictationFeatures: Sendable, Equatable {
         screenTerms = s.focusedText || s.nearbyText || s.ocr || s.windowTitle || s.webDomain
         skipGate = environment["POPTALK_SKIP_LLM"].map { $0 == "1" } ?? d.bool(forKey: Key.skipGate)
         soundAlikeTerms = d.bool(forKey: Key.soundAlikeTerms)
-        fidelityProbe = d.bool(forKey: Key.fidelityProbe)
+        fidelityProbe = d.object(forKey: Key.fidelityProbe) as? Bool ?? true
     }
 }
 
